@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Geoportal Profissional - Grupo Michels</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/jpeg" href="apoio/GP Michels.jpg">
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="style.css?v=2.2">
+</head>
+<body data-page="portal">
+    <div id="auth-loading-overlay" class="loading-overlay"><div class="spinner"></div><p>Validando seu acesso…</p></div>
+    <div class="app-container">
+        <!-- ============================================== -->
+        <!-- SIDEBAR REORGANIZADA COM ESPAÇAMENTO CLARO -->
+        <!-- ============================================== -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <img src="apoio/GP Michels.jpg" alt="Grupo Michels" class="brand-logo">
+                    <div class="logo-text">
+                        <span class="logo-grupo">GRUPO</span>
+                        <span class="logo-michels">MICHELS</span>
+                    </div>
+                </div>
+                <p class="subtitle">Gestão Agrícola Integrada</p>
+            </div>
+
+            <div class="sidebar-content-scroll">
+                <!-- SEÇÃO 1: OPERAÇÕES -->
+                <div class="sidebar-section section-operacoes">
+                    <h3 class="section-title"><i class="fa-solid fa-layer-group"></i> Operações</h3>
+                    <nav class="sidebar-nav">
+                        <button class="nav-item tab-btn" data-tab="colheita">
+                            <i class="fa-solid fa-wheat-awn tab-icon colheita-icon"></i>
+                            <span>Colheita</span>
+                        </button>
+                        
+                        <button class="nav-item tab-btn" data-tab="savefarm">
+                            <i class="fa-solid fa-leaf tab-icon savefarm-icon"></i>
+                            <span>Save Farm</span>
+                        </button>
+                        
+                        <!-- Menu Adubação com Submenu Expansível / Retrátil Suave -->
+                        <div class="nav-group expanded" id="nav-adubacao-group">
+                            <button type="button" class="nav-item tab-btn active" data-tab="adubacao" id="btn-menu-adubacao">
+                                <i class="fa-solid fa-seedling tab-icon adubacao-icon"></i>
+                                <span>Adubação</span>
+                                <i class="fa-solid fa-chevron-down nav-chevron"></i>
+                            </button>
+                            <div class="sub-nav-menu" id="sub-nav-adubacao">
+                                <button type="button" class="sub-nav-item active" data-subtab="calcario" id="subtab-calcario-btn">
+                                    <i class="fa-solid fa-map-location-dot"></i>
+                                    <span>Atualizar Mapa de Calcário</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <button class="nav-item tab-btn" data-tab="pulverizacao">
+                            <i class="fa-solid fa-spray-can tab-icon pulverizacao-icon"></i>
+                            <span>Pulverização</span>
+                        </button>
+                        
+                        <button class="nav-item tab-btn" data-tab="linhas">
+                            <i class="fa-solid fa-route tab-icon linhas-icon"></i>
+                            <span>Projetos de Linha</span>
+                        </button>
+                    </nav>
+                </div>
+
+                <!-- SEÇÃO 2: FILTRO DE FAZENDAS -->
+                <div class="sidebar-section section-fazendas">
+                    <h3 class="section-title"><i class="fa-solid fa-tractor"></i> Filtro de Fazendas</h3>
+                    <div class="select-wrapper">
+                        <select id="fazenda-filter">
+                            <option value="ALL">Todas as Fazendas</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- SEÇÃO 3: ESCOLHA DOS MAPAS -->
+                <div class="sidebar-section section-mapas" id="mapa-base-section">
+                    <h3 class="section-title"><i class="fa-solid fa-map"></i> Escolha dos Mapas</h3>
+                    <div class="basemap-controls">
+                        <label class="radio-label">
+                            <input type="radio" name="basemap" value="esri" checked>
+                            <span>ESRI Satélite</span>
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="basemap" value="blank">
+                            <span>Fundo Branco</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- SEÇÃO 4: PERMISSÃO DE USUÁRIO -->
+                <div class="sidebar-section section-permissao" id="admin-view-switch">
+                    <h3 class="section-title"><i class="fa-solid fa-user-shield"></i> Permissão de Usuário</h3>
+                    <div class="role-switch-container">
+                        <button type="button" class="role-btn active" id="role-editor-btn" data-role="editor">
+                            <i class="fa-solid fa-pen-to-square"></i> Editor
+                        </button>
+                        <button type="button" class="role-btn" id="role-viewer-btn" data-role="viewer">
+                            <i class="fa-solid fa-eye"></i> Visualizador
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer Stats -->
+            <div class="sidebar-footer">
+                <div class="stats-box">
+                    <span class="stats-label">Talhões na Fazenda:</span>
+                    <span class="stats-value" id="stats-count">0</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Map Area -->
+        <main class="map-area">
+            <!-- Barra Superior Informativa para Outras Operações -->
+            <div class="generic-op-bar hidden" id="generic-op-bar">
+                <div class="generic-op-title">
+                    <i class="fa-solid fa-layer-group" id="generic-op-icon"></i>
+                    <span id="generic-op-name">Operação</span>
+                </div>
+                <div class="generic-op-badges">
+                    <span class="op-badge-farm"><i class="fa-solid fa-tractor"></i> <span id="generic-op-fazenda">Fazenda: FE</span></span>
+                    <span class="op-badge-count"><i class="fa-solid fa-draw-polygon"></i> <span id="generic-op-count">0 talhões</span></span>
+                </div>
+                <div class="generic-op-hint">
+                    <i class="fa-solid fa-circle-info"></i> Clique em qualquer talhão para visualizar informações
+                </div>
+            </div>
+
+            <!-- Barra de Filtros Operacionais do Calcário -->
+            <div class="calcario-filter-bar" id="calcario-filter-bar">
+                <div class="filter-bar-title">
+                    <i class="fa-solid fa-sliders"></i>
+                    <span>Filtros Operacionais:</span>
+                </div>
+
+                <div class="filter-group">
+                    <label for="filter-ano">Ano / Safra:</label>
+                    <div class="select-wrapper">
+                        <select id="filter-ano">
+                            <option value="2026">2026</option>
+                            <option value="2027">2027</option>
+                        </select>
+                    </div>
+                    <button type="button" class="btn-add-quick editor-control" id="btn-add-ano" title="Adicionar Novo Ano">
+                        <i class="fa-solid fa-plus"></i>
+                    </button>
+                </div>
+
+                <div class="filter-group">
+                    <label for="filter-cultura">Cultura:</label>
+                    <div class="select-wrapper">
+                        <select id="filter-cultura">
+                            <option value="Soja">Soja</option>
+                            <option value="Milho">Milho</option>
+                        </select>
+                    </div>
+                    <button type="button" class="btn-add-quick editor-control" id="btn-add-cultura" title="Adicionar Nova Cultura">
+                        <i class="fa-solid fa-plus"></i>
+                    </button>
+                </div>
+
+                <div class="filter-group filter-group-product">
+                    <label for="filter-produto">Produto:</label>
+                    <div class="select-wrapper">
+                        <select id="filter-produto">
+                            <option value="Calcário PRNT 80">Calcário PRNT 80</option>
+                            <option value="Calcário 2026">Calcário 2026</option>
+                            <option value="Calcário Dolomítico 75">Calcário Dolomítico 75</option>
+                            <option value="Produto ABC 90">Produto ABC 90</option>
+                        </select>
+                    </div>
+                    <button type="button" class="btn-primary-sm editor-control" id="btn-add-produto">
+                        <i class="fa-solid fa-plus"></i> Novo Produto
+                    </button>
+                </div>
+
+                <div class="mode-switch-container editor-control" id="calcario-mode-container">
+                    <div class="mode-switch-buttons">
+                        <button type="button" class="btn-mode-toggle active" id="btn-mode-aplicacao" data-mode="aplicacao" title="Modo de Aplicação / Execução">
+                            <i class="fa-solid fa-spray-can-sparkles"></i> <span>Aplicação</span>
+                        </button>
+                        <button type="button" class="btn-mode-toggle" id="btn-mode-planejamento" data-mode="planejamento" title="Modo de Planejamento de Talhões por Produto">
+                            <i class="fa-solid fa-map-location-dot"></i> <span>Planejamento</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="filter-bar-meta" id="filter-summary-tag">
+                    <span class="active-config-tag">
+                        <i class="fa-solid fa-location-dot"></i> <strong id="tag-fazenda">FE</strong> | 
+                        <span id="tag-ano">2026</span> | 
+                        <span id="tag-cultura">Soja</span> | 
+                        <span id="tag-produto">Calcário PRNT 80</span>
+                    </span>
+                </div>
+            </div>
+
+            <!-- Barra de Ações do Modo Planejamento -->
+            <div class="planning-banner-bar hidden" id="planning-banner-bar">
+                <div class="planning-banner-left">
+                    <span class="planning-chip"><i class="fa-solid fa-pen-ruler"></i> Modo de Planejamento</span>
+                    <span class="planning-hint">Clique nos talhões para ativar/desativar do produto: <strong id="plan-prod-title">Calcário PRNT 80</strong></span>
+                </div>
+                <div class="planning-banner-right">
+                    <div class="plan-stat-badge">
+                        <span class="plan-stat-label">Área Planejada:</span>
+                        <strong class="plan-stat-value" id="plan-banner-ha">0.00 ha</strong>
+                        <span class="plan-stat-count" id="plan-banner-count">(0 talhões)</span>
+                    </div>
+                    <button type="button" class="btn-plan-opt" id="btn-plan-select-all" title="Planejar todos os talhões para este produto">
+                        <i class="fa-solid fa-check-double"></i> Selecionar Todos
+                    </button>
+                    <button type="button" class="btn-plan-opt btn-plan-clear" id="btn-plan-clear-all" title="Limpar planejamento deste produto">
+                        <i class="fa-solid fa-trash-can"></i> Limpar
+                    </button>
+                </div>
+            </div>
+
+            <!-- Container do Mapa -->
+            <div id="map-container" class="map-container">
+                <div id="map"></div>
+
+                <!-- Dashboard de Indicadores do Calcário (Overlay Superior) -->
+                <div class="calcario-dashboard-panel" id="calcario-dashboard">
+                    <div class="dashboard-header-toggle">
+                        <div class="dashboard-title-box">
+                            <i class="fa-solid fa-chart-column"></i>
+                            <h3>Acompanhamento da Aplicação de Calcário</h3>
+                            <span class="badge-farm" id="dash-fazenda-name">Fazenda: FE</span>
+                        </div>
+                        <button class="btn-toggle-dash" id="btn-toggle-dash" title="Minimizar / Expandir Dashboard">
+                            <i class="fa-solid fa-chevron-up"></i>
+                        </button>
+                    </div>
+
+                    <div class="dashboard-content" id="dashboard-content">
+                        <!-- Cards Principais -->
+                        <div class="kpi-cards-grid">
+                            <!-- Card 1: Área Planejada -->
+                            <div class="kpi-card card-planejada">
+                                <div class="kpi-icon-wrapper icon-blue">
+                                    <i class="fa-solid fa-calendar-check"></i>
+                                </div>
+                                <div class="kpi-data">
+                                    <span class="kpi-title">ÁREA PLANEJADA</span>
+                                    <h2 class="kpi-value" id="kpi-area-planejada">0 ha</h2>
+                                    <span class="kpi-subtitle">Área total programada (100%)</span>
+                                </div>
+                            </div>
+
+                            <!-- Card 2: Área Realizada -->
+                            <div class="kpi-card card-realizada">
+                                <div class="kpi-icon-wrapper icon-green">
+                                    <i class="fa-solid fa-circle-check"></i>
+                                </div>
+                                <div class="kpi-data">
+                                    <span class="kpi-title">ÁREA REALIZADA</span>
+                                    <h2 class="kpi-value" id="kpi-area-realizada">0 ha</h2>
+                                    <span class="kpi-subtitle">Aplicado até o momento</span>
+                                </div>
+                            </div>
+
+                            <!-- Card 3: Progresso -->
+                            <div class="kpi-card card-progresso">
+                                <div class="kpi-icon-wrapper icon-orange">
+                                    <i class="fa-solid fa-bars-progress"></i>
+                                </div>
+                                <div class="kpi-data">
+                                    <span class="kpi-title">PROGRESSO GERAL</span>
+                                    <h2 class="kpi-value" id="kpi-progresso">0%</h2>
+                                    <span class="kpi-subtitle" id="kpi-progresso-sub">0 de 0 ha executados</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Barra de Progresso Horizontal Segmentada -->
+                        <div class="progress-bar-section">
+                            <div class="progress-bar-label-row">
+                                <span class="progress-bar-title">Distribuição do Progresso Operacional:</span>
+                                <span class="progress-bar-pct" id="progress-total-badge">0% Concluído</span>
+                            </div>
+                            <div class="segmented-progress-track">
+                                <div class="progress-segment seg-concluido" id="seg-concluido" style="width: 0%;" title="Concluído"></div>
+                                <div class="progress-segment seg-andamento" id="seg-andamento" style="width: 0%;" title="Em Andamento"></div>
+                                <div class="progress-segment seg-nao-iniciado" id="seg-nao-iniciado" style="width: 100%;" title="Não Iniciado"></div>
+                            </div>
+                        </div>
+
+                        <!-- Resumo / Tabela de Status com Hectares -->
+                        <div class="status-summary-grid">
+                            <div class="status-pill pill-concluido">
+                                <div class="status-pill-header">
+                                    <span class="status-dot dot-concluido"></span>
+                                    <strong>Concluído</strong>
+                                </div>
+                                <div class="status-pill-numbers">
+                                    <span class="status-ha" id="sum-concluido-ha">0 ha</span>
+                                    <span class="status-pct" id="sum-concluido-pct">(0%)</span>
+                                </div>
+                                <span class="status-count" id="sum-concluido-count">0 talhões</span>
+                            </div>
+
+                            <div class="status-pill pill-andamento">
+                                <div class="status-pill-header">
+                                    <span class="status-dot dot-andamento"></span>
+                                    <strong>Em Andamento</strong>
+                                </div>
+                                <div class="status-pill-numbers">
+                                    <span class="status-ha" id="sum-andamento-ha">0 ha</span>
+                                    <span class="status-pct" id="sum-andamento-pct">(0%)</span>
+                                </div>
+                                <span class="status-count" id="sum-andamento-count">0 talhões</span>
+                            </div>
+
+                            <div class="status-pill pill-nao-iniciado">
+                                <div class="status-pill-header">
+                                    <span class="status-dot dot-nao-iniciado"></span>
+                                    <strong>Não Iniciado</strong>
+                                </div>
+                                <div class="status-pill-numbers">
+                                    <span class="status-ha" id="sum-nao-iniciado-ha">0 ha</span>
+                                    <span class="status-pct" id="sum-nao-iniciado-pct">(0%)</span>
+                                </div>
+                                <span class="status-count" id="sum-nao-iniciado-count">0 talhões</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Painel Flutuante Fixo para Outras Abas (Colheita, etc.) -->
+                <div id="info-panel" class="info-panel hidden">
+                    <div class="info-panel-header">
+                        <h4 id="info-title">Talhão</h4>
+                        <button type="button" class="btn-close-panel" id="btn-close-info">&times;</button>
+                    </div>
+                    <div class="info-panel-body">
+                        <div class="custom-popup-row">
+                            <span class="popup-label">Fazenda:</span>
+                            <span class="popup-value" id="info-fazenda">N/A</span>
+                        </div>
+                        <div class="custom-popup-row">
+                            <span class="popup-label">Área:</span>
+                            <span class="popup-value" id="info-area">N/A</span>
+                        </div>
+                        <div class="custom-popup-row">
+                            <span class="popup-label">Variedade:</span>
+                            <span class="popup-value" id="info-variedade">N/A</span>
+                        </div>
+                        <div class="custom-popup-row">
+                            <span class="popup-label">Colheita:</span>
+                            <span class="popup-value" id="info-colheita">N/A</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Loading Overlay -->
+            <div id="loading-overlay" class="loading-overlay">
+                <div class="spinner"></div>
+                <p>Carregando dados operacionais e espaciais...</p>
+            </div>
+        </main>
+    </div>
+
+    <!-- ============================================== -->
+    <!-- MODAL DE EDIÇÃO / CONSULTA DE ADUBAÇÃO (CALCÁRIO) -->
+    <!-- ============================================== -->
+    <div class="modal-backdrop hidden" id="adubacao-modal-backdrop">
+        <div class="adubacao-modal-card" id="adubacao-modal">
+            <!-- Cabeçalho -->
+            <div class="modal-header">
+                <div class="modal-title-group">
+                    <span class="modal-tag"><i class="fa-solid fa-map-pin"></i> <span id="adubacao-modal-tag-text">ATUALIZAR APLICAÇÃO</span></span>
+                    <h3 id="adubacao-modal-title">Talhão: -</h3>
+                </div>
+                <button type="button" class="modal-btn-close" id="btn-close-adubacao-modal" title="Fechar">&times;</button>
+            </div>
+
+            <!-- Corpo -->
+            <div class="modal-body">
+                <!-- Informações Cadastrais em Grid -->
+                <div class="talhao-cadastral-card">
+                    <div class="cadastral-col">
+                        <span class="cadastral-lbl">FAZENDA</span>
+                        <strong class="cadastral-val" id="cadastral-fazenda">-</strong>
+                    </div>
+                    <div class="cadastral-col">
+                        <span class="cadastral-lbl">TALHÃO</span>
+                        <strong class="cadastral-val" id="cadastral-talhao">-</strong>
+                    </div>
+                    <div class="cadastral-col">
+                        <span class="cadastral-lbl">ÁREA TOTAL</span>
+                        <strong class="cadastral-val val-highlight-blue" id="cadastral-area">0.00 ha</strong>
+                    </div>
+                    <div class="cadastral-col">
+                        <span class="cadastral-lbl">ANO / SAFRA</span>
+                        <strong class="cadastral-val" id="cadastral-ano">-</strong>
+                    </div>
+                    <div class="cadastral-col">
+                        <span class="cadastral-lbl">CULTURA</span>
+                        <strong class="cadastral-val" id="cadastral-cultura">-</strong>
+                    </div>
+                    <div class="cadastral-col">
+                        <span class="cadastral-lbl">PRODUTO</span>
+                        <strong class="cadastral-val" id="cadastral-produto">-</strong>
+                    </div>
+                </div>
+
+                <!-- Painel Exclusivo do Visualizador (Somente Leitura) -->
+                <div class="viewer-view-container hidden" id="adubacao-viewer-view">
+                    <div class="viewer-status-card">
+                        <div class="viewer-status-header">
+                            <span class="viewer-status-badge" id="viewer-status-badge">🟢 Concluído</span>
+                            <span class="viewer-status-time" id="viewer-status-time">-</span>
+                        </div>
+                        <div class="viewer-status-details">
+                            <div class="viewer-detail-row">
+                                <span class="viewer-detail-label">Progresso Realizado:</span>
+                                <strong class="viewer-detail-val" id="viewer-detail-progresso">0% (0.00 ha)</strong>
+                            </div>
+                            <div class="viewer-detail-row" id="viewer-row-taxa">
+                                <span class="viewer-detail-label">Taxa Aplicada:</span>
+                                <strong class="viewer-detail-val" id="viewer-detail-taxa">-</strong>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn-secondary" id="btn-fechar-adubacao-viewer">Fechar</button>
+                    </div>
+                </div>
+
+                <!-- Formulário de Edição (Exclusivo Editor) -->
+                <form id="form-adubacao-edit" class="adubacao-edit-form" novalidate>
+                    <label class="form-section-title">SELECIONE O STATUS DA APLICAÇÃO:</label>
+                    
+                    <!-- 3 Cards de Seleção de Status -->
+                    <div class="status-cards-row">
+                        <!-- Card 1: Concluído -->
+                        <div class="status-card" data-status="concluido" id="status-card-concluido">
+                            <div class="status-card-icon icon-circle-green">
+                                <i class="fa-solid fa-check"></i>
+                            </div>
+                            <div class="status-card-info">
+                                <strong class="status-card-name">Concluído</strong>
+                                <span class="status-card-sub">100% da área aplicada</span>
+                            </div>
+                        </div>
+
+                        <!-- Card 2: Em Andamento -->
+                        <div class="status-card" data-status="em_andamento" id="status-card-andamento">
+                            <div class="status-card-icon icon-circle-orange">
+                                <i class="fa-solid fa-clock"></i>
+                            </div>
+                            <div class="status-card-info">
+                                <strong class="status-card-name">Em Andamento</strong>
+                                <span class="status-card-sub">Aplicação parcial</span>
+                            </div>
+                        </div>
+
+                        <!-- Card 3: Não Iniciado -->
+                        <div class="status-card" data-status="nao_iniciado" id="status-card-nao-iniciado">
+                            <div class="status-card-icon icon-circle-red">
+                                <i class="fa-solid fa-xmark"></i>
+                            </div>
+                            <div class="status-card-info">
+                                <strong class="status-card-name">Não Iniciado</strong>
+                                <span class="status-card-sub">Nenhuma aplicação</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Seção de Campos Dinâmicos Condicionais -->
+                    <div class="dynamic-inputs-panel" id="adubacao-dynamic-panel">
+                        <!-- 1. Conteúdo: Concluído -->
+                        <div class="cond-block hidden" id="cond-block-concluido">
+                            <div class="form-field-group">
+                                <label for="input-taxa-adubacao">
+                                    <span class="star-req">*</span> Taxa Aplicada (t/ha):
+                                </label>
+                                <div class="input-with-badge">
+                                    <input type="number" id="input-taxa-adubacao" step="0.01" min="0.01" placeholder="Ex: 2.50">
+                                    <span class="input-unit-badge">t/ha</span>
+                                </div>
+                                <small class="field-help-text">Informe a dosagem de calcário aplicada por hectare neste talhão.</small>
+                            </div>
+                        </div>
+
+                        <!-- 2. Conteúdo: Em Andamento -->
+                        <div class="cond-block hidden" id="cond-block-andamento">
+                            <label class="dynamic-sub-title">COMO DESEJA INFORMAR O PROGRESSO?</label>
+                            
+                            <div class="progress-radio-row">
+                                <label class="radio-option">
+                                    <input type="radio" name="adubacao-progress-mode" value="percentual" id="radio-mode-pct" checked>
+                                    <span class="custom-radio"></span>
+                                    <span>Por Porcentagem (%)</span>
+                                </label>
+                                <label class="radio-option">
+                                    <input type="radio" name="adubacao-progress-mode" value="hectares" id="radio-mode-ha">
+                                    <span class="custom-radio"></span>
+                                    <span>Por Hectares (ha)</span>
+                                </label>
+                            </div>
+
+                            <!-- Campo Percentual -->
+                            <div class="form-field-group" id="field-group-pct">
+                                <label for="input-pct-adubacao">
+                                    <span class="star-req">*</span> Percentual Concluído (%):
+                                </label>
+                                <div class="input-with-badge">
+                                    <input type="number" id="input-pct-adubacao" min="0.1" max="99.9" step="0.1" placeholder="Ex: 60">
+                                    <span class="input-unit-badge">%</span>
+                                </div>
+                                <div class="calc-preview-box" id="calc-preview-pct">
+                                    <i class="fa-solid fa-calculator"></i> Área calculada: <strong id="preview-calc-ha">0.00 ha</strong> de <span id="preview-total-ha">0.00 ha</span>
+                                </div>
+                            </div>
+
+                            <!-- Campo Hectares -->
+                            <div class="form-field-group" id="field-group-ha">
+                                <label for="input-ha-adubacao">
+                                    <span class="star-req">*</span> Área Concluída (ha):
+                                </label>
+                                <div class="input-with-badge">
+                                    <input type="number" id="input-ha-adubacao" min="0.01" step="0.01" placeholder="Ex: 500">
+                                    <span class="input-unit-badge">ha</span>
+                                </div>
+                                <div class="calc-preview-box" id="calc-preview-ha">
+                                    <i class="fa-solid fa-calculator"></i> Progresso calculado: <strong id="preview-calc-pct">0.0%</strong> da área total
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 3. Conteúdo: Não Iniciado -->
+                        <div class="cond-block hidden" id="cond-block-nao-iniciado">
+                            <div class="empty-status-notice">
+                                <i class="fa-solid fa-circle-info"></i>
+                                <span>Nenhum dado adicional é necessário. O talhão permanecerá como <strong>Não Iniciado (0% realizado)</strong>.</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Mensagem de Validação / Alerta de Erro -->
+                    <div class="form-alert-error hidden" id="adubacao-form-error">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                        <span id="adubacao-error-text">Por favor, preencha os campos obrigatórios.</span>
+                    </div>
+
+                    <!-- Acordeão de Histórico -->
+                    <div class="history-accordion-card" id="history-accordion">
+                        <button type="button" class="history-accordion-header" id="btn-toggle-history">
+                            <div class="history-header-left">
+                                <i class="fa-solid fa-clock-rotate-left"></i>
+                                <span>Histórico de Alterações deste Talhão</span>
+                            </div>
+                            <i class="fa-solid fa-chevron-down history-arrow" id="history-arrow-icon"></i>
+                        </button>
+                        <div class="history-accordion-content" id="history-accordion-body">
+                            <div class="history-list" id="adubacao-history-list">
+                                <p class="history-empty-msg">Nenhuma alteração registrada ainda para este talhão.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Rodapé de Ações -->
+                    <div class="modal-footer">
+                        <button type="button" class="btn-secondary" id="btn-cancel-adubacao">Cancelar</button>
+                        <button type="submit" class="btn-primary btn-save-adubacao" id="btn-save-adubacao">
+                            <i class="fa-solid fa-floppy-disk"></i> Salvar Alteração
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================== -->
+    <!-- MODAL DE CRIAÇÃO DE PRODUTO -->
+    <!-- ============================================== -->
+    <div class="modal-backdrop hidden" id="produto-modal-backdrop">
+        <div class="modal-card modal-card-sm">
+            <div class="modal-header">
+                <div class="modal-title-group">
+                    <span class="modal-tag"><i class="fa-solid fa-flask"></i> Gestão de Insumos</span>
+                    <h3>Criar Novo Produto</h3>
+                </div>
+                <button type="button" class="modal-btn-close" id="btn-close-produto-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="form-novo-produto">
+                    <div class="form-group">
+                        <label for="input-nome-produto"><span class="required-star">*</span> Nome do Produto:</label>
+                        <input type="text" id="input-nome-produto" placeholder="Ex: Calcário Super 90" required>
+                        <small class="field-hint">O nome pode conter letras, números, espaços e símbolos comuns. Ficará disponível para todos os usuários.</small>
+                    </div>
+                    
+                    <div class="form-error-alert hidden" id="produto-error-alert">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                        <span id="produto-error-text">Já existe um produto cadastrado com esse nome.</span>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn-secondary" id="btn-cancelar-produto">Cancelar</button>
+                        <button type="submit" class="btn-primary">
+                            <i class="fa-solid fa-check"></i> Cadastrar Produto
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================== -->
+    <!-- MODAL DE ADIÇÃO DE ANO -->
+    <!-- ============================================== -->
+    <div class="modal-backdrop hidden" id="ano-modal-backdrop">
+        <div class="modal-card modal-card-sm">
+            <div class="modal-header">
+                <div class="modal-title-group">
+                    <span class="modal-tag"><i class="fa-solid fa-calendar-plus"></i> Safras</span>
+                    <h3>Adicionar Novo Ano / Safra</h3>
+                </div>
+                <button type="button" class="modal-btn-close" id="btn-close-ano-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="form-novo-ano">
+                    <div class="form-group">
+                        <label for="input-novo-ano"><span class="required-star">*</span> Ano (Safra):</label>
+                        <input type="number" id="input-novo-ano" min="2020" max="2050" placeholder="Ex: 2028" required>
+                    </div>
+                    <div class="form-error-alert hidden" id="ano-error-alert">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                        <span id="ano-error-text">Este ano já está cadastrado.</span>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn-secondary" id="btn-cancelar-ano">Cancelar</button>
+                        <button type="submit" class="btn-primary"><i class="fa-solid fa-check"></i> Adicionar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================== -->
+    <!-- MODAL DE ADIÇÃO DE CULTURA -->
+    <!-- ============================================== -->
+    <div class="modal-backdrop hidden" id="cultura-modal-backdrop">
+        <div class="modal-card modal-card-sm">
+            <div class="modal-header">
+                <div class="modal-title-group">
+                    <span class="modal-tag"><i class="fa-solid fa-seedling"></i> Culturas</span>
+                    <h3>Adicionar Nova Cultura</h3>
+                </div>
+                <button type="button" class="modal-btn-close" id="btn-close-cultura-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="form-nova-cultura">
+                    <div class="form-group">
+                        <label for="input-nova-cultura"><span class="required-star">*</span> Nome da Cultura:</label>
+                        <input type="text" id="input-nova-cultura" placeholder="Ex: Algodão, Trigo, Sorgo" required>
+                    </div>
+                    <div class="form-error-alert hidden" id="cultura-error-alert">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                        <span id="cultura-error-text">Esta cultura já está cadastrada.</span>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn-secondary" id="btn-cancelar-cultura">Cancelar</button>
+                        <button type="submit" class="btn-primary"><i class="fa-solid fa-check"></i> Adicionar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
+    <script src="auth.js"></script>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    
+    <!-- Custom JS -->
+    <script src="app.js?v=2.2"></script>
+</body>
+</html>

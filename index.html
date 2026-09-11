@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Entrar | Geoportal Grupo Michels</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="login.css">
+</head>
+<body data-page="login">
+    <main class="login-layout">
+        <section class="login-brand">
+            <img src="apoio/GP Michels.jpg" alt="Grupo Michels">
+            <h1>Geoportal Grupo Michels</h1>
+            <p>Gestão agrícola integrada, com informação espacial, planejamento e acompanhamento operacional em um só lugar.</p>
+        </section>
+        <section class="login-card-wrap">
+            <div class="login-card">
+                <h2>Bem-vindo</h2>
+                <p>Entre com seu acesso corporativo para continuar.</p>
+                <form class="login-form" id="login-form">
+                    <label>E-mail<input id="email" type="email" autocomplete="email" required></label>
+                    <label>Senha<input id="password" type="password" autocomplete="current-password" required></label>
+                    <button type="submit">Entrar no geoportal</button>
+                    <p class="login-message" id="login-message" aria-live="polite"></p>
+                </form>
+                <div class="config-notice" id="config-notice" hidden>O acesso ainda está sendo configurado. Conecte este projeto ao Supabase antes de publicar.</div>
+            </div>
+        </section>
+    </main>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
+    <script src="auth.js"></script>
+    <script>
+        document.getElementById('login-form').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            await window.portalReady;
+            if (!window.supabaseClient) return;
+            window.loginGeoportal(document.getElementById('email').value, document.getElementById('password').value);
+        });
+    </script>
+</body>
+</html>
