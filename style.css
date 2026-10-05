@@ -212,6 +212,21 @@ body {
 .colheita-icon { color: var(--color-colheita); }
 .savefarm-icon { color: var(--color-savefarm); }
 .adubacao-icon { color: var(--color-adubacao); }
+.plantio-icon { color: #16a34a; }
+
+.sidebar-filter-label {
+    display: block;
+    margin: 10px 0 5px;
+    color: #475569;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.section-fazendas .section-title + .sidebar-filter-label {
+    margin-top: 0;
+}
 .pulverizacao-icon { color: var(--color-pulverizacao); }
 .linhas-icon { color: var(--color-linhas); }
 

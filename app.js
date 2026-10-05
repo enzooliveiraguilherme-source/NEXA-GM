@@ -18,9 +18,11 @@ const state = {
     
     // Filtros
     currentFazenda: 'FE',
+    currentGleba: 'ALL',
     currentAno: '2026',
     currentCultura: 'Soja',
     currentProduto: 'Calcário PRNT 80',
+    lastAdubacaoProduto: 'Calcário PRNT 80',
     
     // Perfil / Permissão ('editor' | 'viewer')
     userRole: 'editor',
@@ -110,6 +112,25 @@ const STORAGE_KEYS = {
     PLANNING: 'geoportal_calcario_planning_v1'
 };
 
+function isPlantioMode() {
+    return state.currentTab === 'plantio';
+}
+
+function isOperationalMapMode() {
+    return state.currentTab === 'adubacao' || state.currentTab === 'plantio';
+}
+
+function featureMatchesFilters(feature) {
+    const properties = feature && feature.properties ? feature.properties : {};
+    const matchesFazenda = state.currentFazenda === 'ALL' || properties.Fazenda === state.currentFazenda;
+    const matchesGleba = state.currentGleba === 'ALL' || properties.Gleba === state.currentGleba;
+    return matchesFazenda && matchesGleba;
+}
+
+function getCurrentOperationLabel() {
+    return isPlantioMode() ? 'Plantio' : 'Aplicação de Calcário';
+}
+
 // ==========================================================================
 // GERENCIADOR DE PLANEJAMENTO DE TALHÕES POR PRODUTO
 // ==========================================================================
@@ -132,11 +153,12 @@ const PlanningManager = {
     },
 
     getKey(fazenda, ano, cultura, produto) {
-        const f = (fazenda && fazenda !== 'ALL' ? fazenda : state.currentFazenda).trim().toUpperCase();
+        const f = (state.currentFazenda || 'ALL').trim().toUpperCase();
+        const g = (state.currentGleba || 'ALL').trim().toUpperCase();
         const a = (ano || state.currentAno).trim();
         const c = (cultura || state.currentCultura).trim().toUpperCase();
         const p = (produto || state.currentProduto).trim().toUpperCase();
-        return `${f}__${a}__${c}__${p}`;
+        return `${state.currentTab.toUpperCase()}__${f}__${g}__${a}__${c}__${p}`;
     },
 
     getPlannedFields(fazenda, ano, cultura, produto) {
@@ -145,13 +167,21 @@ const PlanningManager = {
         if (all && Array.isArray(all[key])) {
             return all[key];
         }
+
+        // Compatibilidade com planejamentos salvos antes da inclusão de Gleba e Plantio.
+        if (state.currentTab === 'adubacao' && state.currentGleba === 'ALL') {
+            const legacyFazenda = (state.currentFazenda || 'ALL').trim().toUpperCase();
+            const legacyAno = (ano || state.currentAno).trim();
+            const legacyCultura = (cultura || state.currentCultura).trim().toUpperCase();
+            const legacyProduto = (produto || state.currentProduto).trim().toUpperCase();
+            const legacyKey = `${legacyFazenda}__${legacyAno}__${legacyCultura}__${legacyProduto}`;
+            if (Array.isArray(all[legacyKey])) return all[legacyKey];
+        }
         
         // Se ainda não tem planejamento customizado para este produto, inclui inicialmente todos os talhões da fazenda
         if (state.geojsonData) {
-            const currentF = (fazenda && fazenda !== 'ALL') ? fazenda : state.currentFazenda;
-            const fMatch = (currentF === 'ALL') ? () => true : (f) => f.properties && f.properties.Fazenda === currentF;
             const defaultList = state.geojsonData.features
-                .filter(fMatch)
+                .filter(featureMatchesFilters)
                 .map(f => f.properties.Campo);
             return defaultList;
         }
@@ -184,10 +214,8 @@ const PlanningManager = {
 
     selectAll(fazenda, ano, cultura, produto) {
         if (!state.geojsonData) return;
-        const currentF = (fazenda && fazenda !== 'ALL') ? fazenda : state.currentFazenda;
-        const fMatch = (currentF === 'ALL') ? () => true : (f) => f.properties && f.properties.Fazenda === currentF;
         const allFields = state.geojsonData.features
-            .filter(fMatch)
+            .filter(featureMatchesFilters)
             .map(f => f.properties.Campo);
         this.setPlannedFields(fazenda, ano, cultura, produto, allFields);
     },
@@ -379,7 +407,9 @@ async function loadData() {
         state.geojsonData = await response.json();
         
         populateFazendaFilter(state.geojsonData);
+        populateGlebaFilter(state.geojsonData);
         populateDropdowns();
+        updateOperationUI();
         seedSampleDataIfEmpty();
         renderMap(true);
         
@@ -423,6 +453,30 @@ function populateFazendaFilter(data) {
         select.value = 'FE';
         state.currentFazenda = 'FE';
     }
+}
+
+function populateGlebaFilter(data) {
+    const glebas = new Set();
+    data.features.forEach(feature => {
+        const properties = feature.properties || {};
+        const matchesFazenda = state.currentFazenda === 'ALL' || properties.Fazenda === state.currentFazenda;
+        if (matchesFazenda && properties.Gleba) glebas.add(properties.Gleba);
+    });
+
+    const select = document.getElementById('gleba-filter');
+    if (!select) return;
+
+    const previousValue = state.currentGleba;
+    select.innerHTML = '<option value="ALL">Todas as Glebas</option>';
+    Array.from(glebas).sort((a, b) => a.localeCompare(b, 'pt-BR')).forEach(gleba => {
+        const option = document.createElement('option');
+        option.value = gleba;
+        option.textContent = `Gleba ${gleba}`;
+        select.appendChild(option);
+    });
+
+    state.currentGleba = glebas.has(previousValue) ? previousValue : 'ALL';
+    select.value = state.currentGleba;
 }
 
 function populateDropdowns() {
@@ -470,17 +524,20 @@ function populateDropdowns() {
 
 function updateFilterTag() {
     const fazendaLabel = state.currentFazenda === 'ALL' ? 'Todas' : state.currentFazenda;
+    const glebaLabel = state.currentGleba === 'ALL' ? 'Todas as Glebas' : `Gleba ${state.currentGleba}`;
     const tagFaz = document.getElementById('tag-fazenda');
+    const tagGleba = document.getElementById('tag-gleba');
     const tagAno = document.getElementById('tag-ano');
     const tagCul = document.getElementById('tag-cultura');
     const tagPro = document.getElementById('tag-produto');
     const dashFaz = document.getElementById('dash-fazenda-name');
 
     if (tagFaz) tagFaz.textContent = fazendaLabel;
+    if (tagGleba) tagGleba.textContent = glebaLabel;
     if (tagAno) tagAno.textContent = state.currentAno;
     if (tagCul) tagCul.textContent = state.currentCultura;
     if (tagPro) tagPro.textContent = state.currentProduto;
-    if (dashFaz) dashFaz.textContent = `Fazenda: ${fazendaLabel}`;
+    if (dashFaz) dashFaz.textContent = `${state.currentFazenda === 'ALL' ? 'Fazendas: Todas' : `Fazenda: ${fazendaLabel}`} • ${glebaLabel}`;
 }
 
 // ==========================================================================
@@ -508,6 +565,13 @@ const OPERACOES_CONFIG = {
         fillColor: '#059669',
         borderColor: '#047857'
     },
+    plantio: {
+        name: 'Plantio',
+        icon: 'fa-solid fa-leaf',
+        color: '#16a34a',
+        fillColor: '#15803d',
+        borderColor: '#166534'
+    },
     pulverizacao: {
         name: 'Pulverização',
         icon: 'fa-solid fa-spray-can',
@@ -528,7 +592,40 @@ const OPERACOES_CONFIG = {
 // RENDERIZAÇÃO DO MAPA & POLÍGONOS (BORDA PRETA FINA NORMAL)
 // ==========================================================================
 function isCalcarioMode() {
-    return state.currentTab === 'adubacao';
+    return isOperationalMapMode();
+}
+
+function updateOperationUI() {
+    const plantio = isPlantioMode();
+    const setText = (id, value) => {
+        const element = document.getElementById(id);
+        if (element) element.textContent = value;
+    };
+
+    const productGroup = document.getElementById('operation-product-filter-group');
+    if (productGroup) productGroup.classList.toggle('hidden', plantio);
+
+    setText('dashboard-operation-title', plantio ? 'Acompanhamento do Plantio' : 'Acompanhamento da Aplicação de Calcário');
+    setText('kpi-realizada-subtitle', plantio ? 'Plantado até o momento' : 'Aplicado até o momento');
+    setText('operation-status-title', plantio ? 'SELECIONE O STATUS DO PLANTIO:' : 'SELECIONE O STATUS DA APLICAÇÃO:');
+    setText('status-concluido-sub', plantio ? '100% da área plantada' : '100% da área aplicada');
+    setText('status-andamento-sub', plantio ? 'Plantio parcial' : 'Aplicação parcial');
+    setText('status-nao-iniciado-sub', plantio ? 'Nenhum plantio' : 'Nenhuma aplicação');
+    setText('cadastral-produto-label', plantio ? 'OPERAÇÃO' : 'PRODUTO');
+    setText('tag-produto', plantio ? 'Plantio' : state.currentProduto);
+
+    const executionButtonLabel = document.querySelector('#btn-mode-aplicacao span');
+    if (executionButtonLabel) executionButtonLabel.textContent = plantio ? 'Execução' : 'Aplicação';
+    const planningHint = document.querySelector('.planning-hint');
+    if (planningHint) {
+        planningHint.textContent = plantio
+            ? 'Clique nos talhões para ativar/desativar do planejamento de '
+            : 'Clique nos talhões para ativar/desativar do produto: ';
+        const strong = document.createElement('strong');
+        strong.id = 'plan-prod-title';
+        strong.textContent = plantio ? 'Plantio' : state.currentProduto;
+        planningHint.appendChild(strong);
+    }
 }
 
 function getFeatureStyle(feature) {
@@ -602,7 +699,7 @@ function getTalhaoTooltipHtml(feature) {
             <div class="talhao-tooltip-inner">
                 <div class="talhao-tooltip-title">${campo} (${fazenda})</div>
                 <div>Área: <strong>${area} ha</strong></div>
-                <div>Produto: <strong>${state.currentProduto}</strong></div>
+                <div>${isPlantioMode() ? 'Operação' : 'Produto'}: <strong>${isPlantioMode() ? 'Plantio' : state.currentProduto}</strong></div>
                 <span class="talhao-tooltip-badge ${isPlanned ? 'badge-concluido' : 'badge-nao-iniciado'}">
                     ${isPlanned ? '✓ Planejado' : '✗ Não Planejado'}
                 </span>
@@ -615,7 +712,7 @@ function getTalhaoTooltipHtml(feature) {
             <div class="talhao-tooltip-inner">
                 <div class="talhao-tooltip-title">${campo} (${fazenda})</div>
                 <div>Área: <strong>${area} ha</strong></div>
-                <span class="talhao-tooltip-badge" style="background:#64748b;color:#fff;">Não Planejado para ${state.currentProduto}</span>
+                <span class="talhao-tooltip-badge" style="background:#64748b;color:#fff;">Não Planejado para ${isPlantioMode() ? 'Plantio' : state.currentProduto}</span>
             </div>
         `;
     }
@@ -733,6 +830,7 @@ function onEachFeature(feature, layer) {
             const colheita = colheitaVal || 'N/A';
             const infoTitle = document.getElementById('info-title');
             const infoFaz = document.getElementById('info-fazenda');
+            const infoGleba = document.getElementById('info-gleba');
             const infoArea = document.getElementById('info-area');
             const infoVar = document.getElementById('info-variedade');
             const infoCol = document.getElementById('info-colheita');
@@ -740,6 +838,7 @@ function onEachFeature(feature, layer) {
 
             if (infoTitle) infoTitle.textContent = `Talhão: ${p.Campo || 'Sem nome'}`;
             if (infoFaz) infoFaz.textContent = p.Fazenda || 'N/A';
+            if (infoGleba) infoGleba.textContent = p.Gleba || 'N/A';
             if (infoArea) infoArea.textContent = p.Area ? `${parseFloat(p.Area).toFixed(2)} ha` : '0.00 ha';
             if (infoVar) infoVar.textContent = p.Variedade || 'N/A';
             if (infoCol) infoCol.textContent = colheita;
@@ -761,10 +860,7 @@ function updateMapStylesAndKPIs() {
         }
         
         if (state.geojsonData && isCalcarioMode()) {
-            const filteredFeatures = state.geojsonData.features.filter(feature => {
-                if (state.currentFazenda === 'ALL') return true;
-                return feature.properties && feature.properties.Fazenda === state.currentFazenda;
-            });
+            const filteredFeatures = state.geojsonData.features.filter(featureMatchesFilters);
             updateDashboardKPIs(filteredFeatures);
         }
     } catch (err) {
@@ -780,10 +876,7 @@ function renderMap(shouldFitBounds = true) {
     
     if (!state.geojsonData) return;
     
-    const filteredFeatures = state.geojsonData.features.filter(feature => {
-        if (state.currentFazenda === 'ALL') return true;
-        return feature.properties && feature.properties.Fazenda === state.currentFazenda;
-    });
+    const filteredFeatures = state.geojsonData.features.filter(featureMatchesFilters);
     
     const filteredData = {
         type: "FeatureCollection",
@@ -824,7 +917,11 @@ function renderMap(shouldFitBounds = true) {
                 opIcon.style.color = opCfg.color;
             }
             if (opName) opName.textContent = `Operação: ${opCfg.name}`;
-            if (opFaz) opFaz.textContent = state.currentFazenda === 'ALL' ? 'Todas as Fazendas' : `Fazenda ${state.currentFazenda}`;
+            if (opFaz) {
+                const fazenda = state.currentFazenda === 'ALL' ? 'Todas as Fazendas' : `Fazenda ${state.currentFazenda}`;
+                const gleba = state.currentGleba === 'ALL' ? 'Todas as Glebas' : `Gleba ${state.currentGleba}`;
+                opFaz.textContent = `${fazenda} • ${gleba}`;
+            }
             if (opCount) opCount.textContent = `${filteredFeatures.length} talhõe${filteredFeatures.length === 1 ? '' : 's'}`;
         }
     }
@@ -915,7 +1012,7 @@ function updateDashboardKPIs(features) {
     setTxt('kpi-area-planejada', formatHectares(areaPlanejada));
     setTxt('kpi-area-realizada', formatHectares(areaRealizada));
     setTxt('kpi-progresso', `${progressoPct.toFixed(1)}%`);
-    setTxt('kpi-progresso-sub', `${formatHectares(areaRealizada)} de ${formatHectares(areaPlanejada)} aplicados`);
+    setTxt('kpi-progresso-sub', `${formatHectares(areaRealizada)} de ${formatHectares(areaPlanejada)} ${isPlantioMode() ? 'plantados' : 'aplicados'}`);
 
     setTxt('progress-total-badge', `${progressoPct.toFixed(1)}% Realizado`);
     
@@ -955,10 +1052,7 @@ function updatePlanningBannerUI() {
     if (prodTitle) prodTitle.textContent = state.currentProduto;
 
     if (!state.geojsonData) return;
-    const filteredFeatures = state.geojsonData.features.filter(feature => {
-        if (state.currentFazenda === 'ALL') return true;
-        return feature.properties && feature.properties.Fazenda === state.currentFazenda;
-    });
+    const filteredFeatures = state.geojsonData.features.filter(featureMatchesFilters);
 
     const plannedFields = PlanningManager.getPlannedFields(state.currentFazenda, state.currentAno, state.currentCultura, state.currentProduto);
     
@@ -1003,6 +1097,7 @@ const AdubacaoModal = {
         this.elements.title = document.getElementById('adubacao-modal-title');
         this.elements.tagText = document.getElementById('adubacao-modal-tag-text');
         this.elements.cadastralFazenda = document.getElementById('cadastral-fazenda');
+        this.elements.cadastralGleba = document.getElementById('cadastral-gleba');
         this.elements.cadastralTalhao = document.getElementById('cadastral-talhao');
         this.elements.cadastralArea = document.getElementById('cadastral-area');
         this.elements.cadastralAno = document.getElementById('cadastral-ano');
@@ -1117,6 +1212,7 @@ const AdubacaoModal = {
         const p = feature.properties;
         const campo = p.Campo || 'Sem nome';
         const fazenda = p.Fazenda || 'N/A';
+        const gleba = p.Gleba || 'N/A';
         const area = parseFloat(p.Area) || 0;
 
         this.currentFeature = feature;
@@ -1131,12 +1227,13 @@ const AdubacaoModal = {
         // Dados cadastrais
         if (this.elements.title) this.elements.title.textContent = `Talhão: ${campo}`;
         if (this.elements.cadastralFazenda) this.elements.cadastralFazenda.textContent = fazenda;
+        if (this.elements.cadastralGleba) this.elements.cadastralGleba.textContent = gleba;
         if (this.elements.cadastralTalhao) this.elements.cadastralTalhao.textContent = campo;
         if (this.elements.cadastralArea) this.elements.cadastralArea.textContent = `${area.toFixed(2)} ha`;
         if (this.elements.previewTotalHa) this.elements.previewTotalHa.textContent = `${area.toFixed(2)} ha`;
         if (this.elements.cadastralAno) this.elements.cadastralAno.textContent = state.currentAno;
         if (this.elements.cadastralCultura) this.elements.cadastralCultura.textContent = state.currentCultura;
-        if (this.elements.cadastralProduto) this.elements.cadastralProduto.textContent = state.currentProduto;
+        if (this.elements.cadastralProduto) this.elements.cadastralProduto.textContent = isPlantioMode() ? 'Plantio' : state.currentProduto;
 
         // Histórico
         this.renderHistory(this.currentRecord.historico);
@@ -1147,7 +1244,7 @@ const AdubacaoModal = {
         const isViewer = (state.userRole === 'viewer');
 
         if (isViewer) {
-            if (this.elements.tagText) this.elements.tagText.textContent = 'CONSULTA DE APLICAÇÃO';
+            if (this.elements.tagText) this.elements.tagText.textContent = isPlantioMode() ? 'CONSULTA DE PLANTIO' : 'CONSULTA DE APLICAÇÃO';
             if (this.elements.viewerView) {
                 this.elements.viewerView.classList.remove('hidden');
                 this.elements.viewerView.style.display = 'flex';
@@ -1158,7 +1255,7 @@ const AdubacaoModal = {
             }
             this.renderViewerMode();
         } else {
-            if (this.elements.tagText) this.elements.tagText.textContent = 'ATUALIZAR APLICAÇÃO';
+            if (this.elements.tagText) this.elements.tagText.textContent = isPlantioMode() ? 'ATUALIZAR PLANTIO' : 'ATUALIZAR APLICAÇÃO';
             if (this.elements.viewerView) {
                 this.elements.viewerView.classList.add('hidden');
                 this.elements.viewerView.style.display = 'none';
@@ -1202,7 +1299,7 @@ const AdubacaoModal = {
         }
 
         if (this.elements.viewerRowTaxa) {
-            if (st === 'concluido') {
+            if (st === 'concluido' && !isPlantioMode()) {
                 this.elements.viewerRowTaxa.style.display = 'flex';
                 if (this.elements.viewerTaxa) this.elements.viewerTaxa.textContent = rec.taxaAplicada ? `${rec.taxaAplicada} t/ha` : 'Não informada';
             } else {
@@ -1241,7 +1338,7 @@ const AdubacaoModal = {
         if (this.elements.condNaoIniciado) this.elements.condNaoIniciado.classList.add('hidden');
 
         if (status === 'concluido') {
-            if (this.elements.condConcluido) this.elements.condConcluido.classList.remove('hidden');
+            if (this.elements.condConcluido && !isPlantioMode()) this.elements.condConcluido.classList.remove('hidden');
         } else if (status === 'em_andamento') {
             if (this.elements.condAndamento) this.elements.condAndamento.classList.remove('hidden');
             this.setProgressMode(this.currentProgressMode);
@@ -1348,15 +1445,19 @@ const AdubacaoModal = {
         let historicoDetalhe = '';
 
         if (status === 'concluido') {
-            const taxaVal = this.elements.inputTaxa ? parseFloat(this.elements.inputTaxa.value) : NaN;
-            if (isNaN(taxaVal) || taxaVal <= 0) {
-                this.showError('A Taxa Aplicada (t/ha) é obrigatória para talhões concluídos e deve ser maior que zero.');
-                return;
+            if (!isPlantioMode()) {
+                const taxaVal = this.elements.inputTaxa ? parseFloat(this.elements.inputTaxa.value) : NaN;
+                if (isNaN(taxaVal) || taxaVal <= 0) {
+                    this.showError('A Taxa Aplicada (t/ha) é obrigatória para talhões concluídos e deve ser maior que zero.');
+                    return;
+                }
+                taxaAplicada = taxaVal;
             }
-            taxaAplicada = taxaVal;
             areaRealizada = totalArea;
             percentualRealizado = 100;
-            historicoDetalhe = `Taxa aplicada: ${taxaAplicada} t/ha (100% concluído)`;
+            historicoDetalhe = isPlantioMode()
+                ? 'Plantio marcado como 100% concluído'
+                : `Taxa aplicada: ${taxaAplicada} t/ha (100% concluído)`;
 
         } else if (status === 'em_andamento') {
             if (tipoProgresso === 'percentual') {
@@ -1385,7 +1486,7 @@ const AdubacaoModal = {
         } else {
             areaRealizada = 0;
             percentualRealizado = 0;
-            historicoDetalhe = 'Aplicação marcada como Não Iniciada';
+            historicoDetalhe = `${getCurrentOperationLabel()} marcado como Não Iniciado`;
         }
 
         const now = new Date();
@@ -1562,6 +1663,16 @@ function setupEventListeners() {
     if (fazendaFilter) {
         fazendaFilter.addEventListener('change', (e) => {
             state.currentFazenda = e.target.value;
+            populateGlebaFilter(state.geojsonData);
+            updateFilterTag();
+            renderMap(true);
+        });
+    }
+
+    const glebaFilter = document.getElementById('gleba-filter');
+    if (glebaFilter) {
+        glebaFilter.addEventListener('change', (e) => {
+            state.currentGleba = e.target.value;
             updateFilterTag();
             renderMap(true);
         });
@@ -1617,10 +1728,24 @@ function setupEventListeners() {
     // 4. Navegação Lateral
     const adubacaoGroup = document.getElementById('nav-adubacao-group');
     const subtabCalcario = document.getElementById('subtab-calcario-btn');
+    const plantioGroup = document.getElementById('nav-plantio-group');
+    const subtabPlantio = document.getElementById('subtab-mapa-plantio-btn');
 
     function switchMainTab(tabKey, subtabKey = null) {
         if (!tabKey) return;
+
+        if (state.currentTab === 'adubacao' && state.currentProduto !== 'Plantio') {
+            state.lastAdubacaoProduto = state.currentProduto;
+        }
         state.currentTab = tabKey;
+
+        if (tabKey === 'plantio') {
+            state.currentProduto = 'Plantio';
+        } else if (tabKey === 'adubacao') {
+            state.currentProduto = state.lastAdubacaoProduto || state.produtos[0];
+            const productSelect = document.getElementById('filter-produto');
+            if (productSelect) productSelect.value = state.currentProduto;
+        }
 
         const infoPanel = document.getElementById('info-panel');
         const calcarioFilterBar = document.getElementById('calcario-filter-bar');
@@ -1631,12 +1756,23 @@ function setupEventListeners() {
         if (tabKey === 'adubacao') {
             state.currentSubTab = subtabKey || 'calcario';
             if (subtabCalcario) subtabCalcario.classList.add('active');
+            if (subtabPlantio) subtabPlantio.classList.remove('active');
             if (adubacaoGroup) adubacaoGroup.classList.add('expanded');
+            if (plantioGroup) plantioGroup.classList.remove('expanded');
+            if (infoPanel) infoPanel.classList.add('hidden');
+        } else if (tabKey === 'plantio') {
+            state.currentSubTab = subtabKey || 'mapa-plantio';
+            if (subtabCalcario) subtabCalcario.classList.remove('active');
+            if (subtabPlantio) subtabPlantio.classList.add('active');
+            if (adubacaoGroup) adubacaoGroup.classList.remove('expanded');
+            if (plantioGroup) plantioGroup.classList.add('expanded');
             if (infoPanel) infoPanel.classList.add('hidden');
         } else {
             state.currentSubTab = null;
             if (subtabCalcario) subtabCalcario.classList.remove('active');
+            if (subtabPlantio) subtabPlantio.classList.remove('active');
             if (adubacaoGroup) adubacaoGroup.classList.remove('expanded');
+            if (plantioGroup) plantioGroup.classList.remove('expanded');
             if (calcarioFilterBar) calcarioFilterBar.classList.add('hidden');
             if (calcarioDashboard) calcarioDashboard.classList.add('hidden');
             if (planningBanner) planningBanner.classList.add('hidden');
@@ -1657,6 +1793,9 @@ function setupEventListeners() {
             btn.classList.toggle('active', isCurrent);
         });
 
+        updateOperationUI();
+        updateFilterTag();
+
         try {
             renderMap(false);
         } catch (e) {
@@ -1676,6 +1815,12 @@ function setupEventListeners() {
                 } else {
                     switchMainTab('adubacao', 'calcario');
                 }
+            } else if (tabKey === 'plantio') {
+                if (state.currentTab === 'plantio') {
+                    if (plantioGroup) plantioGroup.classList.toggle('expanded');
+                } else {
+                    switchMainTab('plantio', 'mapa-plantio');
+                }
             } else {
                 switchMainTab(tabKey);
             }
@@ -1687,6 +1832,13 @@ function setupEventListeners() {
         subtabCalcario.addEventListener('click', (e) => {
             e.stopPropagation();
             switchMainTab('adubacao', 'calcario');
+        });
+    }
+
+    if (subtabPlantio) {
+        subtabPlantio.addEventListener('click', (e) => {
+            e.stopPropagation();
+            switchMainTab('plantio', 'mapa-plantio');
         });
     }
 

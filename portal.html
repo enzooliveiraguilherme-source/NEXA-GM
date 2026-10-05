@@ -20,7 +20,7 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
     
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="style.css?v=2.2">
+    <link rel="stylesheet" href="style.css?v=2.3">
 </head>
 <body data-page="portal">
     <div id="auth-loading-overlay" class="loading-overlay"><div class="spinner"></div><p>Validando seu acesso…</p></div>
@@ -70,6 +70,21 @@
                             </div>
                         </div>
 
+                        <!-- Menu Plantio com Submenu Expansível / Retrátil Suave -->
+                        <div class="nav-group" id="nav-plantio-group">
+                            <button type="button" class="nav-item tab-btn" data-tab="plantio" id="btn-menu-plantio">
+                                <i class="fa-solid fa-leaf tab-icon plantio-icon"></i>
+                                <span>Plantio</span>
+                                <i class="fa-solid fa-chevron-down nav-chevron"></i>
+                            </button>
+                            <div class="sub-nav-menu" id="sub-nav-plantio">
+                                <button type="button" class="sub-nav-item" data-subtab="mapa-plantio" id="subtab-mapa-plantio-btn">
+                                    <i class="fa-solid fa-map-location-dot"></i>
+                                    <span>Atualizar Mapa de Plantio</span>
+                                </button>
+                            </div>
+                        </div>
+
                         <button class="nav-item tab-btn" data-tab="pulverizacao">
                             <i class="fa-solid fa-spray-can tab-icon pulverizacao-icon"></i>
                             <span>Pulverização</span>
@@ -85,9 +100,16 @@
                 <!-- SEÇÃO 2: FILTRO DE FAZENDAS -->
                 <div class="sidebar-section section-fazendas">
                     <h3 class="section-title"><i class="fa-solid fa-tractor"></i> Filtro de Fazendas</h3>
+                    <label class="sidebar-filter-label" for="fazenda-filter">Fazenda</label>
                     <div class="select-wrapper">
                         <select id="fazenda-filter">
                             <option value="ALL">Todas as Fazendas</option>
+                        </select>
+                    </div>
+                    <label class="sidebar-filter-label" for="gleba-filter">Gleba</label>
+                    <div class="select-wrapper">
+                        <select id="gleba-filter">
+                            <option value="ALL">Todas as Glebas</option>
                         </select>
                     </div>
                 </div>
@@ -124,7 +146,7 @@
             <!-- Footer Stats -->
             <div class="sidebar-footer">
                 <div class="stats-box">
-                    <span class="stats-label">Talhões na Fazenda:</span>
+                    <span class="stats-label">Talhões no filtro:</span>
                     <span class="stats-value" id="stats-count">0</span>
                 </div>
             </div>
@@ -180,7 +202,7 @@
                     </button>
                 </div>
 
-                <div class="filter-group filter-group-product">
+                <div class="filter-group filter-group-product" id="operation-product-filter-group">
                     <label for="filter-produto">Produto:</label>
                     <div class="select-wrapper">
                         <select id="filter-produto">
@@ -208,7 +230,7 @@
 
                 <div class="filter-bar-meta" id="filter-summary-tag">
                     <span class="active-config-tag">
-                        <i class="fa-solid fa-location-dot"></i> <strong id="tag-fazenda">FE</strong> | 
+                            <i class="fa-solid fa-location-dot"></i> <strong id="tag-fazenda">FE</strong> | <strong id="tag-gleba">Todas as Glebas</strong> |
                         <span id="tag-ano">2026</span> | 
                         <span id="tag-cultura">Soja</span> | 
                         <span id="tag-produto">Calcário PRNT 80</span>
@@ -246,7 +268,7 @@
                     <div class="dashboard-header-toggle">
                         <div class="dashboard-title-box">
                             <i class="fa-solid fa-chart-column"></i>
-                            <h3>Acompanhamento da Aplicação de Calcário</h3>
+                            <h3 id="dashboard-operation-title">Acompanhamento da Aplicação de Calcário</h3>
                             <span class="badge-farm" id="dash-fazenda-name">Fazenda: FE</span>
                         </div>
                         <button class="btn-toggle-dash" id="btn-toggle-dash" title="Minimizar / Expandir Dashboard">
@@ -277,7 +299,7 @@
                                 <div class="kpi-data">
                                     <span class="kpi-title">ÁREA REALIZADA</span>
                                     <h2 class="kpi-value" id="kpi-area-realizada">0 ha</h2>
-                                    <span class="kpi-subtitle">Aplicado até o momento</span>
+                                    <span class="kpi-subtitle" id="kpi-realizada-subtitle">Aplicado até o momento</span>
                                 </div>
                             </div>
 
@@ -360,6 +382,10 @@
                             <span class="popup-value" id="info-fazenda">N/A</span>
                         </div>
                         <div class="custom-popup-row">
+                            <span class="popup-label">Gleba:</span>
+                            <span class="popup-value" id="info-gleba">N/A</span>
+                        </div>
+                        <div class="custom-popup-row">
                             <span class="popup-label">Área:</span>
                             <span class="popup-value" id="info-area">N/A</span>
                         </div>
@@ -371,6 +397,143 @@
                             <span class="popup-label">Colheita:</span>
                             <span class="popup-value" id="info-colheita">N/A</span>
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ============================================== -->
+            <!-- PAINEL DE PLANTIO (exibido no lugar do mapa)  -->
+            <!-- ============================================== -->
+            <div id="plantio-panel" class="plantio-panel hidden">
+
+                <!-- Cabeçalho do Painel -->
+                <div class="plantio-panel-header">
+                    <div class="plantio-header-left">
+                        <i class="fa-solid fa-leaf plantio-header-icon"></i>
+                        <div class="plantio-header-text">
+                            <h2>Resumo de Plantio</h2>
+                            <span class="plantio-header-sub">Planejamento e execução de plantio — Grupo Michels</span>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-primary editor-control" id="btn-add-plantio">
+                        <i class="fa-solid fa-plus"></i> Adicionar Plantio
+                    </button>
+                </div>
+
+                <!-- Barra de Filtros -->
+                <div class="plantio-filter-bar">
+                    <div class="plantio-filter-title">
+                        <i class="fa-solid fa-sliders"></i>
+                        <span>Filtros:</span>
+                    </div>
+                    <div class="plantio-filter-group">
+                        <label for="plantio-filter-safra">Safra:</label>
+                        <div class="select-wrapper"><select id="plantio-filter-safra"><option value="">Todas</option></select></div>
+                    </div>
+                    <div class="plantio-filter-group">
+                        <label for="plantio-filter-fazenda">Fazenda:</label>
+                        <div class="select-wrapper"><select id="plantio-filter-fazenda"><option value="">Todas</option></select></div>
+                    </div>
+                    <div class="plantio-filter-group">
+                        <label for="plantio-filter-variedade">Variedade:</label>
+                        <div class="select-wrapper"><select id="plantio-filter-variedade"><option value="">Todas</option></select></div>
+                    </div>
+                    <div class="plantio-filter-group">
+                        <label for="plantio-filter-status">Status:</label>
+                        <div class="select-wrapper">
+                            <select id="plantio-filter-status">
+                                <option value="">Todos</option>
+                                <option value="em_andamento">Em Andamento</option>
+                                <option value="concluido">Concluído</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-clear-filters" id="btn-plantio-clear-filters" title="Limpar todos os filtros">
+                        <i class="fa-solid fa-xmark"></i> Limpar
+                    </button>
+                </div>
+
+                <!-- KPI Cards -->
+                <div class="plantio-kpi-section">
+                    <div class="plantio-kpi-grid">
+                        <div class="kpi-card card-planejada">
+                            <div class="kpi-icon-wrapper icon-blue"><i class="fa-solid fa-calendar-check"></i></div>
+                            <div class="kpi-data">
+                                <span class="kpi-title">ÁREA PLANEJADA</span>
+                                <h2 class="kpi-value" id="plantio-kpi-planejada">0 ha</h2>
+                                <span class="kpi-subtitle">Total programado</span>
+                            </div>
+                        </div>
+                        <div class="kpi-card card-realizada">
+                            <div class="kpi-icon-wrapper icon-green"><i class="fa-solid fa-circle-check"></i></div>
+                            <div class="kpi-data">
+                                <span class="kpi-title">ÁREA PLANTADA</span>
+                                <h2 class="kpi-value" id="plantio-kpi-plantada">0 ha</h2>
+                                <span class="kpi-subtitle">Plantios concluídos</span>
+                            </div>
+                        </div>
+                        <div class="kpi-card card-progresso">
+                            <div class="kpi-icon-wrapper icon-orange"><i class="fa-solid fa-clock"></i></div>
+                            <div class="kpi-data">
+                                <span class="kpi-title">EM ANDAMENTO</span>
+                                <h2 class="kpi-value" id="plantio-kpi-andamento">0 ha</h2>
+                                <span class="kpi-subtitle">Aguardando execução</span>
+                            </div>
+                        </div>
+                        <div class="kpi-card card-plantio-pct">
+                            <div class="kpi-icon-wrapper icon-indigo"><i class="fa-solid fa-chart-pie"></i></div>
+                            <div class="kpi-data">
+                                <span class="kpi-title">PROGRESSO</span>
+                                <h2 class="kpi-value" id="plantio-kpi-progresso">0%</h2>
+                                <span class="kpi-subtitle" id="plantio-kpi-progresso-sub">0 de 0 ha plantados</span>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Barra de Progresso Segmentada -->
+                    <div class="progress-bar-section">
+                        <div class="progress-bar-label-row">
+                            <span class="progress-bar-title">Distribuição do Progresso de Plantio:</span>
+                            <span class="progress-bar-pct" id="plantio-progress-badge">0% Plantado</span>
+                        </div>
+                        <div class="segmented-progress-track">
+                            <div class="progress-segment seg-concluido" id="plantio-seg-concluido" style="width:0%;" title="Plantado"></div>
+                            <div class="progress-segment seg-andamento" id="plantio-seg-andamento" style="width:100%;" title="Em Andamento"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tabela de Registros -->
+                <div class="plantio-table-section">
+                    <div class="plantio-table-header">
+                        <h3><i class="fa-solid fa-table-list"></i> Planejamentos</h3>
+                        <span class="plantio-count-badge" id="plantio-count-badge">0 registros</span>
+                    </div>
+                    <div class="plantio-table-wrapper">
+                        <table class="plantio-table" id="plantio-table">
+                            <thead>
+                                <tr>
+                                    <th>Safra</th>
+                                    <th>Fazenda</th>
+                                    <th>Variedade</th>
+                                    <th>Talhões</th>
+                                    <th>Área Total</th>
+                                    <th>Data Plantio</th>
+                                    <th>Status</th>
+                                    <th class="editor-control">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="plantio-table-body">
+                                <tr class="plantio-empty-row">
+                                    <td colspan="8">
+                                        <div class="plantio-empty-state">
+                                            <i class="fa-solid fa-leaf fa-2x"></i>
+                                            <p>Nenhum planejamento de plantio cadastrado.</p>
+                                            <small>Clique em "Adicionar Plantio" para começar.</small>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
@@ -406,7 +569,11 @@
                         <strong class="cadastral-val" id="cadastral-fazenda">-</strong>
                     </div>
                     <div class="cadastral-col">
-                        <span class="cadastral-lbl">TALHÃO</span>
+                                <span class="cadastral-lbl">GLEBA</span>
+                                <strong class="cadastral-val" id="cadastral-gleba">-</strong>
+                            </div>
+                            <div class="cadastral-col">
+                                <span class="cadastral-lbl">TALHÃO</span>
                         <strong class="cadastral-val" id="cadastral-talhao">-</strong>
                     </div>
                     <div class="cadastral-col">
@@ -422,7 +589,7 @@
                         <strong class="cadastral-val" id="cadastral-cultura">-</strong>
                     </div>
                     <div class="cadastral-col">
-                        <span class="cadastral-lbl">PRODUTO</span>
+                        <span class="cadastral-lbl" id="cadastral-produto-label">PRODUTO</span>
                         <strong class="cadastral-val" id="cadastral-produto">-</strong>
                     </div>
                 </div>
@@ -452,7 +619,7 @@
 
                 <!-- Formulário de Edição (Exclusivo Editor) -->
                 <form id="form-adubacao-edit" class="adubacao-edit-form" novalidate>
-                    <label class="form-section-title">SELECIONE O STATUS DA APLICAÇÃO:</label>
+                    <label class="form-section-title" id="operation-status-title">SELECIONE O STATUS DA APLICAÇÃO:</label>
                     
                     <!-- 3 Cards de Seleção de Status -->
                     <div class="status-cards-row">
@@ -463,7 +630,7 @@
                             </div>
                             <div class="status-card-info">
                                 <strong class="status-card-name">Concluído</strong>
-                                <span class="status-card-sub">100% da área aplicada</span>
+                                <span class="status-card-sub" id="status-concluido-sub">100% da área aplicada</span>
                             </div>
                         </div>
 
@@ -474,7 +641,7 @@
                             </div>
                             <div class="status-card-info">
                                 <strong class="status-card-name">Em Andamento</strong>
-                                <span class="status-card-sub">Aplicação parcial</span>
+                                <span class="status-card-sub" id="status-andamento-sub">Aplicação parcial</span>
                             </div>
                         </div>
 
@@ -485,7 +652,7 @@
                             </div>
                             <div class="status-card-info">
                                 <strong class="status-card-name">Não Iniciado</strong>
-                                <span class="status-card-sub">Nenhuma aplicação</span>
+                                <span class="status-card-sub" id="status-nao-iniciado-sub">Nenhuma aplicação</span>
                             </div>
                         </div>
                     </div>
@@ -556,7 +723,7 @@
                         <div class="cond-block hidden" id="cond-block-nao-iniciado">
                             <div class="empty-status-notice">
                                 <i class="fa-solid fa-circle-info"></i>
-                                <span>Nenhum dado adicional é necessário. O talhão permanecerá como <strong>Não Iniciado (0% realizado)</strong>.</span>
+                                <span id="status-nao-iniciado-help">Nenhum dado adicional é necessário. O talhão permanecerá como <strong>Não Iniciado (0% realizado)</strong>.</span>
                             </div>
                         </div>
                     </div>
@@ -701,6 +868,6 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     
     <!-- Custom JS -->
-    <script src="app.js?v=2.2"></script>
+    <script src="app.js?v=2.3"></script>
 </body>
 </html>
