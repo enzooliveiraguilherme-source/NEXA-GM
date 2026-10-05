@@ -23,6 +23,7 @@ const state = {
     currentCultura: 'Soja',
     currentProduto: 'Calcário PRNT 80',
     lastAdubacaoProduto: 'Calcário PRNT 80',
+    sharedSeedVarieties: [],
     
     // Perfil / Permissão ('editor' | 'viewer')
     userRole: 'editor',
@@ -76,6 +77,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupEventListeners();
     AdubacaoModal.init();
     updateRoleUI();
+    SharedSeedCatalog.load();
     loadData();
 });
 
@@ -110,6 +112,105 @@ const STORAGE_KEYS = {
     CULTURAS: 'geoportal_calcario_culturas_v1',
     ROLE: 'geoportal_calcario_role_v1',
     PLANNING: 'geoportal_calcario_planning_v1'
+};
+
+const SharedSeedCatalog = {
+    tableName: 'seed_varieties',
+
+    normalize(name) {
+        return String(name || '').trim().replace(/\s+/g, ' ').toLocaleLowerCase('pt-BR');
+    },
+
+    collectLocalNames() {
+        const names = new Set();
+        Object.values(getAllRecords()).forEach(record => {
+            const name = record && record.variedadeSemente ? String(record.variedadeSemente).trim() : '';
+            if (name) names.add(name);
+        });
+        return Array.from(names);
+    },
+
+    mergeNames(names) {
+        const merged = new Map();
+        [...state.sharedSeedVarieties, ...names].forEach(name => {
+            const cleanName = String(name || '').trim().replace(/\s+/g, ' ');
+            const normalized = this.normalize(cleanName);
+            if (normalized && !merged.has(normalized)) merged.set(normalized, cleanName);
+        });
+        state.sharedSeedVarieties = Array.from(merged.values()).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    },
+
+    async load() {
+        const client = window.supabaseClient;
+        if (!client) return;
+
+        try {
+            const { data, error } = await client
+                .from(this.tableName)
+                .select('name')
+                .order('name', { ascending: true });
+
+            if (error) throw error;
+            this.mergeNames((data || []).map(item => item.name));
+
+            if (state.userRole === 'editor') {
+                await this.syncLocalNames();
+            }
+
+            if (typeof AdubacaoModal !== 'undefined' && AdubacaoModal.currentFeature) {
+                AdubacaoModal.populateVariedadeSuggestions();
+            }
+        } catch (error) {
+            console.warn('Catálogo compartilhado de sementes indisponível; usando lista local.', error);
+            this.mergeNames(this.collectLocalNames());
+        }
+    },
+
+    async syncLocalNames() {
+        const names = this.collectLocalNames();
+        if (!names.length) return;
+
+        const userId = window.portalUser?.id;
+        if (!userId) return;
+
+        const rows = names.map(name => ({
+            name: String(name).trim().replace(/\s+/g, ' '),
+            normalized_name: this.normalize(name),
+            created_by: userId,
+            created_by_name: state.currentUser
+        }));
+
+        const { error } = await window.supabaseClient
+            .from(this.tableName)
+            .upsert(rows, { onConflict: 'normalized_name', ignoreDuplicates: true });
+
+        if (error) throw error;
+        this.mergeNames(names);
+    },
+
+    async add(name) {
+        const cleanName = String(name || '').trim().replace(/\s+/g, ' ');
+        if (!cleanName) return;
+        this.mergeNames([cleanName]);
+
+        const client = window.supabaseClient;
+        const userId = window.portalUser?.id;
+        if (!client || !userId || state.userRole === 'viewer') return;
+
+        try {
+            const { error } = await client
+                .from(this.tableName)
+                .upsert({
+                    name: cleanName,
+                    normalized_name: this.normalize(cleanName),
+                    created_by: userId,
+                    created_by_name: state.currentUser
+                }, { onConflict: 'normalized_name', ignoreDuplicates: true });
+            if (error) throw error;
+        } catch (error) {
+            console.warn('Não foi possível compartilhar a variedade de semente.', error);
+        }
+    }
 };
 
 function isPlantioMode() {
@@ -1243,6 +1344,10 @@ const AdubacaoModal = {
         if (!this.elements.listaVariedadesSemente) return;
         const variedades = new Set();
 
+        state.sharedSeedVarieties.forEach(variedade => {
+            if (variedade && String(variedade).trim()) variedades.add(String(variedade).trim());
+        });
+
         if (state.geojsonData && Array.isArray(state.geojsonData.features)) {
             state.geojsonData.features.forEach(feature => {
                 const variedade = feature.properties && feature.properties.Variedade;
@@ -1624,6 +1729,9 @@ const AdubacaoModal = {
         };
 
         saveTalhaoRecord(updatedRecord);
+        if (isPlantioMode() && variedadeSemente) {
+            SharedSeedCatalog.add(variedadeSemente);
+        }
         this.close();
         updateMapStylesAndKPIs();
     }
