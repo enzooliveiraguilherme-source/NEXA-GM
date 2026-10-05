@@ -292,6 +292,8 @@ function getTalhaoRecord(fazenda, campo, ano, cultura, produto, areaTotal = 0) {
         areaRealizada: 0,
         percentualRealizado: 0,
         taxaAplicada: null,
+        variedadeSemente: '',
+        dataPlantio: '',
         tipoProgresso: 'percentual',
         usuario: 'Sistema',
         ultimaAlteracao: new Date().toISOString(),
@@ -604,6 +606,9 @@ function updateOperationUI() {
 
     const productGroup = document.getElementById('operation-product-filter-group');
     if (productGroup) productGroup.classList.toggle('hidden', plantio);
+    document.querySelectorAll('.plantio-only').forEach(element => {
+        element.classList.toggle('hidden', !plantio);
+    });
 
     setText('dashboard-operation-title', plantio ? 'Acompanhamento do Plantio' : 'Acompanhamento da Aplicação de Calcário');
     setText('kpi-realizada-subtitle', plantio ? 'Plantado até o momento' : 'Aplicado até o momento');
@@ -721,7 +726,14 @@ function getTalhaoTooltipHtml(feature) {
     const statusCfg = STATUS_COLORS[record.status] || STATUS_COLORS.nao_iniciado;
     
     let extraInfo = '';
-    if (record.status === 'concluido' && record.taxaAplicada) {
+    if (isPlantioMode()) {
+        const variedade = record.variedadeSemente || p.Variedade;
+        if (variedade) extraInfo += `<div>Variedade: <strong>${escapeHtml(variedade)}</strong></div>`;
+        if (record.dataPlantio) extraInfo += `<div>Data do Plantio: <strong>${formatDateBR(record.dataPlantio)}</strong></div>`;
+        if (record.status === 'em_andamento') {
+            extraInfo += `<div>Progresso: <strong>${record.percentualRealizado}% (${record.areaRealizada.toFixed(2)} ha)</strong></div>`;
+        }
+    } else if (record.status === 'concluido' && record.taxaAplicada) {
         extraInfo = `<div>Taxa: <strong>${record.taxaAplicada} t/ha</strong></div>`;
     } else if (record.status === 'em_andamento') {
         extraInfo = `<div>Progresso: <strong>${record.percentualRealizado}% (${record.areaRealizada.toFixed(2)} ha)</strong></div>`;
@@ -1076,6 +1088,22 @@ function formatHectares(num) {
     return num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ha';
 }
 
+function formatDateBR(dateValue) {
+    if (!dateValue) return 'Não informada';
+    const parts = String(dateValue).split('-');
+    if (parts.length !== 3) return String(dateValue);
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+}
+
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+}
+
 // ==========================================================================
 // CONTROLADOR MODULAR DO POP-UP DE ADUBAÇÃO (RECONSTRUÍDO DO ZERO)
 // ==========================================================================
@@ -1103,6 +1131,8 @@ const AdubacaoModal = {
         this.elements.cadastralAno = document.getElementById('cadastral-ano');
         this.elements.cadastralCultura = document.getElementById('cadastral-cultura');
         this.elements.cadastralProduto = document.getElementById('cadastral-produto');
+        this.elements.cadastralVariedadeSemente = document.getElementById('cadastral-variedade-semente');
+        this.elements.cadastralDataPlantio = document.getElementById('cadastral-data-plantio');
         
         this.elements.viewerView = document.getElementById('adubacao-viewer-view');
         this.elements.viewerBadge = document.getElementById('viewer-status-badge');
@@ -1110,6 +1140,8 @@ const AdubacaoModal = {
         this.elements.viewerProgresso = document.getElementById('viewer-detail-progresso');
         this.elements.viewerRowTaxa = document.getElementById('viewer-row-taxa');
         this.elements.viewerTaxa = document.getElementById('viewer-detail-taxa');
+        this.elements.viewerVariedadeSemente = document.getElementById('viewer-detail-variedade-semente');
+        this.elements.viewerDataPlantio = document.getElementById('viewer-detail-data-plantio');
         this.elements.btnFecharViewer = document.getElementById('btn-fechar-adubacao-viewer');
 
         this.elements.formEdit = document.getElementById('form-adubacao-edit');
@@ -1119,6 +1151,9 @@ const AdubacaoModal = {
         this.elements.condAndamento = document.getElementById('cond-block-andamento');
         this.elements.condNaoIniciado = document.getElementById('cond-block-nao-iniciado');
         this.elements.inputTaxa = document.getElementById('input-taxa-adubacao');
+        this.elements.inputVariedadeSemente = document.getElementById('input-variedade-semente');
+        this.elements.inputDataPlantio = document.getElementById('input-data-plantio');
+        this.elements.listaVariedadesSemente = document.getElementById('lista-variedades-semente');
         this.elements.radiosProgressMode = document.querySelectorAll('input[name="adubacao-progress-mode"]');
         this.elements.fieldGroupPct = document.getElementById('field-group-pct');
         this.elements.fieldGroupHa = document.getElementById('field-group-ha');
@@ -1204,6 +1239,31 @@ const AdubacaoModal = {
         }
     },
 
+    populateVariedadeSuggestions() {
+        if (!this.elements.listaVariedadesSemente) return;
+        const variedades = new Set();
+
+        if (state.geojsonData && Array.isArray(state.geojsonData.features)) {
+            state.geojsonData.features.forEach(feature => {
+                const variedade = feature.properties && feature.properties.Variedade;
+                if (variedade && String(variedade).trim()) variedades.add(String(variedade).trim());
+            });
+        }
+
+        Object.values(getAllRecords()).forEach(record => {
+            if (record && record.variedadeSemente && String(record.variedadeSemente).trim()) {
+                variedades.add(String(record.variedadeSemente).trim());
+            }
+        });
+
+        this.elements.listaVariedadesSemente.innerHTML = '';
+        Array.from(variedades).sort((a, b) => a.localeCompare(b, 'pt-BR')).forEach(variedade => {
+            const option = document.createElement('option');
+            option.value = variedade;
+            this.elements.listaVariedadesSemente.appendChild(option);
+        });
+    },
+
     open(feature) {
         if (!feature || !feature.properties) return;
 
@@ -1218,6 +1278,8 @@ const AdubacaoModal = {
         this.currentFeature = feature;
         this.currentArea = area;
         this.currentRecord = getTalhaoRecord(fazenda, campo, state.currentAno, state.currentCultura, state.currentProduto, area);
+        const variedadeSemente = this.currentRecord.variedadeSemente || p.Variedade || '';
+        const dataPlantio = this.currentRecord.dataPlantio || '';
 
         state.selectedFeature = feature;
         state.selectedTalhaoRecord = this.currentRecord;
@@ -1234,6 +1296,9 @@ const AdubacaoModal = {
         if (this.elements.cadastralAno) this.elements.cadastralAno.textContent = state.currentAno;
         if (this.elements.cadastralCultura) this.elements.cadastralCultura.textContent = state.currentCultura;
         if (this.elements.cadastralProduto) this.elements.cadastralProduto.textContent = isPlantioMode() ? 'Plantio' : state.currentProduto;
+        if (this.elements.cadastralVariedadeSemente) this.elements.cadastralVariedadeSemente.textContent = variedadeSemente || 'Não informada';
+        if (this.elements.cadastralDataPlantio) this.elements.cadastralDataPlantio.textContent = formatDateBR(dataPlantio);
+        this.populateVariedadeSuggestions();
 
         // Histórico
         this.renderHistory(this.currentRecord.historico);
@@ -1306,6 +1371,13 @@ const AdubacaoModal = {
                 this.elements.viewerRowTaxa.style.display = 'none';
             }
         }
+
+        if (this.elements.viewerVariedadeSemente) {
+            this.elements.viewerVariedadeSemente.textContent = rec.variedadeSemente || this.currentFeature?.properties?.Variedade || 'Não informada';
+        }
+        if (this.elements.viewerDataPlantio) {
+            this.elements.viewerDataPlantio.textContent = formatDateBR(rec.dataPlantio);
+        }
     },
 
     renderEditorMode() {
@@ -1314,6 +1386,10 @@ const AdubacaoModal = {
         const initialMode = rec.tipoProgresso || 'percentual';
 
         if (this.elements.inputTaxa) this.elements.inputTaxa.value = (rec.taxaAplicada != null) ? rec.taxaAplicada : '';
+        if (this.elements.inputVariedadeSemente) {
+            this.elements.inputVariedadeSemente.value = rec.variedadeSemente || this.currentFeature?.properties?.Variedade || '';
+        }
+        if (this.elements.inputDataPlantio) this.elements.inputDataPlantio.value = rec.dataPlantio || '';
         if (this.elements.inputPct) this.elements.inputPct.value = (rec.percentualRealizado != null && rec.percentualRealizado > 0) ? rec.percentualRealizado : '';
         if (this.elements.inputHa) this.elements.inputHa.value = (rec.areaRealizada != null && rec.areaRealizada > 0) ? rec.areaRealizada : '';
 
@@ -1386,10 +1462,18 @@ const AdubacaoModal = {
             if (!item) return;
             const div = document.createElement('div');
             div.className = 'history-record-item';
-            div.innerHTML = `
-                <span class="history-record-meta">${item.data || ''} &bull; ${item.usuario || ''}</span>
-                <span class="history-record-detail"><strong>${item.status || ''}</strong> &mdash; ${item.detalhe || ''}</span>
-            `;
+            const meta = document.createElement('span');
+            meta.className = 'history-record-meta';
+            meta.textContent = `${item.data || ''} • ${item.usuario || ''}`;
+
+            const detail = document.createElement('span');
+            detail.className = 'history-record-detail';
+            const status = document.createElement('strong');
+            status.textContent = item.status || '';
+            detail.appendChild(status);
+            detail.appendChild(document.createTextNode(` — ${item.detalhe || ''}`));
+
+            div.append(meta, detail);
             this.elements.historyList.appendChild(div);
         });
     },
@@ -1418,6 +1502,8 @@ const AdubacaoModal = {
 
             if (this.elements && this.elements.formEdit) this.elements.formEdit.reset();
             if (this.elements && this.elements.inputTaxa) this.elements.inputTaxa.value = '';
+            if (this.elements && this.elements.inputVariedadeSemente) this.elements.inputVariedadeSemente.value = '';
+            if (this.elements && this.elements.inputDataPlantio) this.elements.inputDataPlantio.value = '';
             if (this.elements && this.elements.inputPct) this.elements.inputPct.value = '';
             if (this.elements && this.elements.inputHa) this.elements.inputHa.value = '';
             if (this.elements && this.elements.historyAccordion) this.elements.historyAccordion.classList.remove('expanded');
@@ -1443,6 +1529,22 @@ const AdubacaoModal = {
         let percentualRealizado = 0;
         let tipoProgresso = this.currentProgressMode;
         let historicoDetalhe = '';
+        let variedadeSemente = this.currentRecord.variedadeSemente || '';
+        let dataPlantio = this.currentRecord.dataPlantio || '';
+
+        if (isPlantioMode()) {
+            variedadeSemente = this.elements.inputVariedadeSemente ? this.elements.inputVariedadeSemente.value.trim() : '';
+            dataPlantio = this.elements.inputDataPlantio ? this.elements.inputDataPlantio.value : '';
+
+            if (status !== 'nao_iniciado' && !variedadeSemente) {
+                this.showError('Informe a variedade da semente utilizada neste talhão.');
+                return;
+            }
+            if (status !== 'nao_iniciado' && !dataPlantio) {
+                this.showError('Informe a data em que o plantio foi realizado neste talhão.');
+                return;
+            }
+        }
 
         if (status === 'concluido') {
             if (!isPlantioMode()) {
@@ -1489,6 +1591,13 @@ const AdubacaoModal = {
             historicoDetalhe = `${getCurrentOperationLabel()} marcado como Não Iniciado`;
         }
 
+        if (isPlantioMode()) {
+            const dadosPlantio = [];
+            if (variedadeSemente) dadosPlantio.push(`Variedade: ${variedadeSemente}`);
+            if (dataPlantio) dadosPlantio.push(`Data do plantio: ${formatDateBR(dataPlantio)}`);
+            if (dadosPlantio.length) historicoDetalhe += ` • ${dadosPlantio.join(' • ')}`;
+        }
+
         const now = new Date();
         const historyEntry = {
             data: now.toLocaleString('pt-BR'),
@@ -1506,6 +1615,8 @@ const AdubacaoModal = {
             areaRealizada: areaRealizada,
             percentualRealizado: percentualRealizado,
             taxaAplicada: taxaAplicada,
+            variedadeSemente: variedadeSemente,
+            dataPlantio: dataPlantio,
             tipoProgresso: tipoProgresso,
             usuario: state.currentUser,
             ultimaAlteracao: now.toISOString(),

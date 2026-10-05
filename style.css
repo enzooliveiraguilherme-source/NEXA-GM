@@ -1332,6 +1332,59 @@ svg.leaflet-zoom-animated:focus,
     gap: 14px;
 }
 
+.plantio-details-panel {
+    padding: 14px 16px;
+    border: 1px solid #bbf7d0;
+    border-radius: 12px;
+    background: #f0fdf4;
+}
+
+.plantio-details-heading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+    color: #166534;
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.plantio-details-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(190px, 0.65fr);
+    gap: 12px;
+}
+
+.plantio-details-grid input {
+    width: 100%;
+    min-height: 40px;
+    padding: 9px 12px;
+    border: 1.5px solid #cbd5e1;
+    border-radius: 8px;
+    background: #ffffff;
+    color: #0f172a;
+    font: inherit;
+    font-weight: 600;
+}
+
+.plantio-details-grid input:focus {
+    outline: none;
+    border-color: #16a34a;
+    box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.15);
+}
+
+.cadastral-val.val-highlight-green {
+    color: #15803d;
+}
+
+@media (max-width: 720px) {
+    .plantio-details-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
 .form-section-title {
     font-size: 0.74rem;
     font-weight: 800;

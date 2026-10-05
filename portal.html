@@ -20,7 +20,7 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
     
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="style.css?v=2.3">
+    <link rel="stylesheet" href="style.css?v=2.4">
 </head>
 <body data-page="portal">
     <div id="auth-loading-overlay" class="loading-overlay"><div class="spinner"></div><p>Validando seu acesso…</p></div>
@@ -592,6 +592,14 @@
                         <span class="cadastral-lbl" id="cadastral-produto-label">PRODUTO</span>
                         <strong class="cadastral-val" id="cadastral-produto">-</strong>
                     </div>
+                    <div class="cadastral-col plantio-only hidden">
+                        <span class="cadastral-lbl">VARIEDADE DA SEMENTE</span>
+                        <strong class="cadastral-val val-highlight-green" id="cadastral-variedade-semente">-</strong>
+                    </div>
+                    <div class="cadastral-col plantio-only hidden">
+                        <span class="cadastral-lbl">DATA DO PLANTIO</span>
+                        <strong class="cadastral-val val-highlight-green" id="cadastral-data-plantio">-</strong>
+                    </div>
                 </div>
 
                 <!-- Painel Exclusivo do Visualizador (Somente Leitura) -->
@@ -610,6 +618,14 @@
                                 <span class="viewer-detail-label">Taxa Aplicada:</span>
                                 <strong class="viewer-detail-val" id="viewer-detail-taxa">-</strong>
                             </div>
+                            <div class="viewer-detail-row plantio-only hidden" id="viewer-row-variedade-semente">
+                                <span class="viewer-detail-label">Variedade da Semente:</span>
+                                <strong class="viewer-detail-val" id="viewer-detail-variedade-semente">-</strong>
+                            </div>
+                            <div class="viewer-detail-row plantio-only hidden" id="viewer-row-data-plantio">
+                                <span class="viewer-detail-label">Data do Plantio:</span>
+                                <strong class="viewer-detail-val" id="viewer-detail-data-plantio">-</strong>
+                            </div>
                         </div>
                     </div>
                     <div class="modal-footer">
@@ -619,6 +635,29 @@
 
                 <!-- Formulário de Edição (Exclusivo Editor) -->
                 <form id="form-adubacao-edit" class="adubacao-edit-form" novalidate>
+                    <div class="plantio-details-panel plantio-only hidden" id="plantio-details-panel">
+                        <div class="plantio-details-heading">
+                            <i class="fa-solid fa-seedling"></i>
+                            <span>Dados do Plantio neste Talhão</span>
+                        </div>
+                        <div class="plantio-details-grid">
+                            <div class="form-field-group">
+                                <label for="input-variedade-semente">
+                                    <span class="star-req">*</span> Variedade da Semente:
+                                </label>
+                                <input type="text" id="input-variedade-semente" list="lista-variedades-semente" maxlength="80" placeholder="Ex: M 8644 IPRO" autocomplete="off">
+                                <datalist id="lista-variedades-semente"></datalist>
+                                <small class="field-help-text">Informe a cultivar utilizada neste talhão.</small>
+                            </div>
+                            <div class="form-field-group">
+                                <label for="input-data-plantio">
+                                    <span class="star-req">*</span> Data do Plantio:
+                                </label>
+                                <input type="date" id="input-data-plantio">
+                                <small class="field-help-text">Informe a data em que o plantio foi realizado.</small>
+                            </div>
+                        </div>
+                    </div>
                     <label class="form-section-title" id="operation-status-title">SELECIONE O STATUS DA APLICAÇÃO:</label>
                     
                     <!-- 3 Cards de Seleção de Status -->
@@ -868,6 +907,6 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     
     <!-- Custom JS -->
-    <script src="app.js?v=2.3"></script>
+    <script src="app.js?v=2.4"></script>
 </body>
 </html>
