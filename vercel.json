@@ -6,5 +6,8 @@
       { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
       { "key": "X-Frame-Options", "value": "DENY" }
     ] }
+  ],
+  "crons": [
+    { "path": "/api/keepalive", "schedule": "17 12 * * *" }
   ]
 }
