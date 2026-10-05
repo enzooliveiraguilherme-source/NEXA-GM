@@ -20,7 +20,7 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
     
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="style.css?v=2.4">
+    <link rel="stylesheet" href="style.css?v=2.6">
 </head>
 <body data-page="portal">
     <div id="auth-loading-overlay" class="loading-overlay"><div class="spinner"></div><p>Validando seu acesso…</p></div>
@@ -645,8 +645,13 @@
                                 <label for="input-variedade-semente">
                                     <span class="star-req">*</span> Variedade da Semente:
                                 </label>
-                                <input type="text" id="input-variedade-semente" list="lista-variedades-semente" maxlength="80" placeholder="Ex: M 8644 IPRO" autocomplete="off">
-                                <datalist id="lista-variedades-semente"></datalist>
+                                <div class="seed-combobox" id="seed-combobox">
+                                    <input type="text" id="input-variedade-semente" maxlength="80" placeholder="Digite ou selecione uma variedade" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="lista-variedades-semente">
+                                    <button type="button" class="seed-combobox-toggle" id="btn-toggle-variedades" title="Ver variedades cadastradas" aria-label="Ver variedades cadastradas">
+                                        <i class="fa-solid fa-chevron-down"></i>
+                                    </button>
+                                    <div class="seed-suggestions hidden" id="lista-variedades-semente" role="listbox" aria-label="Variedades de sementes cadastradas"></div>
+                                </div>
                                 <small class="field-help-text">Informe a cultivar utilizada neste talhão.</small>
                             </div>
                             <div class="form-field-group">
@@ -907,6 +912,6 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     
     <!-- Custom JS -->
-    <script src="app.js?v=2.5"></script>
+    <script src="app.js?v=2.6"></script>
 </body>
 </html>

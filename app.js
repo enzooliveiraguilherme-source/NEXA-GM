@@ -1252,9 +1252,11 @@ const AdubacaoModal = {
         this.elements.condAndamento = document.getElementById('cond-block-andamento');
         this.elements.condNaoIniciado = document.getElementById('cond-block-nao-iniciado');
         this.elements.inputTaxa = document.getElementById('input-taxa-adubacao');
+        this.elements.seedCombobox = document.getElementById('seed-combobox');
         this.elements.inputVariedadeSemente = document.getElementById('input-variedade-semente');
         this.elements.inputDataPlantio = document.getElementById('input-data-plantio');
         this.elements.listaVariedadesSemente = document.getElementById('lista-variedades-semente');
+        this.elements.btnToggleVariedades = document.getElementById('btn-toggle-variedades');
         this.elements.radiosProgressMode = document.querySelectorAll('input[name="adubacao-progress-mode"]');
         this.elements.fieldGroupPct = document.getElementById('field-group-pct');
         this.elements.fieldGroupHa = document.getElementById('field-group-ha');
@@ -1287,9 +1289,43 @@ const AdubacaoModal = {
         }
         if (this.elements.backdrop) {
             this.elements.backdrop.addEventListener('click', (e) => {
+                if (!e.target.closest('.seed-combobox')) this.hideVariedadeSuggestions();
                 if (e.target.id === 'adubacao-modal-backdrop') {
                     this.close();
                 }
+            });
+        }
+
+        if (this.elements.inputVariedadeSemente) {
+            this.elements.inputVariedadeSemente.addEventListener('focus', () => {
+                this.showVariedadeSuggestions();
+            });
+            this.elements.inputVariedadeSemente.addEventListener('input', () => {
+                this.showVariedadeSuggestions(this.elements.inputVariedadeSemente.value);
+            });
+            this.elements.inputVariedadeSemente.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    this.hideVariedadeSuggestions();
+                } else if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    this.showVariedadeSuggestions(this.elements.inputVariedadeSemente.value);
+                    this.elements.listaVariedadesSemente?.querySelector('.seed-suggestion-item')?.focus();
+                }
+            });
+        }
+
+        if (this.elements.btnToggleVariedades) {
+            this.elements.btnToggleVariedades.addEventListener('click', () => {
+                const isOpen = this.elements.seedCombobox?.classList.contains('open');
+                if (isOpen) this.hideVariedadeSuggestions();
+                else this.showVariedadeSuggestions(this.elements.inputVariedadeSemente?.value || '');
+            });
+        }
+
+        if (this.elements.listaVariedadesSemente) {
+            this.elements.listaVariedadesSemente.addEventListener('click', (e) => {
+                const item = e.target.closest('.seed-suggestion-item');
+                if (item && item.dataset.value) this.selectVariedade(item.dataset.value);
             });
         }
 
@@ -1340,7 +1376,7 @@ const AdubacaoModal = {
         }
     },
 
-    populateVariedadeSuggestions() {
+    populateVariedadeSuggestions(filterText = '') {
         if (!this.elements.listaVariedadesSemente) return;
         const variedades = new Set();
 
@@ -1361,12 +1397,53 @@ const AdubacaoModal = {
             }
         });
 
+        const normalizedFilter = SharedSeedCatalog.normalize(filterText);
+        const filtered = Array.from(variedades)
+            .sort((a, b) => a.localeCompare(b, 'pt-BR'))
+            .filter(variedade => !normalizedFilter || SharedSeedCatalog.normalize(variedade).includes(normalizedFilter));
+
         this.elements.listaVariedadesSemente.innerHTML = '';
-        Array.from(variedades).sort((a, b) => a.localeCompare(b, 'pt-BR')).forEach(variedade => {
-            const option = document.createElement('option');
-            option.value = variedade;
-            this.elements.listaVariedadesSemente.appendChild(option);
+        if (!filtered.length) {
+            const empty = document.createElement('div');
+            empty.className = 'seed-suggestions-empty';
+            empty.textContent = normalizedFilter
+                ? 'Nenhuma variedade encontrada. Você pode cadastrar uma nova digitando o nome.'
+                : 'Nenhuma variedade cadastrada ainda.';
+            this.elements.listaVariedadesSemente.appendChild(empty);
+            return;
+        }
+
+        filtered.forEach(variedade => {
+            const item = document.createElement('button');
+            item.type = 'button';
+            item.className = 'seed-suggestion-item';
+            item.dataset.value = variedade;
+            item.setAttribute('role', 'option');
+            item.textContent = variedade;
+            this.elements.listaVariedadesSemente.appendChild(item);
         });
+    },
+
+    showVariedadeSuggestions(filterText = '') {
+        if (!isPlantioMode() || !this.elements.listaVariedadesSemente) return;
+        this.populateVariedadeSuggestions(filterText);
+        this.elements.listaVariedadesSemente.classList.remove('hidden');
+        this.elements.seedCombobox?.classList.add('open');
+        this.elements.inputVariedadeSemente?.setAttribute('aria-expanded', 'true');
+    },
+
+    hideVariedadeSuggestions() {
+        this.elements.listaVariedadesSemente?.classList.add('hidden');
+        this.elements.seedCombobox?.classList.remove('open');
+        this.elements.inputVariedadeSemente?.setAttribute('aria-expanded', 'false');
+    },
+
+    selectVariedade(variedade) {
+        if (this.elements.inputVariedadeSemente) {
+            this.elements.inputVariedadeSemente.value = variedade;
+            this.elements.inputVariedadeSemente.focus();
+        }
+        this.hideVariedadeSuggestions();
     },
 
     open(feature) {
@@ -1604,6 +1681,7 @@ const AdubacaoModal = {
             state.selectedFeature = null;
             state.selectedTalhaoRecord = null;
             this.hideError();
+            this.hideVariedadeSuggestions();
 
             if (this.elements && this.elements.formEdit) this.elements.formEdit.reset();
             if (this.elements && this.elements.inputTaxa) this.elements.inputTaxa.value = '';
