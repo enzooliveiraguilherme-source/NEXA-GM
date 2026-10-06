@@ -9,6 +9,12 @@
 const state = {
     map: null,
     geojsonData: null,
+    harvestData: null,
+    harvestSummary: null,
+    harvestRenderer: null,
+    harvestDataset: null,
+    harvestSelected: null,
+    harvestDetailLayer: null,
     geojsonLayer: null,
     basemapLayers: {},
     
@@ -514,6 +520,7 @@ async function loadData() {
         populateDropdowns();
         updateOperationUI();
         seedSampleDataIfEmpty();
+        await loadHarvestTest();
         renderMap(true);
         
         const overlay = document.getElementById('loading-overlay');
@@ -526,6 +533,41 @@ async function loadData() {
         const spinner = document.querySelector('.spinner');
         if (spinner) spinner.style.display = 'none';
     }
+}
+
+function getActiveMapData() {
+    return state.currentTab === 'colheita'
+        ? (state.harvestData || { type: 'FeatureCollection', features: [] })
+        : state.geojsonData;
+}
+
+async function loadHarvestTest() {
+    const status = document.getElementById('harvest-import-status');
+    try {
+        state.harvestDataset = await HarvestStore.load();
+        state.harvestSummary = state.harvestDataset.index;
+        state.harvestData = { type: 'FeatureCollection', features: state.geojsonData.features.filter(feature => feature.properties.Fazenda === 'FE').map(feature => {
+            const record = state.harvestSummary.records.find(r => r.campo === feature.properties.Campo);
+            return { ...feature, properties: { ...feature.properties, produtividade: record?.mean ?? null, unidade_produtividade: 'sc/ha' } };
+        }) };
+        HarvestView.init(state);
+        if (state.currentTab === 'colheita') refreshMapFilters();
+    } catch (error) {
+        if (status) status.textContent = 'Dados não importados. Não foi possível carregar a colheita.';
+        console.warn('Teste de colheita indisponível:', error);
+    }
+}
+
+function refreshMapFilters() {
+    const data = getActiveMapData();
+    if (!data) return;
+    const previous = state.currentFazenda;
+    populateFazendaFilter(data);
+    const available = new Set(data.features.map(feature => feature.properties?.Fazenda));
+    state.currentFazenda = available.has(previous) ? previous : 'ALL';
+    const select = document.getElementById('fazenda-filter');
+    if (select) select.value = state.currentFazenda;
+    populateGlebaFilter(data);
 }
 
 // ==========================================================================
@@ -700,6 +742,9 @@ function isCalcarioMode() {
 
 function updateOperationUI() {
     const plantio = isPlantioMode();
+    const harvest = state.currentTab === 'colheita';
+    document.getElementById('harvest-import-section')?.classList.toggle('hidden', !harvest);
+    document.querySelectorAll('.harvest-detail').forEach(element => element.classList.toggle('hidden', !harvest));
     const setText = (id, value) => {
         const element = document.getElementById(id);
         if (element) element.textContent = value;
@@ -735,6 +780,12 @@ function updateOperationUI() {
 }
 
 function getFeatureStyle(feature) {
+    if (state.currentTab === 'colheita') {
+        const value = feature.properties?.unidade_produtividade === 'sc/ha' ? feature.properties.produtividade : null;
+        const color = HarvestView.color(value);
+        const selected = state.harvestSelected === feature.properties.Campo;
+        return { color: selected ? '#0f172a' : '#ffffff', fillColor: color, fillOpacity: selected ? 0.15 : 0.5, weight: selected ? 3 : 1.5 };
+    }
     if (!isCalcarioMode()) {
         return {
             fillColor: 'transparent',
@@ -868,11 +919,13 @@ function bindTalhaoTooltip(layer, feature) {
         const p = feature.properties || {};
         const campo = p.Campo || 'Sem nome';
         const fazenda = p.Fazenda || 'N/A';
-        const area = p.Area ? `${parseFloat(p.Area).toFixed(2)} ha` : '0.00 ha';
+        const area = HarvestImport.displayNumber(p.Area, 'ha');
+        const productivity = state.currentTab === 'colheita' ? `<div>Produtividade: <strong>${escapeHtml(HarvestImport.displayNumber(p.produtividade, p.unidade_produtividade))}</strong></div>` : '';
         const content = `
             <div class="talhao-tooltip-inner">
-                <div class="talhao-tooltip-title">${campo} (${fazenda})</div>
-                <div>Área: <strong>${area}</strong></div>
+                <div class="talhao-tooltip-title">${escapeHtml(campo)} (${escapeHtml(fazenda)})</div>
+                <div>Área: <strong>${escapeHtml(area)}</strong></div>
+                ${productivity}
                 <div style="font-size: 0.72rem; color: #64748b; margin-top: 2px;">Clique para ver detalhes</div>
             </div>
         `;
@@ -898,7 +951,7 @@ function onEachFeature(feature, layer) {
             layer.setStyle({
                 weight: 1.8,
                 color: '#000000',
-                fillOpacity: 0
+                fillOpacity: state.currentTab === 'colheita' ? 1 : 0
             });
         }
     });
@@ -918,6 +971,11 @@ function onEachFeature(feature, layer) {
             try { state.map.closeTooltip(); } catch(err){}
         }
 
+        if (state.currentTab === 'colheita') {
+            HarvestView.select(state, feature);
+            return;
+        }
+
         if (isCalcarioMode()) {
             if (state.operationalMode === 'planejamento') {
                 if (state.userRole === 'viewer') return;
@@ -931,16 +989,8 @@ function onEachFeature(feature, layer) {
             }
         } else {
             const p = feature.properties || {};
-            let colheitaVal = p['Início Colheita'];
-            if (!colheitaVal) {
-                for (const k of Object.keys(p)) {
-                    if (k.toLowerCase().includes('colheita')) {
-                        colheitaVal = p[k];
-                        break;
-                    }
-                }
-            }
-            const colheita = colheitaVal || 'N/A';
+            const colheitaVal = p.data_inicio || p['Início Colheita'];
+            const colheita = colheitaVal ? formatDateBR(colheitaVal) : HarvestImport.MISSING;
             const infoTitle = document.getElementById('info-title');
             const infoFaz = document.getElementById('info-fazenda');
             const infoGleba = document.getElementById('info-gleba');
@@ -950,11 +1000,22 @@ function onEachFeature(feature, layer) {
             const infoPanel = document.getElementById('info-panel');
 
             if (infoTitle) infoTitle.textContent = `Talhão: ${p.Campo || 'Sem nome'}`;
-            if (infoFaz) infoFaz.textContent = p.Fazenda || 'N/A';
-            if (infoGleba) infoGleba.textContent = p.Gleba || 'N/A';
-            if (infoArea) infoArea.textContent = p.Area ? `${parseFloat(p.Area).toFixed(2)} ha` : '0.00 ha';
-            if (infoVar) infoVar.textContent = p.Variedade || 'N/A';
+            const productivityLabel = document.getElementById('info-produtividade-label');
+            if (productivityLabel) productivityLabel.textContent = feature.geometry?.type === 'Point' ? 'Produtividade neste ponto:' : 'Produtividade:';
+            if (infoFaz) infoFaz.textContent = HarvestImport.display(p.Fazenda);
+            if (infoGleba) infoGleba.textContent = HarvestImport.display(p.Gleba);
+            if (infoArea) infoArea.textContent = HarvestImport.displayNumber(p.Area, 'ha');
+            if (infoVar) infoVar.textContent = HarvestImport.display(p.Variedade);
             if (infoCol) infoCol.textContent = colheita;
+            const harvestDetails = {
+                'info-colheita-fim': p.data_fim ? formatDateBR(p.data_fim) : HarvestImport.MISSING,
+                'info-colheita-safra': HarvestImport.display(p.safra),
+                'info-produtividade': HarvestImport.displayNumber(p.produtividade, p.unidade_produtividade)
+            };
+            Object.entries(harvestDetails).forEach(([id, value]) => {
+                const element = document.getElementById(id);
+                if (element) element.textContent = value;
+            });
             if (infoPanel) infoPanel.classList.remove('hidden');
         }
     });
@@ -982,14 +1043,16 @@ function updateMapStylesAndKPIs() {
 }
 
 function renderMap(shouldFitBounds = true) {
+    HarvestView.clear(state);
     if (state.geojsonLayer && state.map) {
         state.map.removeLayer(state.geojsonLayer);
         state.geojsonLayer = null;
     }
     
-    if (!state.geojsonData) return;
+    const activeData = getActiveMapData();
+    if (!activeData) return;
     
-    const filteredFeatures = state.geojsonData.features.filter(featureMatchesFilters);
+    const filteredFeatures = activeData.features.filter(featureMatchesFilters);
     
     const filteredData = {
         type: "FeatureCollection",
@@ -997,7 +1060,9 @@ function renderMap(shouldFitBounds = true) {
     };
     
     const statsCount = document.getElementById('stats-count');
-    if (statsCount) statsCount.textContent = filteredFeatures.length;
+    if (statsCount) statsCount.textContent = state.currentTab === 'colheita'
+        ? new Set(filteredFeatures.map(feature => JSON.stringify([feature.properties.Fazenda, feature.properties.Campo]))).size
+        : filteredFeatures.length;
     
     const calcarioFilterBar = document.getElementById('calcario-filter-bar');
     const calcarioDashboard = document.getElementById('calcario-dashboard');
@@ -1029,13 +1094,16 @@ function renderMap(shouldFitBounds = true) {
                 opIcon.className = opCfg.icon;
                 opIcon.style.color = opCfg.color;
             }
-            if (opName) opName.textContent = `Operação: ${opCfg.name}`;
+            if (opName) opName.textContent = state.currentTab === 'colheita' ? 'Produtividade • Fazenda Esperança' : `Operação: ${opCfg.name}`;
             if (opFaz) {
                 const fazenda = state.currentFazenda === 'ALL' ? 'Todas as Fazendas' : `Fazenda ${state.currentFazenda}`;
                 const gleba = state.currentGleba === 'ALL' ? 'Todas as Glebas' : `Gleba ${state.currentGleba}`;
                 opFaz.textContent = `${fazenda} • ${gleba}`;
             }
-            if (opCount) opCount.textContent = `${filteredFeatures.length} talhõe${filteredFeatures.length === 1 ? '' : 's'}`;
+            if (opCount) {
+                const points = state.currentTab === 'colheita' && filteredFeatures.some(feature => feature.geometry.type === 'Point');
+                opCount.textContent = points ? `${filteredFeatures.length.toLocaleString('pt-BR')} pontos de amostra` : `${filteredFeatures.length} talhõe${filteredFeatures.length === 1 ? '' : 's'}`;
+            }
         }
     }
 
@@ -1043,6 +1111,10 @@ function renderMap(shouldFitBounds = true) {
     
     state.geojsonLayer = L.geoJSON(filteredData, {
         style: getFeatureStyle,
+        pointToLayer: (feature, latlng) => {
+            if (!state.harvestRenderer) state.harvestRenderer = L.canvas({ padding: 0.5 });
+            return L.circleMarker(latlng, { ...getFeatureStyle(feature), renderer: state.harvestRenderer });
+        },
         onEachFeature: onEachFeature
     }).addTo(state.map);
     
@@ -1955,12 +2027,41 @@ function handleNovaCulturaSubmit(e) {
 // CONFIGURAÇÃO DOS EVENT LISTENERS
 // ==========================================================================
 function setupEventListeners() {
+    const harvestFile = document.getElementById('harvest-file');
+    if (harvestFile) harvestFile.addEventListener('change', async () => {
+        const file = harvestFile.files[0];
+        if (!file) return;
+        const status = document.getElementById('harvest-import-status');
+        harvestFile.disabled = true;
+        try {
+            if (status) status.textContent = 'Conferindo o GeoJSON…';
+            if (file.size > 50 * 1024 * 1024) throw new Error('Arquivo maior que 50 MB. Use a versão de amostra preparada para o teste.');
+            const data = HarvestImport.normalize(JSON.parse(await file.text()));
+            state.harvestData = data;
+            state.harvestSummary = null;
+            if (state.currentTab === 'colheita') {
+                state.currentFazenda = 'ALL';
+                state.currentGleba = 'ALL';
+                refreshMapFilters();
+                document.getElementById('info-panel')?.classList.add('hidden');
+                updateFilterTag();
+                renderMap(true);
+            }
+            const farms = new Set(data.features.map(feature => feature.properties.Fazenda));
+            if (status) status.textContent = `${file.name}: ${data.features.length} feições em ${farms.size} fazendas. Milho / 2026. Teste somente nesta sessão; não salvo no banco.`;
+        } catch (error) {
+            if (status) status.textContent = `Arquivo não importado: ${error.message}`;
+        } finally {
+            harvestFile.disabled = false;
+            harvestFile.value = '';
+        }
+    });
     // 1. Filtro de Fazenda Principal
     const fazendaFilter = document.getElementById('fazenda-filter');
     if (fazendaFilter) {
         fazendaFilter.addEventListener('change', (e) => {
             state.currentFazenda = e.target.value;
-            populateGlebaFilter(state.geojsonData);
+            populateGlebaFilter(getActiveMapData());
             updateFilterTag();
             renderMap(true);
         });
@@ -2034,7 +2135,13 @@ function setupEventListeners() {
         if (state.currentTab === 'adubacao' && state.currentProduto !== 'Plantio') {
             state.lastAdubacaoProduto = state.currentProduto;
         }
+        const previousTab = state.currentTab;
         state.currentTab = tabKey;
+        if (tabKey === 'colheita' && previousTab !== 'colheita') {
+            state.currentFazenda = 'ALL';
+            state.currentGleba = 'ALL';
+        }
+        refreshMapFilters();
 
         if (tabKey === 'plantio') {
             state.currentProduto = 'Plantio';
@@ -2094,7 +2201,7 @@ function setupEventListeners() {
         updateFilterTag();
 
         try {
-            renderMap(false);
+            renderMap(tabKey === 'colheita' && previousTab !== 'colheita');
         } catch (e) {
             console.error('Erro ao renderizar mapa ao trocar de aba:', e);
         }

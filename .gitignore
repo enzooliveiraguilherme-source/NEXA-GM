@@ -23,12 +23,19 @@ package-lock.json
 
 # === Vercel ===
 .vercel/
+.publish/
 
 # === Python (servidor local) ===
 __pycache__/
 *.py[cod]
 
 # === Logs ===
+# Original volumoso mantido localmente; o site usa derivados leves.
+/dados/colheita/2026/milho/TESTE_MILHO.geojson
+/dados/colheita/2026/milho/TESTE_MILHO.qmd
+/dados/colheita/2026/milho/FE.geojson
+/dados/colheita/2026/milho/FE.qmd
+
 *.log
 logs/
 

@@ -20,7 +20,7 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
     
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="style.css?v=2.6">
+    <link rel="stylesheet" href="style.css?v=2.7">
 </head>
 <body data-page="portal">
     <div id="auth-loading-overlay" class="loading-overlay"><div class="spinner"></div><p>Validando seu acesso…</p></div>
@@ -95,6 +95,31 @@
                             <span>Projetos de Linha</span>
                         </button>
                     </nav>
+                </div>
+
+                <div class="sidebar-section hidden" id="harvest-import-section">
+                    <div class="harvest-eyebrow">COLHEITA · MILHO 2026</div>
+                    <h3 class="harvest-farm-title">Fazenda Esperança</h3>
+                    <p id="harvest-import-status" class="harvest-muted" role="status">Carregando os talhões…</p>
+                    <label class="sidebar-filter-label" for="harvest-field-select">Talhão</label>
+                    <select id="harvest-field-select" class="harvest-select"><option value="">Selecionar talhão</option></select>
+                    <div class="harvest-selection-card">
+                        <h4 id="harvest-selection-title">Explore os talhões</h4>
+                        <p id="harvest-selection-hint">Selecione um talhão para ver os detalhes.</p>
+                        <div id="harvest-field-metrics" class="hidden">
+                            <span class="harvest-metric-label">Média da grade interpolada</span>
+                            <div class="harvest-main-metric"><strong id="harvest-mean">—</strong><span>sc/ha</span></div>
+                            <div class="harvest-range"><span>Mínima <strong id="harvest-min">—</strong></span><span>Máxima <strong id="harvest-max">—</strong></span></div>
+                        </div>
+                        <button type="button" id="harvest-back" class="harvest-back hidden">← Ver todos os talhões</button>
+                    </div>
+                    <div class="harvest-legend" aria-label="Produtividade em sacas por hectare">
+                        <div><strong>Produtividade</strong><span>sc/ha</span></div>
+                        <div class="harvest-color-scale"></div>
+                        <div class="harvest-scale-ticks"><span>&lt;80</span><span>110</span><span>140</span><span>170+</span></div>
+                    </div>
+                    <button type="button" id="harvest-cloud-upload" class="harvest-sync hidden">Salvar base de teste no Supabase</button>
+                    <p id="harvest-cloud-status" class="harvest-muted" role="status"></p>
                 </div>
 
                 <!-- SEÇÃO 2: FILTRO DE FAZENDAS -->
@@ -394,8 +419,24 @@
                             <span class="popup-value" id="info-variedade">N/A</span>
                         </div>
                         <div class="custom-popup-row">
-                            <span class="popup-label">Colheita:</span>
+                            <span class="popup-label">Início da colheita:</span>
                             <span class="popup-value" id="info-colheita">N/A</span>
+                        </div>
+                        <div class="custom-popup-row harvest-detail hidden">
+                            <span class="popup-label">Fim da colheita:</span>
+                            <span class="popup-value" id="info-colheita-fim">Dados não importados</span>
+                        </div>
+                        <div class="custom-popup-row harvest-detail hidden">
+                            <span class="popup-label">Ano / cultura:</span>
+                            <span class="popup-value" id="info-colheita-contexto">2026 / Milho</span>
+                        </div>
+                        <div class="custom-popup-row harvest-detail hidden">
+                            <span class="popup-label">Safra:</span>
+                            <span class="popup-value" id="info-colheita-safra">Dados não importados</span>
+                        </div>
+                        <div class="custom-popup-row harvest-detail hidden">
+                            <span class="popup-label" id="info-produtividade-label">Produtividade:</span>
+                            <span class="popup-value" id="info-produtividade">Dados não importados</span>
                         </div>
                     </div>
                 </div>
@@ -912,6 +953,9 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     
     <!-- Custom JS -->
-    <script src="app.js?v=2.6"></script>
+    <script src="js/harvest-import.js?v=3"></script>
+    <script src="js/harvest-store.js?v=1"></script>
+    <script src="js/harvest-view.js?v=1"></script>
+    <script src="app.js?v=2.9"></script>
 </body>
 </html>
