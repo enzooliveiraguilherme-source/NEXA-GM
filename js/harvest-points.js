@@ -30,6 +30,7 @@
                     if (!gl.getProgramParameter(this.program, gl.LINK_STATUS)) throw new Error('Falha ao iniciar o mapa de produtividade.');
                     this.locations = { p: gl.getAttribLocation(this.program, 'p'), viewport: gl.getUniformLocation(this.program, 'viewport'), offset: gl.getUniformLocation(this.program, 'offset'), scale: gl.getUniformLocation(this.program, 'scale'), size: gl.getUniformLocation(this.program, 'size') };
                 }
+                this.unbindZoom=root.HarvestPyramid.bindCanvas(this);
                 map.on('move zoom resize', this.schedule, this);
                 this.draw();
             },
@@ -55,7 +56,8 @@
             },
             schedule() { if (this.frame === null) this.frame = requestAnimationFrame(() => { this.frame = null; this.draw(); }); },
             draw() {
-                if (!this.map) return;
+                if (!this.map||this.zooming) return;
+                root.HarvestPyramid.captureView(this);
                 const viewport = this.map.getSize();
                 const ratio = Math.min(root.devicePixelRatio || 1, 2);
                 const w = Math.round(viewport.x * ratio), h = Math.round(viewport.y * ratio);
@@ -86,6 +88,7 @@
                 ctx.restore();
             },
             onRemove(map) {
+                this.unbindZoom();
                 map.off('move zoom resize', this.schedule, this);
                 if (this.frame !== null) cancelAnimationFrame(this.frame);
                 if (this.gl) { for (const part of this.parts) this.gl.deleteBuffer(part.buffer); this.gl.deleteProgram(this.program); }
