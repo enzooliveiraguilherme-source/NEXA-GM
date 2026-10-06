@@ -6,6 +6,10 @@ As posições e os valores de produtividade são originais. A otimização está
 
 O portal permite mostrar todos os talhões ao mesmo tempo ou selecionar um. O cálculo atual da média foi preservado; sua substituição foi adiada conforme solicitado. Datas ausentes continuam nulas.
 
+A visualização usa seis níveis de pirâmide por talhão (5, 10, 20, 40, 80 e 160 metros em Web Mercator). Cada célula agrega os valores somente para produzir a imagem de exibição. Os pontos originais no Supabase permanecem intactos. As imagens são suavizadas na tela e recortadas pelo polígono, inclusive pelos anéis internos. No zoom 18 ou superior, os pontos originais são carregados sob demanda e recebem o mesmo recorte. scripts/prepare-harvest-pyramid.cjs prepara as imagens; tests/harvest-pyramid.test.cjs verifica os furos do FE 19, os níveis e os limites das classes. A média exibida no painel permanece inalterada.
+
+Legenda: 0 a menos de 120, 120 a menos de 130, 130 a menos de 140, 140 a menos de 160, 160 a 180 e acima de 180 sc/ha. O limite inferior pertence à classe seguinte; 180 pertence à penúltima classe.
+
 scripts/prepare-fe-original.cjs prepara os blocos. tests/fe-original.test.cjs relê o original e compara os valores de todos os pontos bit a bit com os blocos descompactados. Checksums SHA-256 também são verificados no navegador.
 
 A migration 202610060004_original_harvest_points.sql permite a extensão JSON na tabela de arquivos de teste existente, mantendo as permissões de acesso. O envio cria outra versão e só a ativa ao concluir todos os blocos; a versão anterior permanece preservada.

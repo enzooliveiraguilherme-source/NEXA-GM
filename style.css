@@ -2099,6 +2099,9 @@ svg.leaflet-zoom-animated:focus,
 .harvest-range strong { display:block;color:#1e3a32;font-size:16px;margin-top:3px; }
 .harvest-back { width:100%;border:0;background:transparent;color:#0f766e;text-align:left;font-size:12px;font-weight:700;padding:14px 0 0;cursor:pointer; }
 .harvest-legend { margin:18px 0;font-size:12px;color:#334155; }
+.harvest-classes { list-style:none;padding:0;margin:0;display:grid;gap:7px; }
+.harvest-classes li { display:flex;align-items:center;gap:9px;line-height:1.4; }
+.harvest-classes i { width:10px;height:10px;border-radius:50%;flex:none; }
 .harvest-legend>div:first-child { display:flex;justify-content:space-between;margin-bottom:9px; }
 .harvest-color-scale { height:10px;border-radius:8px;background:linear-gradient(to right,#d73027 0%,#fc8d59 25%,#fee08b 50%,#91cf60 75%,#1a9850 100%); }
 .harvest-scale-ticks { display:flex;justify-content:space-between;margin-top:6px;font-size:10px;color:#64748b; }

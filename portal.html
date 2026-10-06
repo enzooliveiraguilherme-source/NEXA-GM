@@ -20,7 +20,7 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
     
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="style.css?v=2.7">
+    <link rel="stylesheet" href="style.css?v=2.8">
 </head>
 <body data-page="portal">
     <div id="auth-loading-overlay" class="loading-overlay"><div class="spinner"></div><p>Validando seu acesso…</p></div>
@@ -115,9 +115,15 @@
                         <button type="button" id="harvest-back" class="harvest-back hidden">← Ver todos os talhões</button>
                     </div>
                     <div class="harvest-legend" aria-label="Produtividade em sacas por hectare">
-                        <div><strong>Produtividade</strong><span>sc/ha</span></div>
-                        <div class="harvest-color-scale"></div>
-                        <div class="harvest-scale-ticks"><span>&lt;80</span><span>110</span><span>140</span><span>170+</span></div>
+                        <div><strong>Produtividade do milho</strong><span>sc/ha</span></div>
+                        <ul class="harvest-classes">
+                            <li><i style="background:#d73027"></i>0 a menos de 120 sc/ha</li>
+                            <li><i style="background:#fc8d59"></i>120 a menos de 130 sc/ha</li>
+                            <li><i style="background:#fee08b"></i>130 a menos de 140 sc/ha</li>
+                            <li><i style="background:#d9ef8b"></i>140 a menos de 160 sc/ha</li>
+                            <li><i style="background:#91cf60"></i>160 a 180 sc/ha</li>
+                            <li><i style="background:#1a9850"></i>Acima de 180 sc/ha</li>
+                        </ul>
                     </div>
                     <button type="button" id="harvest-cloud-upload" class="harvest-sync hidden">Salvar base de teste no Supabase</button>
                     <p id="harvest-cloud-status" class="harvest-muted" role="status"></p>
@@ -956,8 +962,9 @@
     <!-- Custom JS -->
     <script src="js/harvest-import.js?v=3"></script>
     <script src="js/harvest-store.js?v=2"></script>
-    <script src="js/harvest-points.js?v=1"></script>
-    <script src="js/harvest-view.js?v=2"></script>
+    <script src="js/harvest-pyramid.js?v=1"></script>
+    <script src="js/harvest-points.js?v=2"></script>
+    <script src="js/harvest-view.js?v=3"></script>
     <script src="app.js?v=3.1"></script>
 </body>
 </html>
