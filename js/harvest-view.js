@@ -4,8 +4,9 @@
     const cache = new Map();
     const format = value => value == null ? 'Dados não importados' : Number(value).toLocaleString('pt-BR', {maximumFractionDigits:1});
     const text = (id,value) => { const el=document.getElementById(id); if(el) el.textContent=value; };
-    function color(v) { return v==null?'#94a3b8':v<120?'#d73027':v<130?'#fc8d59':v<140?'#fee08b':v<160?'#d9ef8b':v<=180?'#91cf60':'#1a9850'; }
+    function color(v) { return root.HarvestStyle?root.HarvestStyle.color(v):v==null?'#94a3b8':v<120?'#d73027':v<130?'#fc8d59':v<140?'#fee08b':v<160?'#d9ef8b':v<=180?'#91cf60':'#1a9850'; }
     function clear(state) {
+        root.HarvestLegend?.show(state.currentTab==='colheita');
         request++; controller?.abort();
         if(state.harvestDetailLayer) state.map.removeLayer(state.harvestDetailLayer);
         state.harvestDetailLayer=null; state.harvestSelected=null;
@@ -21,14 +22,14 @@
         const signal=controller.signal, bounds=state.harvestSummary.bounds;
         const fields=new Set(records.map(r=>r.campo)),features=state.harvestData.features.filter(f=>fields.has(f.properties.Campo));
         const group=L.layerGroup().addTo(state.map);state.harvestDetailLayer=group;
-        const overview=()=>text('harvest-selection-hint','Visualização em pirâmides · '+records.reduce((n,r)=>n+r.points,0).toLocaleString('pt-BR')+' pontos preservados na base. Datas: Dados não importados.');
+        const overview=()=>text('harvest-selection-hint','Datas: Dados não importados.');
         try {const pyramid=await root.HarvestPyramid.create(records,features);if(token!==request)return;pyramid.addTo(group);overview();}
         catch(error){if(token===request)text('harvest-selection-hint','Não foi possível carregar a visualização. Selecione novamente para tentar.');return;}
         let started=false,loaded=0,complete=false;
         const detail=async()=>{
         if(token!==request||state.currentTab!=='colheita')return;
         if(state.map.getZoom()<16){overview();return;}
-        if(started){text('harvest-selection-hint',complete?loaded.toLocaleString('pt-BR')+' pontos originais · furos e limites respeitados. Datas: Dados não importados.':'Carregando detalhe original: '+loaded.toLocaleString('pt-BR')+'…');return;}started=true;
+        if(started){text('harvest-selection-hint',complete?'Datas: Dados não importados.':'Carregando detalhe da produtividade…');return;}started=true;
         const layer=root.HarvestPoints.create([(bounds[0]+bounds[2])/2,(bounds[1]+bounds[3])/2],features).addTo(group);
         loaded=0;
         try {
@@ -39,9 +40,9 @@
                 if(!chunk) { chunk=await root.HarvestStore.loadChunk(state.harvestDataset,name,signal); cache.set(key,chunk); }
                 if(token!==request||state.currentTab!=='colheita') return;
                 layer.addPoints(chunk.values,chunk.stride); loaded+=chunk.count;
-                if(state.map.getZoom()>=16)text('harvest-selection-hint','Carregando detalhe original: '+loaded.toLocaleString('pt-BR')+'…');
+                if(state.map.getZoom()>=16)text('harvest-selection-hint','Carregando detalhe da produtividade…');
             }
-            complete=true;if(state.map.getZoom()>=16)text('harvest-selection-hint',loaded.toLocaleString('pt-BR')+' pontos originais · furos e limites respeitados. Datas: Dados não importados.');
+            complete=true;if(state.map.getZoom()>=16)text('harvest-selection-hint','Datas: Dados não importados.');
         } catch(error) {
             if(token===request) {
                 group.removeLayer(layer);started=false;
@@ -79,6 +80,7 @@
         await draw(state,records,token);
     }
     function init(state) {
+        root.HarvestLegend.init(state.map);root.HarvestLegend.show(state.currentTab==='colheita');
         const selectEl=document.getElementById('harvest-field-select');
         if(selectEl) {
             selectEl.innerHTML='<option value="">Todos os talhões</option>';

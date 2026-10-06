@@ -1,0 +1,10 @@
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+const saved=new Map();const context=vm.createContext({window:{localStorage:{getItem:key=>saved.get(key)||null,setItem:(key,value)=>saved.set(key,value)}}});
+vm.runInContext(fs.readFileSync('js/harvest-legend.js','utf8'),context);vm.runInContext(fs.readFileSync('js/harvest-pyramid.js','utf8'),context);
+const style=context.window.HarvestStyle,colors=Array.from(style.get().colors);assert.deepEqual(colors,['#fde725','#7ad151','#22a884','#2a788e','#414487','#440154']);
+assert.equal(style.color(119),'#fde725');assert.equal(style.color(181),'#440154');
+const source=new Uint8ClampedArray([215,48,39,255,26,152,80,255,0,0,0,0]);context.window.HarvestPyramid.recolorPixels(source,colors);assert.deepEqual([...source],[253,231,37,255,68,1,84,255,0,0,0,0]);
+let calls=0;const unsubscribe=style.subscribe(()=>calls++);const next=style.get();next.colors[0]='#123456';next.labels[0]='Faixa de teste';style.apply(next);assert.equal(style.color(50),'#123456');assert.equal(calls,1);assert.ok(saved.has('harvest-legend-v1'));unsubscribe();
+assert.throws(()=>style.apply({colors:['invalid'],labels:[]}));assert.equal(style.get().labels[0],'Faixa de teste');
+const restored=vm.createContext({window:{localStorage:context.window.localStorage}});vm.runInContext(fs.readFileSync('js/harvest-legend.js','utf8'),restored);assert.equal(restored.window.HarvestStyle.color(50),'#123456');
+console.log('Viridis invertida, edição, persistência, validação e recoloração sem alterar transparência verificadas.');

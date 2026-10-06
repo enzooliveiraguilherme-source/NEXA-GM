@@ -25,12 +25,13 @@
                     const gl = this.gl;
                     this.program = gl.createProgram();
                     gl.attachShader(this.program, shader(gl, gl.VERTEX_SHADER, 'attribute vec3 p; uniform vec2 viewport; uniform vec2 offset; uniform float scale; uniform float size; varying float c; void main(){ vec2 screen=offset+p.xy*vec2(scale,-scale); gl_Position=vec4(screen.x/viewport.x*2.0-1.0,1.0-screen.y/viewport.y*2.0,0.0,1.0); gl_PointSize=size; c=p.z; }'));
-                    gl.attachShader(this.program, shader(gl, gl.FRAGMENT_SHADER, 'precision mediump float; varying float c; void main(){vec3 rgb=c<0.5?vec3(0.843,0.188,0.153):c<1.5?vec3(0.988,0.553,0.349):c<2.5?vec3(0.996,0.878,0.545):c<3.5?vec3(0.851,0.937,0.545):c<4.5?vec3(0.569,0.812,0.376):vec3(0.102,0.596,0.314); gl_FragColor=vec4(rgb,1.0);}'));
+                    gl.attachShader(this.program, shader(gl, gl.FRAGMENT_SHADER, 'precision mediump float; uniform vec3 colors[6]; varying float c; void main(){vec3 rgb=c<0.5?colors[0]:c<1.5?colors[1]:c<2.5?colors[2]:c<3.5?colors[3]:c<4.5?colors[4]:colors[5]; gl_FragColor=vec4(rgb,1.0);}'));
                     gl.linkProgram(this.program);
                     if (!gl.getProgramParameter(this.program, gl.LINK_STATUS)) throw new Error('Falha ao iniciar o mapa de produtividade.');
-                    this.locations = { p: gl.getAttribLocation(this.program, 'p'), viewport: gl.getUniformLocation(this.program, 'viewport'), offset: gl.getUniformLocation(this.program, 'offset'), scale: gl.getUniformLocation(this.program, 'scale'), size: gl.getUniformLocation(this.program, 'size') };
+                    this.locations = { p: gl.getAttribLocation(this.program, 'p'), viewport: gl.getUniformLocation(this.program, 'viewport'), offset: gl.getUniformLocation(this.program, 'offset'), scale: gl.getUniformLocation(this.program, 'scale'), size: gl.getUniformLocation(this.program, 'size'), colors:gl.getUniformLocation(this.program,'colors[0]') };
                 }
                 this.unbindZoom=root.HarvestPyramid.bindCanvas(this);
+                this.unbindStyle=root.HarvestStyle.subscribe(()=>this.schedule());
                 map.on('move zoom resize', this.schedule, this);
                 this.draw();
             },
@@ -67,12 +68,14 @@
                 const pos = this.map.latLngToContainerPoint([this.origin[1], this.origin[0]]);
                 const scale = 256 * Math.pow(2, this.map.getZoom()) / (2 * Math.PI * R);
                 const size = Math.max(1.5, Math.min(12, 5 * scale * 1.05));
+                const palette=root.HarvestStyle.get().colors;
                 const ctx=this.ctx;ctx.setTransform(ratio,0,0,ratio,0,0);ctx.clearRect(0,0,viewport.x,viewport.y);
                 if(this.map.getZoom()<16) return;
                 ctx.save();root.HarvestPyramid.clip(ctx,this.map,features);
                 if (this.gl) {
                     if(this.gpuCanvas.width!==w||this.gpuCanvas.height!==h){this.gpuCanvas.width=w;this.gpuCanvas.height=h;}
                     const gl = this.gl; gl.viewport(0,0,w,h); gl.clearColor(0,0,0,0); gl.clear(gl.COLOR_BUFFER_BIT); gl.useProgram(this.program);
+                    gl.uniform3fv(this.locations.colors,palette.flatMap(hex=>[parseInt(hex.slice(1,3),16)/255,parseInt(hex.slice(3,5),16)/255,parseInt(hex.slice(5,7),16)/255]));
                     gl.uniform2f(this.locations.viewport, w, h); gl.uniform2f(this.locations.offset, pos.x * ratio, pos.y * ratio);
                     gl.uniform1f(this.locations.scale, scale * ratio); gl.uniform1f(this.locations.size, size * ratio);
                     gl.enableVertexAttribArray(this.locations.p);
@@ -82,12 +85,13 @@
                     for (const part of this.parts) for (let i=0; i<part.count; i+=6) {
                         const x=pos.x+part.vertices[i*3]*scale, y=pos.y-part.vertices[i*3+1]*scale;
                         if(x< -size||y< -size||x>viewport.x+size||y>viewport.y+size) continue;
-                        ctx.fillStyle=colors[part.vertices[i*3+2]];ctx.beginPath();for(const j of [0,1,2,5]){const px=pos.x+part.vertices[(i+j)*3]*scale,py=pos.y-part.vertices[(i+j)*3+1]*scale;if(j===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);}ctx.closePath();ctx.fill();
+                        ctx.fillStyle=palette[part.vertices[i*3+2]];ctx.beginPath();for(const j of [0,1,2,5]){const px=pos.x+part.vertices[(i+j)*3]*scale,py=pos.y-part.vertices[(i+j)*3+1]*scale;if(j===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);}ctx.closePath();ctx.fill();
                     }
                 }
                 ctx.restore();
             },
             onRemove(map) {
+                this.unbindStyle();
                 this.unbindZoom();
                 map.off('move zoom resize', this.schedule, this);
                 if (this.frame !== null) cancelAnimationFrame(this.frame);

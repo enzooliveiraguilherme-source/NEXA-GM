@@ -2102,6 +2102,31 @@ svg.leaflet-zoom-animated:focus,
 .harvest-classes { list-style:none;padding:0;margin:0;display:grid;gap:7px; }
 .harvest-classes li { display:flex;align-items:center;gap:9px;line-height:1.4; }
 .harvest-classes i { width:10px;height:10px;border-radius:50%;flex:none; }
+.harvest-map-legend { width:250px;max-width:calc(100vw - 40px);padding:15px;background:rgba(255,255,255,.97);border:1px solid #e2e8f0;border-radius:16px;box-shadow:0 8px 30px #10253f26;color:#243b53;font-family:Inter,sans-serif;max-height:calc(100vh - 140px);overflow:auto; }
+.leaflet-right .harvest-map-legend { margin-right:16px;margin-bottom:16px; }
+.harvest-legend-toggle { display:flex;justify-content:space-between;align-items:center;gap:12px;width:100%;border:0;padding:0;background:transparent;color:#16324f;cursor:pointer;text-align:left; }
+.harvest-legend-toggle>span { display:grid;gap:3px; }
+.harvest-legend-toggle strong { font-size:13px;line-height:1.4; }
+.harvest-legend-toggle small { font-size:11px;font-weight:400;color:#64748b; }
+.harvest-legend-toggle>i { padding:9px;border-radius:9px;background:#edf5f7;color:#0f766e; }
+.harvest-legend-ramp { height:6px;border-radius:5px;margin:12px 0; }
+.harvest-map-legend .harvest-classes { font-size:11px;gap:6px; }
+.harvest-map-legend .harvest-classes i { border-radius:3px; }
+.harvest-map-legend.is-editing { width:330px; }
+.harvest-legend-editor { border-top:1px solid #e2e8f0;margin-top:14px;padding-top:14px; }
+.harvest-legend-editor[hidden] { display:none; }
+.harvest-legend-editor label { display:grid;gap:7px;font-size:11px;font-weight:600; }
+.harvest-legend-editor select,.harvest-legend-row input[type=text] { width:100%;border:1px solid #dbe5ef;border-radius:8px;padding:8px;background:#fff;color:#16324f;font:inherit;font-size:11px;box-sizing:border-box; }
+.harvest-legend-editor>p { font-size:11px;color:#64748b;margin:10px 0;line-height:1.4; }
+.harvest-legend-rows { display:grid;gap:7px; }
+.harvest-legend-row { display:grid;grid-template-columns:32px 1fr;gap:8px; }
+.harvest-legend-row input[type=color] { width:32px;height:32px;padding:2px;border:1px solid #dbe5ef;border-radius:7px;background:white;cursor:pointer; }
+.harvest-legend-actions { display:flex;gap:6px;justify-content:flex-end;margin-top:12px; }
+.harvest-legend-actions button { border:1px solid #dbe5ef;background:white;border-radius:8px;color:#475569;padding:8px 9px;font:inherit;font-size:11px;cursor:pointer; }
+.harvest-legend-actions button[type=submit] { background:#0f766e;border-color:#0f766e;color:#fff; }
+.harvest-legend-editor .harvest-legend-error { color:#b91c1c; }
+.harvest-map-legend button:focus-visible,.harvest-map-legend input:focus-visible,.harvest-map-legend select:focus-visible { outline:2px solid #0f766e;outline-offset:2px; }
+@media(max-width:600px){.harvest-map-legend { width:218px;padding:12px;max-height:55vh; }.harvest-map-legend.is-editing { width:280px; }.leaflet-right .harvest-map-legend { margin:10px; }}
 .harvest-legend>div:first-child { display:flex;justify-content:space-between;margin-bottom:9px; }
 .harvest-color-scale { height:10px;border-radius:8px;background:linear-gradient(to right,#d73027 0%,#fc8d59 25%,#fee08b 50%,#91cf60 75%,#1a9850 100%); }
 .harvest-scale-ticks { display:flex;justify-content:space-between;margin-top:6px;font-size:10px;color:#64748b; }
