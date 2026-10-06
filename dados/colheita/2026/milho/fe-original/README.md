@@ -12,6 +12,8 @@ Legenda: 0 a menos de 120, 120 a menos de 130, 130 a menos de 140, 140 a menos d
 
 Atualização de nitidez: o nível de 5 metros aparece a partir do zoom 15; o detalhe original começa no zoom 16. As células originais são desenhadas como quadriláteros orientados pelos X/Y da origem, sem limite fixo de tamanho em pixels. Pequenas lacunas periódicas criadas pela reprojeção nas imagens de transição são preenchidas entre vizinhos somente na imagem; a máscara de limites e furos é aplicada depois. Os dados do Supabase e a média do painel permanecem intactos.
 
+A correção das lacunas agora consulta a cobertura da grade original em X/Y: somente uma célula existente pode preencher um pixel vazio da imagem de visualização. Isso resolve também os cruzamentos de linhas que sobravam na correção por vizinhos. Uma auditoria das posições da origem encontrou oito células isoladas ausentes no FE 14; o detalhe original conserva essas ausências. Os furos dos polígonos continuam recortados em todos os níveis.
+
 scripts/prepare-fe-original.cjs prepara os blocos. tests/fe-original.test.cjs relê o original e compara os valores de todos os pontos bit a bit com os blocos descompactados. Checksums SHA-256 também são verificados no navegador.
 
 A migration 202610060004_original_harvest_points.sql permite a extensão JSON na tabela de arquivos de teste existente, mantendo as permissões de acesso. O envio cria outra versão e só a ativa ao concluir todos os blocos; a versão anterior permanece preservada.

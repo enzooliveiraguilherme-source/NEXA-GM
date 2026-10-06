@@ -113,8 +113,8 @@
           ]
         }
       ],
-      "maskedCells": 190,
-      "repairedDisplayCells": 849
+      "maskedCells": 125,
+      "repairedDisplayCells": 804
     },
     {
       "campo": "FE 02",
@@ -226,8 +226,8 @@
           ]
         }
       ],
-      "maskedCells": 318,
-      "repairedDisplayCells": 8505
+      "maskedCells": 488,
+      "repairedDisplayCells": 8956
     },
     {
       "campo": "FE 03",
@@ -339,8 +339,8 @@
           ]
         }
       ],
-      "maskedCells": 273,
-      "repairedDisplayCells": 5684
+      "maskedCells": 320,
+      "repairedDisplayCells": 5820
     },
     {
       "campo": "FE 04",
@@ -452,8 +452,8 @@
           ]
         }
       ],
-      "maskedCells": 94,
-      "repairedDisplayCells": 2760
+      "maskedCells": 206,
+      "repairedDisplayCells": 2979
     },
     {
       "campo": "FE 05",
@@ -565,8 +565,8 @@
           ]
         }
       ],
-      "maskedCells": 430,
-      "repairedDisplayCells": 5990
+      "maskedCells": 1194,
+      "repairedDisplayCells": 6926
     },
     {
       "campo": "FE 05.1",
@@ -678,8 +678,8 @@
           ]
         }
       ],
-      "maskedCells": 150,
-      "repairedDisplayCells": 1094
+      "maskedCells": 151,
+      "repairedDisplayCells": 1112
     },
     {
       "campo": "FE 06",
@@ -791,8 +791,8 @@
           ]
         }
       ],
-      "maskedCells": 163,
-      "repairedDisplayCells": 5460
+      "maskedCells": 487,
+      "repairedDisplayCells": 5855
     },
     {
       "campo": "FE 07",
@@ -904,8 +904,8 @@
           ]
         }
       ],
-      "maskedCells": 3112,
-      "repairedDisplayCells": 4495
+      "maskedCells": 3128,
+      "repairedDisplayCells": 4594
     },
     {
       "campo": "FE 08",
@@ -1017,8 +1017,8 @@
           ]
         }
       ],
-      "maskedCells": 437,
-      "repairedDisplayCells": 7455
+      "maskedCells": 461,
+      "repairedDisplayCells": 7611
     },
     {
       "campo": "FE 09",
@@ -1130,8 +1130,8 @@
           ]
         }
       ],
-      "maskedCells": 249,
-      "repairedDisplayCells": 7414
+      "maskedCells": 273,
+      "repairedDisplayCells": 7564
     },
     {
       "campo": "FE 10",
@@ -1243,8 +1243,8 @@
           ]
         }
       ],
-      "maskedCells": 241,
-      "repairedDisplayCells": 3711
+      "maskedCells": 813,
+      "repairedDisplayCells": 4533
     },
     {
       "campo": "FE 11",
@@ -1356,8 +1356,8 @@
           ]
         }
       ],
-      "maskedCells": 550,
-      "repairedDisplayCells": 4406
+      "maskedCells": 605,
+      "repairedDisplayCells": 4565
     },
     {
       "campo": "FE 12",
@@ -1469,8 +1469,8 @@
           ]
         }
       ],
-      "maskedCells": 214,
-      "repairedDisplayCells": 4075
+      "maskedCells": 222,
+      "repairedDisplayCells": 4158
     },
     {
       "campo": "FE 13",
@@ -1582,8 +1582,8 @@
           ]
         }
       ],
-      "maskedCells": 111,
-      "repairedDisplayCells": 4693
+      "maskedCells": 162,
+      "repairedDisplayCells": 4837
     },
     {
       "campo": "FE 14",
@@ -1695,8 +1695,8 @@
           ]
         }
       ],
-      "maskedCells": 479,
-      "repairedDisplayCells": 9006
+      "maskedCells": 556,
+      "repairedDisplayCells": 9270
     },
     {
       "campo": "FE 15",
@@ -1808,8 +1808,8 @@
           ]
         }
       ],
-      "maskedCells": 244,
-      "repairedDisplayCells": 6779
+      "maskedCells": 332,
+      "repairedDisplayCells": 7030
     },
     {
       "campo": "FE 16",
@@ -1921,8 +1921,8 @@
           ]
         }
       ],
-      "maskedCells": 151,
-      "repairedDisplayCells": 2440
+      "maskedCells": 161,
+      "repairedDisplayCells": 2494
     },
     {
       "campo": "FE 17",
@@ -2034,8 +2034,8 @@
           ]
         }
       ],
-      "maskedCells": 153,
-      "repairedDisplayCells": 4307
+      "maskedCells": 181,
+      "repairedDisplayCells": 4420
     },
     {
       "campo": "FE 18",
@@ -2147,8 +2147,8 @@
           ]
         }
       ],
-      "maskedCells": 812,
-      "repairedDisplayCells": 4027
+      "maskedCells": 837,
+      "repairedDisplayCells": 4128
     },
     {
       "campo": "FE 19",
@@ -2260,8 +2260,8 @@
           ]
         }
       ],
-      "maskedCells": 2138,
-      "repairedDisplayCells": 2720
+      "maskedCells": 2169,
+      "repairedDisplayCells": 2781
     },
     {
       "campo": "FE 20",
@@ -2373,8 +2373,8 @@
           ]
         }
       ],
-      "maskedCells": 270,
-      "repairedDisplayCells": 7518
+      "maskedCells": 287,
+      "repairedDisplayCells": 7655
     }
   ]
 }

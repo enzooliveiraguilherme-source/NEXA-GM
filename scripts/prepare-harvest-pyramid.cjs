@@ -17,15 +17,21 @@ for(const record of index.records){
  const coords=polygons.flat(2),xs=coords.map(p=>p[0]),ys=coords.map(p=>p[1]);
  const minX=Math.floor(Math.min(...xs)/5)*5,maxY=Math.ceil(Math.max(...ys)/5)*5,w=Math.ceil((Math.max(...xs)-minX)/5),h=Math.ceil((maxY-Math.min(...ys))/5);
  let sums=new Float64Array(w*h),counts=new Uint32Array(w*h);
- for(const name of record.chunks){const p=JSON.parse(fs.readFileSync(path.join(base,name))),b=zlib.gunzipSync(Buffer.from(p.gzip_base64,'base64'));for(let i=0;i<p.count;i++){const [x,y]=project([b.readDoubleLE(i*64),b.readDoubleLE(i*64+8)]),cx=Math.floor((x-minX)/5),cy=Math.floor((maxY-y)/5);if(cx>=0&&cx<w&&cy>=0&&cy<h){const at=cy*w+cx;sums[at]+=b.readDoubleLE(i*64+16);counts[at]++;}}}
+ const native=new Map();let anchor,east,north,northSample;
+ for(const name of record.chunks){const p=JSON.parse(fs.readFileSync(path.join(base,name))),b=zlib.gunzipSync(Buffer.from(p.gzip_base64,'base64'));for(let i=0;i<p.count;i++){const [x,y]=project([b.readDoubleLE(i*64),b.readDoubleLE(i*64+8)]),X=b.readDoubleLE(i*64+32),Y=b.readDoubleLE(i*64+40),value=b.readDoubleLE(i*64+16);anchor||={x,y,X,Y};const dx=X-anchor.X,dy=Y-anchor.Y;native.set(Math.round(dx/5)+','+Math.round(dy/5),value);if(!east&&Math.abs(dy)<0.001&&Math.abs(dx)>1)east=[(x-anchor.x)/dx,(y-anchor.y)/dx];if(!northSample&&Math.abs(dy)>1)northSample={x,y,dx,dy};const cx=Math.floor((x-minX)/5),cy=Math.floor((maxY-y)/5);if(cx>=0&&cx<w&&cy>=0&&cy<h){const at=cy*w+cx;sums[at]+=value;counts[at]++;}}}
  // A grade de origem tem 5 m em X/Y. A reprojeção para Mercator abre
  // fileiras vazias periódicas: preencha apenas essas lacunas de exibição.
- const sourceSums=sums.slice(),sourceCounts=counts.slice();let repaired=0;
+ if(!east||!northSample)throw new Error('Não foi possível determinar a grade original.');
+ north=[(northSample.x-anchor.x-east[0]*northSample.dx)/northSample.dy,(northSample.y-anchor.y-east[1]*northSample.dx)/northSample.dy];
+ const determinant=east[0]*north[1]-east[1]*north[0];let repaired=0;
  for(let y=1;y<h-1;y++)for(let x=1;x<w-1;x++){
-  const at=y*w+x;if(sourceCounts[at])continue;
-  const pairs=[[at-1,at+1],[at-w,at+w]];
-  const pair=pairs.find(([a,b])=>sourceCounts[a]&&sourceCounts[b]);
-  if(pair){sums[at]=sourceSums[pair[0]]+sourceSums[pair[1]];counts[at]=sourceCounts[pair[0]]+sourceCounts[pair[1]];repaired++;}
+  const at=y*w+x;if(counts[at])continue;
+  const dx=minX+(x+.5)*5-anchor.x,dy=maxY-(y+.5)*5-anchor.y;
+  const gx=Math.round((dx*north[1]-dy*north[0])/determinant/5),gy=Math.round((dy*east[0]-dx*east[1])/determinant/5);
+  const value=native.get(gx+','+gy);
+  // Preencha somente quando uma célula da origem cobre esta posição.
+  // Ausências reais no arquivo continuam transparentes.
+  if(value!==undefined){sums[at]=value;counts[at]=1;repaired++;}
  }
  let masked=0;for(let y=0;y<h;y++)for(let x=0;x<w;x++){const at=y*w+x;if(counts[at]&&!contains([minX+(x+.5)*5,maxY-(y+.5)*5],polygons)){counts[at]=0;sums[at]=0;masked++;}}
  const levels=[];let width=w,height=h;

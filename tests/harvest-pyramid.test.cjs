@@ -12,6 +12,11 @@ function inside([x,y],ring){let n=0;for(let i=0,j=ring.length-1;i<ring.length;j=
 const [minX,maxY]=project([level.bounds[0][1],level.bounds[1][0]]);let holes=0,shown=0;
 for(let y=0;y<level.height;y++)for(let x=0;x<level.width;x++){const p=[minX+(x+.5)*5,maxY-(y+.5)*5],alpha=pixels[y*(level.width*4+1)+1+x*4+3],hole=rings.slice(1).some(r=>inside(p,r));if(hole){assert.equal(alpha,0,'Nenhum pixel dentro de furo pode ter cor');holes++;}if(alpha)shown++;}
 assert.ok(holes>100);assert.ok(shown>10000);
+const fe12=index.records.find(r=>r.campo==='FE 12').levels[0],image12=fs.readFileSync(path.join(base,fe12.file));let data12=[];
+for(let at=8;at<image12.length;){const n=image12.readUInt32BE(at);if(image12.toString('ascii',at+4,at+8)==='IDAT')data12.push(image12.subarray(at+8,at+8+n));at+=n+12;}
+const pixels12=zlib.inflateSync(Buffer.concat(data12)),alpha12=(x,y)=>pixels12[y*(fe12.width*4+1)+x*4+4];
+let isolated=0;for(let y=1;y<fe12.height-1;y++)for(let x=1;x<fe12.width-1;x++)if(!alpha12(x,y)&&[[1,0],[-1,0],[0,1],[0,-1]].every(([u,v])=>alpha12(x+u,y+v)))isolated++;
+assert.equal(isolated,0,'A reprojeção não deve criar pequenos furos isolados no FE 12');
 const context=vm.createContext({window:{}});vm.runInContext(fs.readFileSync(path.resolve(__dirname,'../js/harvest-view.js'),'utf8'),context);
 const color=context.window.HarvestView.color;assert.equal(color(119.99),'#d73027');assert.equal(color(120),'#fc8d59');assert.equal(color(130),'#fee08b');assert.equal(color(140),'#d9ef8b');assert.equal(color(160),'#91cf60');assert.equal(color(180),'#91cf60');assert.equal(color(180.01),'#1a9850');
 console.log('126 imagens da pirâmide verificadas; '+holes+' células em furos do FE 19 transparentes; limites das seis classes conferidos; '+bytes+' bytes de imagens.');

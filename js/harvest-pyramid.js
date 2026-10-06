@@ -20,7 +20,7 @@
     const level=Math.max(0,Math.min(5,15-Math.floor(map.getZoom())));
     for(const record of this.records){
      const item=record.levels[level],key=item.file;let img=this.images.get(key);
-     if(!img){img=new Image();this.images.set(key,img);img.onload=()=>this.draw();img.onerror=()=>console.error('Não foi possível carregar a resolução da colheita:',key);img.src=BASE+key+'?v=2';}
+     if(!img){img=new Image();this.images.set(key,img);img.onload=()=>this.draw();img.onerror=()=>console.error('Não foi possível carregar a resolução da colheita:',key);img.src=BASE+key+'?v=3';}
      if(!img.complete||!img.naturalWidth)continue;
      const matching=features.filter(f=>f.properties.Campo===record.campo);ctx.save();clip(ctx,map,matching);
      const bounds=item.bounds||record.bounds,a=map.latLngToContainerPoint([bounds[1][0],bounds[0][1]]),b=map.latLngToContainerPoint([bounds[0][0],bounds[1][1]]);
