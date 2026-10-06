@@ -1,0 +1,252 @@
+[
+  {
+    "path": "dados\\colheita\\2026\\milho\\fe\\fe-01.geojson",
+    "bytes": 222808,
+    "sha256": "AFCF8E343F7968FE4319585C35458FB0D278EC85D0FB50630D1F2336E03B5918"
+  },
+  {
+    "path": "dados\\colheita\\2026\\milho\\fe\\fe-02.geojson",
+    "bytes": 2421518,
+    "sha256": "63AC977810AF5388839DF860E94D5A8CADFDA2FC8EDB4C6B01A62CB633E14EA8"
+  },
+  {
+    "path": "dados\\colheita\\2026\\milho\\fe\\fe-03.geojson",
+    "bytes": 1580455,
+    "sha256": "4F2D36AF7D17F8350FBFE2447ACF1E5FC8658F46913253D56FB94753094041A4"
+  },
+  {
+    "path": "dados\\colheita\\2026\\milho\\fe\\fe-04.geojson",
+    "bytes": 811352,
+    "sha256": "D95F4BFEEC4049029054438385B92F699934BF0355E26755B0743BDE52644F5A"
+  },
+  {
+    "path": "dados\\colheita\\2026\\milho\\fe\\fe-05.1.geojson",
+    "bytes": 287175,
+    "sha256": "EF301D33E37E1B204F07CB3EEE582748AAA2A655CBF0E8FE9DB7000B00EFC2AD"
+  },
+  {
+    "path": "dados\\colheita\\2026\\milho\\fe\\fe-05.geojson",
+    "bytes": 1600627,
+    "sha256": "F0229B800B6E384B24F4A6EE107E873D94E0BB39128667CD55FDBE11DEE285B6"
+  },
+  {
+    "path": "dados\\colheita\\2026\\milho\\fe\\fe-06.geojson",
+    "bytes": 1532676,
+    "sha256": "533DE257513C51DF6C3550155FD2F703BD501005099B93B7E7BB23DB57010215"
+  },
+  {
+    "path": "dados\\colheita\\2026\\milho\\fe\\fe-07.geojson",
+    "bytes": 1287931,
+    "sha256": "87515ABD22B3B1045E2B54B37FECC08AC2109358C33AC89FD33A1EDB2B129E8C"
+  },
+  {
+    "path": "dados\\colheita\\2026\\milho\\fe\\fe-08.geojson",
+    "bytes": 2073962,
+    "sha256": "4A7F47DC8119C666B3C3F6B954C0CFCB0EE23891A752B54AE4C9F5BEE4E08249"
+  },
+  {
+    "path": "dados\\colheita\\2026\\milho\\fe\\fe-09.geojson",
+    "bytes": 2008698,
+    "sha256": "BB7A35EABBFF17CFCD02D6931CC4FD0DE6FE7C8993B4F00A3549AFF30E98D932"
+  },
+  {
+    "path": "dados\\colheita\\2026\\milho\\fe\\fe-10.geojson",
+    "bytes": 1100888,
+    "sha256": "C7CF4057AF5EEBAD1F60097FF34A689F270DD501B3CFDCC18A1886CA8924374B"
+  },
+  {
+    "path": "dados\\colheita\\2026\\milho\\fe\\fe-11.geojson",
+    "bytes": 1160135,
+    "sha256": "6013DA4F9EE49123C562D96743208AC0C6C955F366B808D482BB156D1C37ACC1"
+  },
+  {
+    "path": "dados\\colheita\\2026\\milho\\fe\\fe-12.geojson",
+    "bytes": 1144723,
+    "sha256": "7E4414A7C45A306F8AED8B20257D549D030D25D1E1BCE0BEDA92293748A95273"
+  },
+  {
+    "path": "dados\\colheita\\2026\\milho\\fe\\fe-13.geojson",
+    "bytes": 1390711,
+    "sha256": "C42A6586B9FB828EBE95C1A6C203394812E95A321E949F4E236639253913E3A3"
+  },
+  {
+    "path": "dados\\colheita\\2026\\milho\\fe\\fe-14.geojson",
+    "bytes": 2478977,
+    "sha256": "5CA7E864D1A01620FFEEE99EB1F19D237EEEFCC752699A8D3EBE7CD0AAD564E8"
+  },
+  {
+    "path": "dados\\colheita\\2026\\milho\\fe\\fe-15.geojson",
+    "bytes": 1868276,
+    "sha256": "00280759B0B2361A9648056BD36D121EBB0477FFF0BE12605BFC9ECE3113394D"
+  },
+  {
+    "path": "dados\\colheita\\2026\\milho\\fe\\fe-16.geojson",
+    "bytes": 690312,
+    "sha256": "5C5312645B13F32ABB20521A369A04A936D8DC1CD05450228E0AC5B1629C9B4C"
+  },
+  {
+    "path": "dados\\colheita\\2026\\milho\\fe\\fe-17.geojson",
+    "bytes": 1226624,
+    "sha256": "E30B7D929F1582DCC0E9942969B09DEA5F6146D159D060A9609F9492F6381B27"
+  },
+  {
+    "path": "dados\\colheita\\2026\\milho\\fe\\fe-18.geojson",
+    "bytes": 1153694,
+    "sha256": "90646C90CFEE4740EC1880009E43D4EE68EFDABB1012B38DEEC6EAAEC6AC8852"
+  },
+  {
+    "path": "dados\\colheita\\2026\\milho\\fe\\fe-19.geojson",
+    "bytes": 784138,
+    "sha256": "96EED9BB1339033A8A6BB7694C643C76401B919C360EB00F0EA0642571395CE6"
+  },
+  {
+    "path": "dados\\colheita\\2026\\milho\\fe\\fe-20.geojson",
+    "bytes": 2071648,
+    "sha256": "30479E0739866FA547FEC4C9921FB9BD35F88603BEBA75B5EEA029C04BA504C4"
+  },
+  {
+    "path": "dados\\colheita\\2026\\milho\\fe\\index.json",
+    "bytes": 6120,
+    "sha256": "E89BA5B850864A24ED2321CE3E23E513F7A55FD57B3E4666EE77D67A1A9D909A"
+  },
+  {
+    "path": "dados\\colheita\\2026\\milho\\fe\\README.md",
+    "bytes": 1676,
+    "sha256": "8F8C639B5273613F318B63B544ADBE69DCC7521949E05EB88925E756843251FE"
+  },
+  {
+    "path": "scripts\\prepare-fe-harvest.cjs",
+    "bytes": 4302,
+    "sha256": "21BE087ECE3B890F1236CEC5C7EA38BBD52BBDAC23A90071D8784921732EEB08"
+  },
+  {
+    "path": "tests\\fe-harvest.test.cjs",
+    "bytes": 2610,
+    "sha256": "BC35F5C6734B1EC5AF4889DD000722114CCBA430E34E3C3B9562287537C3ADF5"
+  },
+  {
+    "path": ".publish\\fe\\dados\\colheita\\2026\\milho\\fe\\fe-01.geojson",
+    "bytes": 222808,
+    "sha256": "AFCF8E343F7968FE4319585C35458FB0D278EC85D0FB50630D1F2336E03B5918"
+  },
+  {
+    "path": ".publish\\fe\\dados\\colheita\\2026\\milho\\fe\\fe-02.geojson",
+    "bytes": 2421518,
+    "sha256": "63AC977810AF5388839DF860E94D5A8CADFDA2FC8EDB4C6B01A62CB633E14EA8"
+  },
+  {
+    "path": ".publish\\fe\\dados\\colheita\\2026\\milho\\fe\\fe-03.geojson",
+    "bytes": 1580455,
+    "sha256": "4F2D36AF7D17F8350FBFE2447ACF1E5FC8658F46913253D56FB94753094041A4"
+  },
+  {
+    "path": ".publish\\fe\\dados\\colheita\\2026\\milho\\fe\\fe-04.geojson",
+    "bytes": 811352,
+    "sha256": "D95F4BFEEC4049029054438385B92F699934BF0355E26755B0743BDE52644F5A"
+  },
+  {
+    "path": ".publish\\fe\\dados\\colheita\\2026\\milho\\fe\\fe-05.1.geojson",
+    "bytes": 287175,
+    "sha256": "EF301D33E37E1B204F07CB3EEE582748AAA2A655CBF0E8FE9DB7000B00EFC2AD"
+  },
+  {
+    "path": ".publish\\fe\\dados\\colheita\\2026\\milho\\fe\\fe-05.geojson",
+    "bytes": 1600627,
+    "sha256": "F0229B800B6E384B24F4A6EE107E873D94E0BB39128667CD55FDBE11DEE285B6"
+  },
+  {
+    "path": ".publish\\fe\\dados\\colheita\\2026\\milho\\fe\\fe-06.geojson",
+    "bytes": 1532676,
+    "sha256": "533DE257513C51DF6C3550155FD2F703BD501005099B93B7E7BB23DB57010215"
+  },
+  {
+    "path": ".publish\\fe\\dados\\colheita\\2026\\milho\\fe\\fe-07.geojson",
+    "bytes": 1287931,
+    "sha256": "87515ABD22B3B1045E2B54B37FECC08AC2109358C33AC89FD33A1EDB2B129E8C"
+  },
+  {
+    "path": ".publish\\fe\\dados\\colheita\\2026\\milho\\fe\\fe-08.geojson",
+    "bytes": 2073962,
+    "sha256": "4A7F47DC8119C666B3C3F6B954C0CFCB0EE23891A752B54AE4C9F5BEE4E08249"
+  },
+  {
+    "path": ".publish\\fe\\dados\\colheita\\2026\\milho\\fe\\fe-09.geojson",
+    "bytes": 2008698,
+    "sha256": "BB7A35EABBFF17CFCD02D6931CC4FD0DE6FE7C8993B4F00A3549AFF30E98D932"
+  },
+  {
+    "path": ".publish\\fe\\dados\\colheita\\2026\\milho\\fe\\fe-10.geojson",
+    "bytes": 1100888,
+    "sha256": "C7CF4057AF5EEBAD1F60097FF34A689F270DD501B3CFDCC18A1886CA8924374B"
+  },
+  {
+    "path": ".publish\\fe\\dados\\colheita\\2026\\milho\\fe\\fe-11.geojson",
+    "bytes": 1160135,
+    "sha256": "6013DA4F9EE49123C562D96743208AC0C6C955F366B808D482BB156D1C37ACC1"
+  },
+  {
+    "path": ".publish\\fe\\dados\\colheita\\2026\\milho\\fe\\fe-12.geojson",
+    "bytes": 1144723,
+    "sha256": "7E4414A7C45A306F8AED8B20257D549D030D25D1E1BCE0BEDA92293748A95273"
+  },
+  {
+    "path": ".publish\\fe\\dados\\colheita\\2026\\milho\\fe\\fe-13.geojson",
+    "bytes": 1390711,
+    "sha256": "C42A6586B9FB828EBE95C1A6C203394812E95A321E949F4E236639253913E3A3"
+  },
+  {
+    "path": ".publish\\fe\\dados\\colheita\\2026\\milho\\fe\\fe-14.geojson",
+    "bytes": 2478977,
+    "sha256": "5CA7E864D1A01620FFEEE99EB1F19D237EEEFCC752699A8D3EBE7CD0AAD564E8"
+  },
+  {
+    "path": ".publish\\fe\\dados\\colheita\\2026\\milho\\fe\\fe-15.geojson",
+    "bytes": 1868276,
+    "sha256": "00280759B0B2361A9648056BD36D121EBB0477FFF0BE12605BFC9ECE3113394D"
+  },
+  {
+    "path": ".publish\\fe\\dados\\colheita\\2026\\milho\\fe\\fe-16.geojson",
+    "bytes": 690312,
+    "sha256": "5C5312645B13F32ABB20521A369A04A936D8DC1CD05450228E0AC5B1629C9B4C"
+  },
+  {
+    "path": ".publish\\fe\\dados\\colheita\\2026\\milho\\fe\\fe-17.geojson",
+    "bytes": 1226624,
+    "sha256": "E30B7D929F1582DCC0E9942969B09DEA5F6146D159D060A9609F9492F6381B27"
+  },
+  {
+    "path": ".publish\\fe\\dados\\colheita\\2026\\milho\\fe\\fe-18.geojson",
+    "bytes": 1153694,
+    "sha256": "90646C90CFEE4740EC1880009E43D4EE68EFDABB1012B38DEEC6EAAEC6AC8852"
+  },
+  {
+    "path": ".publish\\fe\\dados\\colheita\\2026\\milho\\fe\\fe-19.geojson",
+    "bytes": 784138,
+    "sha256": "96EED9BB1339033A8A6BB7694C643C76401B919C360EB00F0EA0642571395CE6"
+  },
+  {
+    "path": ".publish\\fe\\dados\\colheita\\2026\\milho\\fe\\fe-20.geojson",
+    "bytes": 2071648,
+    "sha256": "30479E0739866FA547FEC4C9921FB9BD35F88603BEBA75B5EEA029C04BA504C4"
+  },
+  {
+    "path": ".publish\\fe\\dados\\colheita\\2026\\milho\\fe\\index.json",
+    "bytes": 6120,
+    "sha256": "E89BA5B850864A24ED2321CE3E23E513F7A55FD57B3E4666EE77D67A1A9D909A"
+  },
+  {
+    "path": ".publish\\fe\\dados\\colheita\\2026\\milho\\fe\\README.md",
+    "bytes": 1676,
+    "sha256": "8F8C639B5273613F318B63B544ADBE69DCC7521949E05EB88925E756843251FE"
+  },
+  {
+    "path": ".publish\\fe\\scripts\\prepare-fe-harvest.cjs",
+    "bytes": 4302,
+    "sha256": "21BE087ECE3B890F1236CEC5C7EA38BBD52BBDAC23A90071D8784921732EEB08"
+  },
+  {
+    "path": ".publish\\fe\\tests\\fe-harvest.test.cjs",
+    "bytes": 2610,
+    "sha256": "BC35F5C6734B1EC5AF4889DD000722114CCBA430E34E3C3B9562287537C3ADF5"
+  }
+]
