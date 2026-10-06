@@ -113,7 +113,8 @@
           ]
         }
       ],
-      "maskedCells": 119
+      "maskedCells": 190,
+      "repairedDisplayCells": 849
     },
     {
       "campo": "FE 02",
@@ -225,7 +226,8 @@
           ]
         }
       ],
-      "maskedCells": 313
+      "maskedCells": 318,
+      "repairedDisplayCells": 8505
     },
     {
       "campo": "FE 03",
@@ -337,7 +339,8 @@
           ]
         }
       ],
-      "maskedCells": 271
+      "maskedCells": 273,
+      "repairedDisplayCells": 5684
     },
     {
       "campo": "FE 04",
@@ -449,7 +452,8 @@
           ]
         }
       ],
-      "maskedCells": 94
+      "maskedCells": 94,
+      "repairedDisplayCells": 2760
     },
     {
       "campo": "FE 05",
@@ -561,7 +565,8 @@
           ]
         }
       ],
-      "maskedCells": 423
+      "maskedCells": 430,
+      "repairedDisplayCells": 5990
     },
     {
       "campo": "FE 05.1",
@@ -673,7 +678,8 @@
           ]
         }
       ],
-      "maskedCells": 147
+      "maskedCells": 150,
+      "repairedDisplayCells": 1094
     },
     {
       "campo": "FE 06",
@@ -785,7 +791,8 @@
           ]
         }
       ],
-      "maskedCells": 162
+      "maskedCells": 163,
+      "repairedDisplayCells": 5460
     },
     {
       "campo": "FE 07",
@@ -897,7 +904,8 @@
           ]
         }
       ],
-      "maskedCells": 2990
+      "maskedCells": 3112,
+      "repairedDisplayCells": 4495
     },
     {
       "campo": "FE 08",
@@ -1009,7 +1017,8 @@
           ]
         }
       ],
-      "maskedCells": 430
+      "maskedCells": 437,
+      "repairedDisplayCells": 7455
     },
     {
       "campo": "FE 09",
@@ -1121,7 +1130,8 @@
           ]
         }
       ],
-      "maskedCells": 248
+      "maskedCells": 249,
+      "repairedDisplayCells": 7414
     },
     {
       "campo": "FE 10",
@@ -1233,7 +1243,8 @@
           ]
         }
       ],
-      "maskedCells": 237
+      "maskedCells": 241,
+      "repairedDisplayCells": 3711
     },
     {
       "campo": "FE 11",
@@ -1345,7 +1356,8 @@
           ]
         }
       ],
-      "maskedCells": 541
+      "maskedCells": 550,
+      "repairedDisplayCells": 4406
     },
     {
       "campo": "FE 12",
@@ -1457,7 +1469,8 @@
           ]
         }
       ],
-      "maskedCells": 209
+      "maskedCells": 214,
+      "repairedDisplayCells": 4075
     },
     {
       "campo": "FE 13",
@@ -1569,7 +1582,8 @@
           ]
         }
       ],
-      "maskedCells": 110
+      "maskedCells": 111,
+      "repairedDisplayCells": 4693
     },
     {
       "campo": "FE 14",
@@ -1681,7 +1695,8 @@
           ]
         }
       ],
-      "maskedCells": 386
+      "maskedCells": 479,
+      "repairedDisplayCells": 9006
     },
     {
       "campo": "FE 15",
@@ -1793,7 +1808,8 @@
           ]
         }
       ],
-      "maskedCells": 242
+      "maskedCells": 244,
+      "repairedDisplayCells": 6779
     },
     {
       "campo": "FE 16",
@@ -1905,7 +1921,8 @@
           ]
         }
       ],
-      "maskedCells": 149
+      "maskedCells": 151,
+      "repairedDisplayCells": 2440
     },
     {
       "campo": "FE 17",
@@ -2017,7 +2034,8 @@
           ]
         }
       ],
-      "maskedCells": 152
+      "maskedCells": 153,
+      "repairedDisplayCells": 4307
     },
     {
       "campo": "FE 18",
@@ -2129,7 +2147,8 @@
           ]
         }
       ],
-      "maskedCells": 810
+      "maskedCells": 812,
+      "repairedDisplayCells": 4027
     },
     {
       "campo": "FE 19",
@@ -2241,7 +2260,8 @@
           ]
         }
       ],
-      "maskedCells": 2049
+      "maskedCells": 2138,
+      "repairedDisplayCells": 2720
     },
     {
       "campo": "FE 20",
@@ -2353,7 +2373,8 @@
           ]
         }
       ],
-      "maskedCells": 266
+      "maskedCells": 270,
+      "repairedDisplayCells": 7518
     }
   ]
 }

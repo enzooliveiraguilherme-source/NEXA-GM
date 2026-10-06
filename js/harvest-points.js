@@ -35,13 +35,21 @@
             },
             addPoints(points, stride) {
                 const count = points.length / stride;
-                const vertices = new Float32Array(count * 3);
+                // Desenhe a célula real da grade, com orientação e escala
+                // derivadas dos X/Y originais, em vez de quadrados em pixels.
+                const first=mercator(points[0],points[1]),x0=points[4],y0=points[5];
+                let east,north;
+                for(let i=1;i<count&&!east;i++)if(Math.abs(points[i*stride+5]-y0)<0.001&&Math.abs(points[i*stride+4]-x0)>1){const p=mercator(points[i*stride],points[i*stride+1]),dx=points[i*stride+4]-x0;east=[(p[0]-first[0])/dx,(p[1]-first[1])/dx];}
+                east ||= [1/Math.cos(points[1]*Math.PI/180),0];
+                for(let i=1;i<count&&!north;i++)if(Math.abs(points[i*stride+5]-y0)>1){const p=mercator(points[i*stride],points[i*stride+1]),dx=points[i*stride+4]-x0,dy=points[i*stride+5]-y0;north=[(p[0]-first[0]-east[0]*dx)/dy,(p[1]-first[1]-east[1]*dx)/dy];}
+                north ||= [0,1/Math.cos(points[1]*Math.PI/180)];
+                const corners=[[-1,-1],[1,-1],[1,1],[-1,-1],[1,1],[-1,1]],half=2.505;
+                const vertices = new Float32Array(count * 18);
                 for (let i = 0; i < count; i++) {
                     const pos = mercator(points[i * stride], points[i * stride + 1]);
-                    vertices[i * 3] = pos[0] - this.center[0]; vertices[i * 3 + 1] = pos[1] - this.center[1];
-                    vertices[i * 3 + 2] = category(points[i * stride + 2]);
+                    for(let j=0;j<6;j++){const at=i*18+j*3,[a,b]=corners[j];vertices[at]=pos[0]-this.center[0]+half*(a*east[0]+b*north[0]);vertices[at+1]=pos[1]-this.center[1]+half*(a*east[1]+b*north[1]);vertices[at+2]=category(points[i*stride+2]);}
                 }
-                const part = { vertices, count };
+                const part = { vertices, count:count*6 };
                 if (this.gl) { part.buffer = this.gl.createBuffer(); this.gl.bindBuffer(this.gl.ARRAY_BUFFER, part.buffer); this.gl.bufferData(this.gl.ARRAY_BUFFER, vertices, this.gl.STATIC_DRAW); }
                 this.parts.push(part); this.schedule();
             },
@@ -58,7 +66,7 @@
                 const scale = 256 * Math.pow(2, this.map.getZoom()) / (2 * Math.PI * R);
                 const size = Math.max(1.5, Math.min(12, 5 * scale * 1.05));
                 const ctx=this.ctx;ctx.setTransform(ratio,0,0,ratio,0,0);ctx.clearRect(0,0,viewport.x,viewport.y);
-                if(this.map.getZoom()<18) return;
+                if(this.map.getZoom()<16) return;
                 ctx.save();root.HarvestPyramid.clip(ctx,this.map,features);
                 if (this.gl) {
                     if(this.gpuCanvas.width!==w||this.gpuCanvas.height!==h){this.gpuCanvas.width=w;this.gpuCanvas.height=h;}
@@ -66,13 +74,13 @@
                     gl.uniform2f(this.locations.viewport, w, h); gl.uniform2f(this.locations.offset, pos.x * ratio, pos.y * ratio);
                     gl.uniform1f(this.locations.scale, scale * ratio); gl.uniform1f(this.locations.size, size * ratio);
                     gl.enableVertexAttribArray(this.locations.p);
-                    for (const part of this.parts) { gl.bindBuffer(gl.ARRAY_BUFFER, part.buffer); gl.vertexAttribPointer(this.locations.p,3,gl.FLOAT,false,0,0); gl.drawArrays(gl.POINTS,0,part.count); }
+                    for (const part of this.parts) { gl.bindBuffer(gl.ARRAY_BUFFER, part.buffer); gl.vertexAttribPointer(this.locations.p,3,gl.FLOAT,false,0,0); gl.drawArrays(gl.TRIANGLES,0,part.count); }
                     ctx.drawImage(this.gpuCanvas,0,0,viewport.x,viewport.y);
                 } else {
-                    for (const part of this.parts) for (let i=0; i<part.count; i++) {
+                    for (const part of this.parts) for (let i=0; i<part.count; i+=6) {
                         const x=pos.x+part.vertices[i*3]*scale, y=pos.y-part.vertices[i*3+1]*scale;
                         if(x< -size||y< -size||x>viewport.x+size||y>viewport.y+size) continue;
-                        ctx.fillStyle=colors[part.vertices[i*3+2]]; ctx.fillRect(x-size/2,y-size/2,size,size);
+                        ctx.fillStyle=colors[part.vertices[i*3+2]];ctx.beginPath();for(const j of [0,1,2,5]){const px=pos.x+part.vertices[(i+j)*3]*scale,py=pos.y-part.vertices[(i+j)*3+1]*scale;if(j===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);}ctx.closePath();ctx.fill();
                     }
                 }
                 ctx.restore();

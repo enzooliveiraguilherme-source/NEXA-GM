@@ -16,11 +16,11 @@
    onAdd(map){this.map=map;const pane=map.getPane('harvest-pyramid')||map.createPane('harvest-pyramid');pane.style.zIndex='345';pane.style.pointerEvents='none';this.canvas=L.DomUtil.create('canvas','harvest-pyramid-canvas',pane);this.canvas.style.pointerEvents='none';map.on('move zoom resize',this.draw,this);this.draw();},
    draw(){
     if(!this.map)return;const map=this.map,size=map.getSize(),ratio=Math.min(root.devicePixelRatio||1,2);this.canvas.width=Math.round(size.x*ratio);this.canvas.height=Math.round(size.y*ratio);this.canvas.style.width=size.x+'px';this.canvas.style.height=size.y+'px';L.DomUtil.setPosition(this.canvas,map.containerPointToLayerPoint([0,0]));
-    const ctx=this.canvas.getContext('2d');ctx.setTransform(ratio,0,0,ratio,0,0);ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
-    const level=Math.max(0,Math.min(5,17-Math.floor(map.getZoom())));
+    const ctx=this.canvas.getContext('2d');ctx.setTransform(ratio,0,0,ratio,0,0);ctx.imageSmoothingEnabled=map.getZoom()<16;ctx.imageSmoothingQuality='high';
+    const level=Math.max(0,Math.min(5,15-Math.floor(map.getZoom())));
     for(const record of this.records){
      const item=record.levels[level],key=item.file;let img=this.images.get(key);
-     if(!img){img=new Image();this.images.set(key,img);img.onload=()=>this.draw();img.onerror=()=>console.error('Não foi possível carregar a resolução da colheita:',key);img.src=BASE+key;}
+     if(!img){img=new Image();this.images.set(key,img);img.onload=()=>this.draw();img.onerror=()=>console.error('Não foi possível carregar a resolução da colheita:',key);img.src=BASE+key+'?v=2';}
      if(!img.complete||!img.naturalWidth)continue;
      const matching=features.filter(f=>f.properties.Campo===record.campo);ctx.save();clip(ctx,map,matching);
      const bounds=item.bounds||record.bounds,a=map.latLngToContainerPoint([bounds[1][0],bounds[0][1]]),b=map.latLngToContainerPoint([bounds[0][0],bounds[1][1]]);

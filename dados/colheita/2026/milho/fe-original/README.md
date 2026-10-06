@@ -10,6 +10,8 @@ A visualização usa seis níveis de pirâmide por talhão (5, 10, 20, 40, 80 e 
 
 Legenda: 0 a menos de 120, 120 a menos de 130, 130 a menos de 140, 140 a menos de 160, 160 a 180 e acima de 180 sc/ha. O limite inferior pertence à classe seguinte; 180 pertence à penúltima classe.
 
+Atualização de nitidez: o nível de 5 metros aparece a partir do zoom 15; o detalhe original começa no zoom 16. As células originais são desenhadas como quadriláteros orientados pelos X/Y da origem, sem limite fixo de tamanho em pixels. Pequenas lacunas periódicas criadas pela reprojeção nas imagens de transição são preenchidas entre vizinhos somente na imagem; a máscara de limites e furos é aplicada depois. Os dados do Supabase e a média do painel permanecem intactos.
+
 scripts/prepare-fe-original.cjs prepara os blocos. tests/fe-original.test.cjs relê o original e compara os valores de todos os pontos bit a bit com os blocos descompactados. Checksums SHA-256 também são verificados no navegador.
 
 A migration 202610060004_original_harvest_points.sql permite a extensão JSON na tabela de arquivos de teste existente, mantendo as permissões de acesso. O envio cria outra versão e só a ativa ao concluir todos os blocos; a versão anterior permanece preservada.
