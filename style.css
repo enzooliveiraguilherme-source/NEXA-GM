@@ -2125,6 +2125,15 @@ svg.leaflet-zoom-animated:focus,
 .harvest-legend-actions button { border:1px solid #dbe5ef;background:white;border-radius:8px;color:#475569;padding:8px 9px;font:inherit;font-size:11px;cursor:pointer; }
 .harvest-legend-actions button[type=submit] { background:#0f766e;border-color:#0f766e;color:#fff; }
 .harvest-legend-editor .harvest-legend-error { color:#b91c1c; }
+.harvest-numeric-row { display:grid;grid-template-columns:28px 1fr 65px auto;align-items:center;gap:7px;font-size:10px;color:#475569; }
+.harvest-numeric-row input[type=color] { width:28px;height:30px;padding:2px;border:1px solid #dbe5ef;border-radius:7px;background:white;cursor:pointer; }
+.harvest-numeric-row input[type=number],.harvest-legend-name input { width:100%;border:1px solid #dbe5ef;border-radius:7px;padding:7px 5px;background:white;color:#16324f;font:inherit;box-sizing:border-box; }
+.harvest-numeric-row:last-child { grid-template-columns:28px 1fr; }
+.harvest-legend-editor>label+label { margin-top:10px; }
+.harvest-legend-name { margin-top:12px; }
+.harvest-legend-save { width:100%;margin-top:8px;padding:9px;border:1px solid #0f766e;background:#f0fdfa;color:#0f766e;border-radius:8px;font:inherit;font-size:11px;cursor:pointer; }
+.harvest-legend-save:disabled { opacity:.5;cursor:wait; }
+.harvest-legend-status { font-size:10px!important; }
 .harvest-map-legend button:focus-visible,.harvest-map-legend input:focus-visible,.harvest-map-legend select:focus-visible { outline:2px solid #0f766e;outline-offset:2px; }
 @media(max-width:600px){.harvest-map-legend { width:218px;padding:12px;max-height:55vh; }.harvest-map-legend.is-editing { width:280px; }.leaflet-right .harvest-map-legend { margin:10px; }}
 .harvest-legend>div:first-child { display:flex;justify-content:space-between;margin-bottom:9px; }

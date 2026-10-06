@@ -38,7 +38,10 @@ for(const record of index.records){
  for(let level=0;level<6;level++){
   const rgba=Buffer.alloc(width*height*4);for(let i=0;i<counts.length;i++)if(counts[i]){const col=palette[category(sums[i]/counts[i])];rgba[i*4]=col[0];rgba[i*4+1]=col[1];rgba[i*4+2]=col[2];rgba[i*4+3]=255;}
   const resolution=5*2**level,swLevel=inverse([minX,maxY-height*resolution]),neLevel=inverse([minX+width*resolution,maxY]);
-  const file=record.campo.replace(/\s+/g,'-').toLowerCase()+'-'+level+'.png';fs.writeFileSync(path.join(out,file),png(width,height,rgba));levels.push({file,width,height,resolution,bounds:[[swLevel[1],swLevel[0]],[neLevel[1],neLevel[0]]]});
+  const stem=record.campo.replace(/\s+/g,'-').toLowerCase()+'-'+level,file=stem+'.png',valuesFile=stem+'.json';
+  const values=Buffer.alloc(width*height*8);for(let i=0;i<counts.length;i++)values.writeDoubleLE(counts[i]?sums[i]/counts[i]:NaN,i*8);
+  fs.writeFileSync(path.join(out,valuesFile),JSON.stringify({format:'harvest-values-f64-v1',width,height,gzip_base64:zlib.gzipSync(values).toString('base64')}));
+  fs.writeFileSync(path.join(out,file),png(width,height,rgba));levels.push({file,valuesFile,width,height,resolution,bounds:[[swLevel[1],swLevel[0]],[neLevel[1],neLevel[0]]]});
   const nw=Math.ceil(width/2),nh=Math.ceil(height/2),ns=new Float64Array(nw*nh),nc=new Uint32Array(nw*nh);for(let y=0;y<height;y++)for(let x=0;x<width;x++){const at=y*width+x,to=Math.floor(y/2)*nw+Math.floor(x/2);ns[to]+=sums[at];nc[to]+=counts[at];}sums=ns;counts=nc;width=nw;height=nh;
  }
  const sw=inverse([minX,maxY-h*5]),ne=inverse([minX+w*5,maxY]);records.push({campo:record.campo,bounds:[[sw[1],sw[0]],[ne[1],ne[0]]],levels,maskedCells:masked,repairedDisplayCells:repaired});console.log(record.campo+': '+masked+' células fora dos limites ocultadas; '+repaired+' lacunas de reprojeção corrigidas.');

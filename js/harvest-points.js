@@ -3,7 +3,6 @@
     const R = 6378137;
     const mercator = (lon, lat) => [R * lon * Math.PI / 180, R * Math.log(Math.tan(Math.PI / 4 + lat * Math.PI / 360))];
     const colors = ['#d73027', '#fc8d59', '#fee08b', '#d9ef8b', '#91cf60', '#1a9850'];
-    const category = value => value < 120 ? 0 : value < 130 ? 1 : value < 140 ? 2 : value < 160 ? 3 : value <= 180 ? 4 : 5;
     function shader(gl, type, source) {
         const result = gl.createShader(type); gl.shaderSource(result, source); gl.compileShader(result);
         if (!gl.getShaderParameter(result, gl.COMPILE_STATUS)) throw new Error('Falha ao preparar o desenho da produtividade.');
@@ -25,10 +24,10 @@
                     const gl = this.gl;
                     this.program = gl.createProgram();
                     gl.attachShader(this.program, shader(gl, gl.VERTEX_SHADER, 'attribute vec3 p; uniform vec2 viewport; uniform vec2 offset; uniform float scale; uniform float size; varying float c; void main(){ vec2 screen=offset+p.xy*vec2(scale,-scale); gl_Position=vec4(screen.x/viewport.x*2.0-1.0,1.0-screen.y/viewport.y*2.0,0.0,1.0); gl_PointSize=size; c=p.z; }'));
-                    gl.attachShader(this.program, shader(gl, gl.FRAGMENT_SHADER, 'precision mediump float; uniform vec3 colors[6]; varying float c; void main(){vec3 rgb=c<0.5?colors[0]:c<1.5?colors[1]:c<2.5?colors[2]:c<3.5?colors[3]:c<4.5?colors[4]:colors[5]; gl_FragColor=vec4(rgb,1.0);}'));
+                    gl.attachShader(this.program, shader(gl, gl.FRAGMENT_SHADER, 'precision highp float; uniform vec3 colors[6]; uniform float breaks[5]; varying float c; void main(){vec3 rgb=c<breaks[0]?colors[0]:c<breaks[1]?colors[1]:c<breaks[2]?colors[2]:c<breaks[3]?colors[3]:c<=breaks[4]?colors[4]:colors[5]; gl_FragColor=vec4(rgb,1.0);}'));
                     gl.linkProgram(this.program);
                     if (!gl.getProgramParameter(this.program, gl.LINK_STATUS)) throw new Error('Falha ao iniciar o mapa de produtividade.');
-                    this.locations = { p: gl.getAttribLocation(this.program, 'p'), viewport: gl.getUniformLocation(this.program, 'viewport'), offset: gl.getUniformLocation(this.program, 'offset'), scale: gl.getUniformLocation(this.program, 'scale'), size: gl.getUniformLocation(this.program, 'size'), colors:gl.getUniformLocation(this.program,'colors[0]') };
+                    this.locations = { p: gl.getAttribLocation(this.program, 'p'), viewport: gl.getUniformLocation(this.program, 'viewport'), offset: gl.getUniformLocation(this.program, 'offset'), scale: gl.getUniformLocation(this.program, 'scale'), size: gl.getUniformLocation(this.program, 'size'), colors:gl.getUniformLocation(this.program,'colors[0]'),breaks:gl.getUniformLocation(this.program,'breaks[0]') };
                 }
                 this.unbindZoom=root.HarvestPyramid.bindCanvas(this);
                 this.unbindStyle=root.HarvestStyle.subscribe(()=>this.schedule());
@@ -49,7 +48,7 @@
                 const vertices = new Float32Array(count * 18);
                 for (let i = 0; i < count; i++) {
                     const pos = mercator(points[i * stride], points[i * stride + 1]);
-                    for(let j=0;j<6;j++){const at=i*18+j*3,[a,b]=corners[j];vertices[at]=pos[0]-this.center[0]+half*(a*east[0]+b*north[0]);vertices[at+1]=pos[1]-this.center[1]+half*(a*east[1]+b*north[1]);vertices[at+2]=category(points[i*stride+2]);}
+                    for(let j=0;j<6;j++){const at=i*18+j*3,[a,b]=corners[j];vertices[at]=pos[0]-this.center[0]+half*(a*east[0]+b*north[0]);vertices[at+1]=pos[1]-this.center[1]+half*(a*east[1]+b*north[1]);vertices[at+2]=points[i*stride+2];}
                 }
                 const part = { vertices, count:count*6 };
                 if (this.gl) { part.buffer = this.gl.createBuffer(); this.gl.bindBuffer(this.gl.ARRAY_BUFFER, part.buffer); this.gl.bufferData(this.gl.ARRAY_BUFFER, vertices, this.gl.STATIC_DRAW); }
@@ -76,6 +75,7 @@
                     if(this.gpuCanvas.width!==w||this.gpuCanvas.height!==h){this.gpuCanvas.width=w;this.gpuCanvas.height=h;}
                     const gl = this.gl; gl.viewport(0,0,w,h); gl.clearColor(0,0,0,0); gl.clear(gl.COLOR_BUFFER_BIT); gl.useProgram(this.program);
                     gl.uniform3fv(this.locations.colors,palette.flatMap(hex=>[parseInt(hex.slice(1,3),16)/255,parseInt(hex.slice(3,5),16)/255,parseInt(hex.slice(5,7),16)/255]));
+                    gl.uniform1fv(this.locations.breaks,root.HarvestStyle.get().breaks);
                     gl.uniform2f(this.locations.viewport, w, h); gl.uniform2f(this.locations.offset, pos.x * ratio, pos.y * ratio);
                     gl.uniform1f(this.locations.scale, scale * ratio); gl.uniform1f(this.locations.size, size * ratio);
                     gl.enableVertexAttribArray(this.locations.p);
@@ -85,7 +85,7 @@
                     for (const part of this.parts) for (let i=0; i<part.count; i+=6) {
                         const x=pos.x+part.vertices[i*3]*scale, y=pos.y-part.vertices[i*3+1]*scale;
                         if(x< -size||y< -size||x>viewport.x+size||y>viewport.y+size) continue;
-                        ctx.fillStyle=palette[part.vertices[i*3+2]];ctx.beginPath();for(const j of [0,1,2,5]){const px=pos.x+part.vertices[(i+j)*3]*scale,py=pos.y-part.vertices[(i+j)*3+1]*scale;if(j===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);}ctx.closePath();ctx.fill();
+                        ctx.fillStyle=root.HarvestStyle.color(part.vertices[i*3+2]);ctx.beginPath();for(const j of [0,1,2,5]){const px=pos.x+part.vertices[(i+j)*3]*scale,py=pos.y-part.vertices[(i+j)*3+1]*scale;if(j===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);}ctx.closePath();ctx.fill();
                     }
                 }
                 ctx.restore();

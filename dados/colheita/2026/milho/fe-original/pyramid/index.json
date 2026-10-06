@@ -18,6 +18,7 @@
       "levels": [
         {
           "file": "fe-01-0.png",
+          "valuesFile": "fe-01-0.json",
           "width": 184,
           "height": 256,
           "resolution": 5,
@@ -34,6 +35,7 @@
         },
         {
           "file": "fe-01-1.png",
+          "valuesFile": "fe-01-1.json",
           "width": 92,
           "height": 128,
           "resolution": 10,
@@ -50,6 +52,7 @@
         },
         {
           "file": "fe-01-2.png",
+          "valuesFile": "fe-01-2.json",
           "width": 46,
           "height": 64,
           "resolution": 20,
@@ -66,6 +69,7 @@
         },
         {
           "file": "fe-01-3.png",
+          "valuesFile": "fe-01-3.json",
           "width": 23,
           "height": 32,
           "resolution": 40,
@@ -82,6 +86,7 @@
         },
         {
           "file": "fe-01-4.png",
+          "valuesFile": "fe-01-4.json",
           "width": 12,
           "height": 16,
           "resolution": 80,
@@ -98,6 +103,7 @@
         },
         {
           "file": "fe-01-5.png",
+          "valuesFile": "fe-01-5.json",
           "width": 6,
           "height": 8,
           "resolution": 160,
@@ -131,6 +137,7 @@
       "levels": [
         {
           "file": "fe-02-0.png",
+          "valuesFile": "fe-02-0.json",
           "width": 797,
           "height": 464,
           "resolution": 5,
@@ -147,6 +154,7 @@
         },
         {
           "file": "fe-02-1.png",
+          "valuesFile": "fe-02-1.json",
           "width": 399,
           "height": 232,
           "resolution": 10,
@@ -163,6 +171,7 @@
         },
         {
           "file": "fe-02-2.png",
+          "valuesFile": "fe-02-2.json",
           "width": 200,
           "height": 116,
           "resolution": 20,
@@ -179,6 +188,7 @@
         },
         {
           "file": "fe-02-3.png",
+          "valuesFile": "fe-02-3.json",
           "width": 100,
           "height": 58,
           "resolution": 40,
@@ -195,6 +205,7 @@
         },
         {
           "file": "fe-02-4.png",
+          "valuesFile": "fe-02-4.json",
           "width": 50,
           "height": 29,
           "resolution": 80,
@@ -211,6 +222,7 @@
         },
         {
           "file": "fe-02-5.png",
+          "valuesFile": "fe-02-5.json",
           "width": 25,
           "height": 15,
           "resolution": 160,
@@ -244,6 +256,7 @@
       "levels": [
         {
           "file": "fe-03-0.png",
+          "valuesFile": "fe-03-0.json",
           "width": 527,
           "height": 413,
           "resolution": 5,
@@ -260,6 +273,7 @@
         },
         {
           "file": "fe-03-1.png",
+          "valuesFile": "fe-03-1.json",
           "width": 264,
           "height": 207,
           "resolution": 10,
@@ -276,6 +290,7 @@
         },
         {
           "file": "fe-03-2.png",
+          "valuesFile": "fe-03-2.json",
           "width": 132,
           "height": 104,
           "resolution": 20,
@@ -292,6 +307,7 @@
         },
         {
           "file": "fe-03-3.png",
+          "valuesFile": "fe-03-3.json",
           "width": 66,
           "height": 52,
           "resolution": 40,
@@ -308,6 +324,7 @@
         },
         {
           "file": "fe-03-4.png",
+          "valuesFile": "fe-03-4.json",
           "width": 33,
           "height": 26,
           "resolution": 80,
@@ -324,6 +341,7 @@
         },
         {
           "file": "fe-03-5.png",
+          "valuesFile": "fe-03-5.json",
           "width": 17,
           "height": 13,
           "resolution": 160,
@@ -357,6 +375,7 @@
       "levels": [
         {
           "file": "fe-04-0.png",
+          "valuesFile": "fe-04-0.json",
           "width": 451,
           "height": 396,
           "resolution": 5,
@@ -373,6 +392,7 @@
         },
         {
           "file": "fe-04-1.png",
+          "valuesFile": "fe-04-1.json",
           "width": 226,
           "height": 198,
           "resolution": 10,
@@ -389,6 +409,7 @@
         },
         {
           "file": "fe-04-2.png",
+          "valuesFile": "fe-04-2.json",
           "width": 113,
           "height": 99,
           "resolution": 20,
@@ -405,6 +426,7 @@
         },
         {
           "file": "fe-04-3.png",
+          "valuesFile": "fe-04-3.json",
           "width": 57,
           "height": 50,
           "resolution": 40,
@@ -421,6 +443,7 @@
         },
         {
           "file": "fe-04-4.png",
+          "valuesFile": "fe-04-4.json",
           "width": 29,
           "height": 25,
           "resolution": 80,
@@ -437,6 +460,7 @@
         },
         {
           "file": "fe-04-5.png",
+          "valuesFile": "fe-04-5.json",
           "width": 15,
           "height": 13,
           "resolution": 160,
@@ -470,6 +494,7 @@
       "levels": [
         {
           "file": "fe-05-0.png",
+          "valuesFile": "fe-05-0.json",
           "width": 605,
           "height": 542,
           "resolution": 5,
@@ -486,6 +511,7 @@
         },
         {
           "file": "fe-05-1.png",
+          "valuesFile": "fe-05-1.json",
           "width": 303,
           "height": 271,
           "resolution": 10,
@@ -502,6 +528,7 @@
         },
         {
           "file": "fe-05-2.png",
+          "valuesFile": "fe-05-2.json",
           "width": 152,
           "height": 136,
           "resolution": 20,
@@ -518,6 +545,7 @@
         },
         {
           "file": "fe-05-3.png",
+          "valuesFile": "fe-05-3.json",
           "width": 76,
           "height": 68,
           "resolution": 40,
@@ -534,6 +562,7 @@
         },
         {
           "file": "fe-05-4.png",
+          "valuesFile": "fe-05-4.json",
           "width": 38,
           "height": 34,
           "resolution": 80,
@@ -550,6 +579,7 @@
         },
         {
           "file": "fe-05-5.png",
+          "valuesFile": "fe-05-5.json",
           "width": 19,
           "height": 17,
           "resolution": 160,
@@ -583,6 +613,7 @@
       "levels": [
         {
           "file": "fe-05.1-0.png",
+          "valuesFile": "fe-05.1-0.json",
           "width": 240,
           "height": 195,
           "resolution": 5,
@@ -599,6 +630,7 @@
         },
         {
           "file": "fe-05.1-1.png",
+          "valuesFile": "fe-05.1-1.json",
           "width": 120,
           "height": 98,
           "resolution": 10,
@@ -615,6 +647,7 @@
         },
         {
           "file": "fe-05.1-2.png",
+          "valuesFile": "fe-05.1-2.json",
           "width": 60,
           "height": 49,
           "resolution": 20,
@@ -631,6 +664,7 @@
         },
         {
           "file": "fe-05.1-3.png",
+          "valuesFile": "fe-05.1-3.json",
           "width": 30,
           "height": 25,
           "resolution": 40,
@@ -647,6 +681,7 @@
         },
         {
           "file": "fe-05.1-4.png",
+          "valuesFile": "fe-05.1-4.json",
           "width": 15,
           "height": 13,
           "resolution": 80,
@@ -663,6 +698,7 @@
         },
         {
           "file": "fe-05.1-5.png",
+          "valuesFile": "fe-05.1-5.json",
           "width": 8,
           "height": 7,
           "resolution": 160,
@@ -696,6 +732,7 @@
       "levels": [
         {
           "file": "fe-06-0.png",
+          "valuesFile": "fe-06-0.json",
           "width": 610,
           "height": 478,
           "resolution": 5,
@@ -712,6 +749,7 @@
         },
         {
           "file": "fe-06-1.png",
+          "valuesFile": "fe-06-1.json",
           "width": 305,
           "height": 239,
           "resolution": 10,
@@ -728,6 +766,7 @@
         },
         {
           "file": "fe-06-2.png",
+          "valuesFile": "fe-06-2.json",
           "width": 153,
           "height": 120,
           "resolution": 20,
@@ -744,6 +783,7 @@
         },
         {
           "file": "fe-06-3.png",
+          "valuesFile": "fe-06-3.json",
           "width": 77,
           "height": 60,
           "resolution": 40,
@@ -760,6 +800,7 @@
         },
         {
           "file": "fe-06-4.png",
+          "valuesFile": "fe-06-4.json",
           "width": 39,
           "height": 30,
           "resolution": 80,
@@ -776,6 +817,7 @@
         },
         {
           "file": "fe-06-5.png",
+          "valuesFile": "fe-06-5.json",
           "width": 20,
           "height": 15,
           "resolution": 160,
@@ -809,6 +851,7 @@
       "levels": [
         {
           "file": "fe-07-0.png",
+          "valuesFile": "fe-07-0.json",
           "width": 439,
           "height": 453,
           "resolution": 5,
@@ -825,6 +868,7 @@
         },
         {
           "file": "fe-07-1.png",
+          "valuesFile": "fe-07-1.json",
           "width": 220,
           "height": 227,
           "resolution": 10,
@@ -841,6 +885,7 @@
         },
         {
           "file": "fe-07-2.png",
+          "valuesFile": "fe-07-2.json",
           "width": 110,
           "height": 114,
           "resolution": 20,
@@ -857,6 +902,7 @@
         },
         {
           "file": "fe-07-3.png",
+          "valuesFile": "fe-07-3.json",
           "width": 55,
           "height": 57,
           "resolution": 40,
@@ -873,6 +919,7 @@
         },
         {
           "file": "fe-07-4.png",
+          "valuesFile": "fe-07-4.json",
           "width": 28,
           "height": 29,
           "resolution": 80,
@@ -889,6 +936,7 @@
         },
         {
           "file": "fe-07-5.png",
+          "valuesFile": "fe-07-5.json",
           "width": 14,
           "height": 15,
           "resolution": 160,
@@ -922,6 +970,7 @@
       "levels": [
         {
           "file": "fe-08-0.png",
+          "valuesFile": "fe-08-0.json",
           "width": 543,
           "height": 518,
           "resolution": 5,
@@ -938,6 +987,7 @@
         },
         {
           "file": "fe-08-1.png",
+          "valuesFile": "fe-08-1.json",
           "width": 272,
           "height": 259,
           "resolution": 10,
@@ -954,6 +1004,7 @@
         },
         {
           "file": "fe-08-2.png",
+          "valuesFile": "fe-08-2.json",
           "width": 136,
           "height": 130,
           "resolution": 20,
@@ -970,6 +1021,7 @@
         },
         {
           "file": "fe-08-3.png",
+          "valuesFile": "fe-08-3.json",
           "width": 68,
           "height": 65,
           "resolution": 40,
@@ -986,6 +1038,7 @@
         },
         {
           "file": "fe-08-4.png",
+          "valuesFile": "fe-08-4.json",
           "width": 34,
           "height": 33,
           "resolution": 80,
@@ -1002,6 +1055,7 @@
         },
         {
           "file": "fe-08-5.png",
+          "valuesFile": "fe-08-5.json",
           "width": 17,
           "height": 17,
           "resolution": 160,
@@ -1035,6 +1089,7 @@
       "levels": [
         {
           "file": "fe-09-0.png",
+          "valuesFile": "fe-09-0.json",
           "width": 500,
           "height": 598,
           "resolution": 5,
@@ -1051,6 +1106,7 @@
         },
         {
           "file": "fe-09-1.png",
+          "valuesFile": "fe-09-1.json",
           "width": 250,
           "height": 299,
           "resolution": 10,
@@ -1067,6 +1123,7 @@
         },
         {
           "file": "fe-09-2.png",
+          "valuesFile": "fe-09-2.json",
           "width": 125,
           "height": 150,
           "resolution": 20,
@@ -1083,6 +1140,7 @@
         },
         {
           "file": "fe-09-3.png",
+          "valuesFile": "fe-09-3.json",
           "width": 63,
           "height": 75,
           "resolution": 40,
@@ -1099,6 +1157,7 @@
         },
         {
           "file": "fe-09-4.png",
+          "valuesFile": "fe-09-4.json",
           "width": 32,
           "height": 38,
           "resolution": 80,
@@ -1115,6 +1174,7 @@
         },
         {
           "file": "fe-09-5.png",
+          "valuesFile": "fe-09-5.json",
           "width": 16,
           "height": 19,
           "resolution": 160,
@@ -1148,6 +1208,7 @@
       "levels": [
         {
           "file": "fe-10-0.png",
+          "valuesFile": "fe-10-0.json",
           "width": 360,
           "height": 518,
           "resolution": 5,
@@ -1164,6 +1225,7 @@
         },
         {
           "file": "fe-10-1.png",
+          "valuesFile": "fe-10-1.json",
           "width": 180,
           "height": 259,
           "resolution": 10,
@@ -1180,6 +1242,7 @@
         },
         {
           "file": "fe-10-2.png",
+          "valuesFile": "fe-10-2.json",
           "width": 90,
           "height": 130,
           "resolution": 20,
@@ -1196,6 +1259,7 @@
         },
         {
           "file": "fe-10-3.png",
+          "valuesFile": "fe-10-3.json",
           "width": 45,
           "height": 65,
           "resolution": 40,
@@ -1212,6 +1276,7 @@
         },
         {
           "file": "fe-10-4.png",
+          "valuesFile": "fe-10-4.json",
           "width": 23,
           "height": 33,
           "resolution": 80,
@@ -1228,6 +1293,7 @@
         },
         {
           "file": "fe-10-5.png",
+          "valuesFile": "fe-10-5.json",
           "width": 12,
           "height": 17,
           "resolution": 160,
@@ -1261,6 +1327,7 @@
       "levels": [
         {
           "file": "fe-11-0.png",
+          "valuesFile": "fe-11-0.json",
           "width": 540,
           "height": 413,
           "resolution": 5,
@@ -1277,6 +1344,7 @@
         },
         {
           "file": "fe-11-1.png",
+          "valuesFile": "fe-11-1.json",
           "width": 270,
           "height": 207,
           "resolution": 10,
@@ -1293,6 +1361,7 @@
         },
         {
           "file": "fe-11-2.png",
+          "valuesFile": "fe-11-2.json",
           "width": 135,
           "height": 104,
           "resolution": 20,
@@ -1309,6 +1378,7 @@
         },
         {
           "file": "fe-11-3.png",
+          "valuesFile": "fe-11-3.json",
           "width": 68,
           "height": 52,
           "resolution": 40,
@@ -1325,6 +1395,7 @@
         },
         {
           "file": "fe-11-4.png",
+          "valuesFile": "fe-11-4.json",
           "width": 34,
           "height": 26,
           "resolution": 80,
@@ -1341,6 +1412,7 @@
         },
         {
           "file": "fe-11-5.png",
+          "valuesFile": "fe-11-5.json",
           "width": 17,
           "height": 13,
           "resolution": 160,
@@ -1374,6 +1446,7 @@
       "levels": [
         {
           "file": "fe-12-0.png",
+          "valuesFile": "fe-12-0.json",
           "width": 335,
           "height": 453,
           "resolution": 5,
@@ -1390,6 +1463,7 @@
         },
         {
           "file": "fe-12-1.png",
+          "valuesFile": "fe-12-1.json",
           "width": 168,
           "height": 227,
           "resolution": 10,
@@ -1406,6 +1480,7 @@
         },
         {
           "file": "fe-12-2.png",
+          "valuesFile": "fe-12-2.json",
           "width": 84,
           "height": 114,
           "resolution": 20,
@@ -1422,6 +1497,7 @@
         },
         {
           "file": "fe-12-3.png",
+          "valuesFile": "fe-12-3.json",
           "width": 42,
           "height": 57,
           "resolution": 40,
@@ -1438,6 +1514,7 @@
         },
         {
           "file": "fe-12-4.png",
+          "valuesFile": "fe-12-4.json",
           "width": 21,
           "height": 29,
           "resolution": 80,
@@ -1454,6 +1531,7 @@
         },
         {
           "file": "fe-12-5.png",
+          "valuesFile": "fe-12-5.json",
           "width": 11,
           "height": 15,
           "resolution": 160,
@@ -1487,6 +1565,7 @@
       "levels": [
         {
           "file": "fe-13-0.png",
+          "valuesFile": "fe-13-0.json",
           "width": 353,
           "height": 571,
           "resolution": 5,
@@ -1503,6 +1582,7 @@
         },
         {
           "file": "fe-13-1.png",
+          "valuesFile": "fe-13-1.json",
           "width": 177,
           "height": 286,
           "resolution": 10,
@@ -1519,6 +1599,7 @@
         },
         {
           "file": "fe-13-2.png",
+          "valuesFile": "fe-13-2.json",
           "width": 89,
           "height": 143,
           "resolution": 20,
@@ -1535,6 +1616,7 @@
         },
         {
           "file": "fe-13-3.png",
+          "valuesFile": "fe-13-3.json",
           "width": 45,
           "height": 72,
           "resolution": 40,
@@ -1551,6 +1633,7 @@
         },
         {
           "file": "fe-13-4.png",
+          "valuesFile": "fe-13-4.json",
           "width": 23,
           "height": 36,
           "resolution": 80,
@@ -1567,6 +1650,7 @@
         },
         {
           "file": "fe-13-5.png",
+          "valuesFile": "fe-13-5.json",
           "width": 12,
           "height": 18,
           "resolution": 160,
@@ -1600,6 +1684,7 @@
       "levels": [
         {
           "file": "fe-14-0.png",
+          "valuesFile": "fe-14-0.json",
           "width": 527,
           "height": 621,
           "resolution": 5,
@@ -1616,6 +1701,7 @@
         },
         {
           "file": "fe-14-1.png",
+          "valuesFile": "fe-14-1.json",
           "width": 264,
           "height": 311,
           "resolution": 10,
@@ -1632,6 +1718,7 @@
         },
         {
           "file": "fe-14-2.png",
+          "valuesFile": "fe-14-2.json",
           "width": 132,
           "height": 156,
           "resolution": 20,
@@ -1648,6 +1735,7 @@
         },
         {
           "file": "fe-14-3.png",
+          "valuesFile": "fe-14-3.json",
           "width": 66,
           "height": 78,
           "resolution": 40,
@@ -1664,6 +1752,7 @@
         },
         {
           "file": "fe-14-4.png",
+          "valuesFile": "fe-14-4.json",
           "width": 33,
           "height": 39,
           "resolution": 80,
@@ -1680,6 +1769,7 @@
         },
         {
           "file": "fe-14-5.png",
+          "valuesFile": "fe-14-5.json",
           "width": 17,
           "height": 20,
           "resolution": 160,
@@ -1713,6 +1803,7 @@
       "levels": [
         {
           "file": "fe-15-0.png",
+          "valuesFile": "fe-15-0.json",
           "width": 563,
           "height": 583,
           "resolution": 5,
@@ -1729,6 +1820,7 @@
         },
         {
           "file": "fe-15-1.png",
+          "valuesFile": "fe-15-1.json",
           "width": 282,
           "height": 292,
           "resolution": 10,
@@ -1745,6 +1837,7 @@
         },
         {
           "file": "fe-15-2.png",
+          "valuesFile": "fe-15-2.json",
           "width": 141,
           "height": 146,
           "resolution": 20,
@@ -1761,6 +1854,7 @@
         },
         {
           "file": "fe-15-3.png",
+          "valuesFile": "fe-15-3.json",
           "width": 71,
           "height": 73,
           "resolution": 40,
@@ -1777,6 +1871,7 @@
         },
         {
           "file": "fe-15-4.png",
+          "valuesFile": "fe-15-4.json",
           "width": 36,
           "height": 37,
           "resolution": 80,
@@ -1793,6 +1888,7 @@
         },
         {
           "file": "fe-15-5.png",
+          "valuesFile": "fe-15-5.json",
           "width": 18,
           "height": 19,
           "resolution": 160,
@@ -1826,6 +1922,7 @@
       "levels": [
         {
           "file": "fe-16-0.png",
+          "valuesFile": "fe-16-0.json",
           "width": 307,
           "height": 374,
           "resolution": 5,
@@ -1842,6 +1939,7 @@
         },
         {
           "file": "fe-16-1.png",
+          "valuesFile": "fe-16-1.json",
           "width": 154,
           "height": 187,
           "resolution": 10,
@@ -1858,6 +1956,7 @@
         },
         {
           "file": "fe-16-2.png",
+          "valuesFile": "fe-16-2.json",
           "width": 77,
           "height": 94,
           "resolution": 20,
@@ -1874,6 +1973,7 @@
         },
         {
           "file": "fe-16-3.png",
+          "valuesFile": "fe-16-3.json",
           "width": 39,
           "height": 47,
           "resolution": 40,
@@ -1890,6 +1990,7 @@
         },
         {
           "file": "fe-16-4.png",
+          "valuesFile": "fe-16-4.json",
           "width": 20,
           "height": 24,
           "resolution": 80,
@@ -1906,6 +2007,7 @@
         },
         {
           "file": "fe-16-5.png",
+          "valuesFile": "fe-16-5.json",
           "width": 10,
           "height": 12,
           "resolution": 160,
@@ -1939,6 +2041,7 @@
       "levels": [
         {
           "file": "fe-17-0.png",
+          "valuesFile": "fe-17-0.json",
           "width": 596,
           "height": 457,
           "resolution": 5,
@@ -1955,6 +2058,7 @@
         },
         {
           "file": "fe-17-1.png",
+          "valuesFile": "fe-17-1.json",
           "width": 298,
           "height": 229,
           "resolution": 10,
@@ -1971,6 +2075,7 @@
         },
         {
           "file": "fe-17-2.png",
+          "valuesFile": "fe-17-2.json",
           "width": 149,
           "height": 115,
           "resolution": 20,
@@ -1987,6 +2092,7 @@
         },
         {
           "file": "fe-17-3.png",
+          "valuesFile": "fe-17-3.json",
           "width": 75,
           "height": 58,
           "resolution": 40,
@@ -2003,6 +2109,7 @@
         },
         {
           "file": "fe-17-4.png",
+          "valuesFile": "fe-17-4.json",
           "width": 38,
           "height": 29,
           "resolution": 80,
@@ -2019,6 +2126,7 @@
         },
         {
           "file": "fe-17-5.png",
+          "valuesFile": "fe-17-5.json",
           "width": 19,
           "height": 15,
           "resolution": 160,
@@ -2052,6 +2160,7 @@
       "levels": [
         {
           "file": "fe-18-0.png",
+          "valuesFile": "fe-18-0.json",
           "width": 566,
           "height": 555,
           "resolution": 5,
@@ -2068,6 +2177,7 @@
         },
         {
           "file": "fe-18-1.png",
+          "valuesFile": "fe-18-1.json",
           "width": 283,
           "height": 278,
           "resolution": 10,
@@ -2084,6 +2194,7 @@
         },
         {
           "file": "fe-18-2.png",
+          "valuesFile": "fe-18-2.json",
           "width": 142,
           "height": 139,
           "resolution": 20,
@@ -2100,6 +2211,7 @@
         },
         {
           "file": "fe-18-3.png",
+          "valuesFile": "fe-18-3.json",
           "width": 71,
           "height": 70,
           "resolution": 40,
@@ -2116,6 +2228,7 @@
         },
         {
           "file": "fe-18-4.png",
+          "valuesFile": "fe-18-4.json",
           "width": 36,
           "height": 35,
           "resolution": 80,
@@ -2132,6 +2245,7 @@
         },
         {
           "file": "fe-18-5.png",
+          "valuesFile": "fe-18-5.json",
           "width": 18,
           "height": 18,
           "resolution": 160,
@@ -2165,6 +2279,7 @@
       "levels": [
         {
           "file": "fe-19-0.png",
+          "valuesFile": "fe-19-0.json",
           "width": 363,
           "height": 310,
           "resolution": 5,
@@ -2181,6 +2296,7 @@
         },
         {
           "file": "fe-19-1.png",
+          "valuesFile": "fe-19-1.json",
           "width": 182,
           "height": 155,
           "resolution": 10,
@@ -2197,6 +2313,7 @@
         },
         {
           "file": "fe-19-2.png",
+          "valuesFile": "fe-19-2.json",
           "width": 91,
           "height": 78,
           "resolution": 20,
@@ -2213,6 +2330,7 @@
         },
         {
           "file": "fe-19-3.png",
+          "valuesFile": "fe-19-3.json",
           "width": 46,
           "height": 39,
           "resolution": 40,
@@ -2229,6 +2347,7 @@
         },
         {
           "file": "fe-19-4.png",
+          "valuesFile": "fe-19-4.json",
           "width": 23,
           "height": 20,
           "resolution": 80,
@@ -2245,6 +2364,7 @@
         },
         {
           "file": "fe-19-5.png",
+          "valuesFile": "fe-19-5.json",
           "width": 12,
           "height": 10,
           "resolution": 160,
@@ -2278,6 +2398,7 @@
       "levels": [
         {
           "file": "fe-20-0.png",
+          "valuesFile": "fe-20-0.json",
           "width": 674,
           "height": 454,
           "resolution": 5,
@@ -2294,6 +2415,7 @@
         },
         {
           "file": "fe-20-1.png",
+          "valuesFile": "fe-20-1.json",
           "width": 337,
           "height": 227,
           "resolution": 10,
@@ -2310,6 +2432,7 @@
         },
         {
           "file": "fe-20-2.png",
+          "valuesFile": "fe-20-2.json",
           "width": 169,
           "height": 114,
           "resolution": 20,
@@ -2326,6 +2449,7 @@
         },
         {
           "file": "fe-20-3.png",
+          "valuesFile": "fe-20-3.json",
           "width": 85,
           "height": 57,
           "resolution": 40,
@@ -2342,6 +2466,7 @@
         },
         {
           "file": "fe-20-4.png",
+          "valuesFile": "fe-20-4.json",
           "width": 43,
           "height": 29,
           "resolution": 80,
@@ -2358,6 +2483,7 @@
         },
         {
           "file": "fe-20-5.png",
+          "valuesFile": "fe-20-5.json",
           "width": 22,
           "height": 15,
           "resolution": 160,
