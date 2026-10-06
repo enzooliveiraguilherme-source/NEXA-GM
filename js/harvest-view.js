@@ -1,81 +1,94 @@
 (function (root) {
     'use strict';
-    let request = 0;
+    let request = 0, controller;
     const cache = new Map();
-    const format = value => value == null ? 'Dados não importados' : Number(value).toLocaleString('pt-BR', { maximumFractionDigits: 1 });
-    const text = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value; };
-    function color(value) { return value == null ? '#94a3b8' : value < 80 ? '#d73027' : value < 110 ? '#fc8d59' : value < 140 ? '#fee08b' : value < 170 ? '#91cf60' : '#1a9850'; }
+    const format = value => value == null ? 'Dados não importados' : Number(value).toLocaleString('pt-BR', {maximumFractionDigits:1});
+    const text = (id,value) => { const el=document.getElementById(id); if(el) el.textContent=value; };
+    function color(v) { return v==null?'#94a3b8':v<80?'#d73027':v<110?'#fc8d59':v<140?'#fee08b':v<170?'#91cf60':'#1a9850'; }
     function clear(state) {
-        request++;
-        if (state.harvestDetailLayer) state.map.removeLayer(state.harvestDetailLayer);
-        state.harvestDetailLayer = null;
-        state.harvestSelected = null;
-        text('harvest-selection-title', 'Explore os talhões');
-        text('harvest-selection-hint', 'Selecione um talhão no mapa ou na lista para ver a produtividade dentro dele.');
+        request++; controller?.abort();
+        if(state.harvestDetailLayer) state.map.removeLayer(state.harvestDetailLayer);
+        state.harvestDetailLayer=null; state.harvestSelected=null;
+        text('harvest-selection-title','Explore a produtividade');
+        text('harvest-selection-hint','Veja todos os talhões juntos ou selecione um para explorar os detalhes.');
         document.getElementById('harvest-field-metrics')?.classList.add('hidden');
         document.getElementById('harvest-back')?.classList.add('hidden');
-        const select = document.getElementById('harvest-field-select');
-        if (select) select.value = '';
+        const select=document.getElementById('harvest-field-select'); if(select) select.value='';
         state.geojsonLayer?.setStyle(root.getFeatureStyle);
     }
-    async function select(state, feature) {
-        clear(state);
-        const token = request;
-        const campo = feature.properties.Campo;
-        state.harvestSelected = campo;
-        const record = state.harvestSummary.records.find(r => r.campo === campo);
-        text('harvest-selection-title', campo);
-        text('harvest-selection-hint', record ? 'Carregando a produtividade do talhão…' : 'Dados não importados para este talhão.');
-        document.getElementById('harvest-back')?.classList.remove('hidden');
-        const selectEl = document.getElementById('harvest-field-select');
-        if (selectEl) selectEl.value = campo;
-        const polygons = state.harvestData.features.filter(f => f.properties.Campo === campo);
-        state.map.fitBounds(L.geoJSON({ type: 'FeatureCollection', features: polygons }).getBounds(), { padding: [65, 65] });
-        state.geojsonLayer?.setStyle(root.getFeatureStyle);
-        if (!record) return;
-        document.getElementById('harvest-field-metrics')?.classList.remove('hidden');
-        text('harvest-mean', format(record.mean));
-        text('harvest-min', format(record.min));
-        text('harvest-max', format(record.max));
+    async function draw(state,records,token) {
+        controller=new AbortController();
+        const signal=controller.signal, bounds=state.harvestSummary.bounds;
+        const layer=root.HarvestPoints.create([(bounds[0]+bounds[2])/2,(bounds[1]+bounds[3])/2]).addTo(state.map);
+        state.harvestDetailLayer=layer;
+        let loaded=0;
         try {
-            const cacheKey = `${state.harvestDataset.version || 'site'}:${record.file}`;
-            let data = cache.get(cacheKey);
-            if (!data) { data = root.HarvestImport.normalize(await root.HarvestStore.loadField(state.harvestDataset, record.file)); cache.set(cacheKey, data); }
-            if (token !== request || state.currentTab !== 'colheita') return;
-            if (!state.harvestRenderer) state.harvestRenderer = L.canvas({ padding: 0.5 });
-            state.harvestDetailLayer = L.geoJSON(data, {
-                pointToLayer: (f, latlng) => L.circleMarker(latlng, { renderer: state.harvestRenderer, radius: 3.5, stroke: false, fillColor: color(f.properties.produtividade), fillOpacity: 0.9 }),
-                onEachFeature: (f, layer) => layer.bindTooltip(`${format(f.properties.produtividade)} sc/ha`, { sticky: true, className: 'harvest-point-tooltip' })
-            }).addTo(state.map);
-            text('harvest-selection-hint', 'Detalhe da produtividade · grade de 25 m. Datas: Dados não importados.');
-        } catch (error) {
-            if (token === request) text('harvest-selection-hint', error.message);
+            for(const name of records.flatMap(r=>r.chunks)) {
+                if(token!==request) return;
+                const key=(state.harvestDataset.version||'site')+':'+name;
+                let chunk=cache.get(key);
+                if(!chunk) { chunk=await root.HarvestStore.loadChunk(state.harvestDataset,name,signal); cache.set(key,chunk); }
+                if(token!==request||state.currentTab!=='colheita') return;
+                layer.addPoints(chunk.values,chunk.stride); loaded+=chunk.count;
+                text('harvest-selection-hint','Carregando pontos originais: '+loaded.toLocaleString('pt-BR')+'…');
+            }
+            text('harvest-selection-hint',loaded.toLocaleString('pt-BR')+' pontos originais · sem simplificação. Datas: Dados não importados.');
+        } catch(error) {
+            if(token===request) {
+                state.map.removeLayer(layer); state.harvestDetailLayer=null;
+                text('harvest-selection-hint','Não foi possível carregar todos os pontos. Selecione novamente para tentar.');
+                console.error('Carregamento da produtividade:',error);
+            }
         }
+    }
+    async function select(state,feature) {
+        clear(state); const token=request, campo=feature.properties.Campo;
+        state.harvestSelected=campo;
+        const record=state.harvestSummary.records.find(r=>r.campo===campo);
+        text('harvest-selection-title',campo);
+        const selectEl=document.getElementById('harvest-field-select'); if(selectEl) selectEl.value=campo;
+        document.getElementById('harvest-back')?.classList.remove('hidden');
+        const features=state.harvestData.features.filter(f=>f.properties.Campo===campo);
+        state.map.stop(); state.map.fitBounds(L.geoJSON({type:'FeatureCollection',features}).getBounds(),{padding:[45,45],animate:false});
+        state.geojsonLayer?.setStyle(root.getFeatureStyle);
+        if(!record) { text('harvest-selection-hint','Dados não importados para este talhão.'); return; }
+        document.getElementById('harvest-field-metrics')?.classList.remove('hidden');
+        text('harvest-mean',format(record.mean)); text('harvest-min',format(record.min)); text('harvest-max',format(record.max));
+        await draw(state,[record],token);
+    }
+    async function showAll(state) {
+        if(!state.harvestSummary||state.currentTab!=='colheita') return;
+        clear(state); const token=request;
+        const features=state.harvestData.features.filter(root.featureMatchesFilters);
+        const allowed=new Set(features.map(f=>f.properties.Campo));
+        const records=state.harvestSummary.records.filter(r=>allowed.has(r.campo));
+        text('harvest-selection-title','Todos os talhões');
+        if(!records.length) return;
+        state.map.stop(); state.map.fitBounds(L.geoJSON({type:'FeatureCollection',features}).getBounds(),{padding:[45,45],animate:false});
+        await draw(state,records,token);
     }
     function init(state) {
-        const selectEl = document.getElementById('harvest-field-select');
-        if (selectEl) {
-            selectEl.innerHTML = '<option value="">Selecionar talhão</option>';
-            const fields = [...new Set(state.harvestData.features.map(f => f.properties.Campo))].sort((a,b) => a.localeCompare(b, 'pt-BR', { numeric: true }));
-            fields.forEach(campo => { const opt = document.createElement('option'); opt.value = campo; opt.textContent = campo; selectEl.appendChild(opt); });
-            selectEl.onchange = () => { const feature = state.harvestData.features.find(f => f.properties.Campo === selectEl.value); if (feature) select(state, feature); else clear(state); };
+        const selectEl=document.getElementById('harvest-field-select');
+        if(selectEl) {
+            selectEl.innerHTML='<option value="">Todos os talhões</option>';
+            const fields=[...new Set(state.harvestData.features.map(f=>f.properties.Campo))].sort((a,b)=>a.localeCompare(b,'pt-BR',{numeric:true}));
+            fields.forEach(campo=>{const opt=document.createElement('option'); opt.value=campo; opt.textContent=campo; selectEl.appendChild(opt);});
+            selectEl.onchange=()=>{const f=state.harvestData.features.find(f=>f.properties.Campo===selectEl.value); if(f) select(state,f); else showAll(state);};
         }
-        document.getElementById('harvest-back').onclick = () => { clear(state); root.renderMap(true); };
-        const upload = document.getElementById('harvest-cloud-upload');
-        upload.classList.toggle('hidden', root.portalAccessRole !== 'admin');
-        upload.onclick = async () => {
-            upload.disabled = true;
+        document.getElementById('harvest-back').onclick=()=>showAll(state);
+        document.getElementById('harvest-all').onclick=()=>showAll(state);
+        const upload=document.getElementById('harvest-cloud-upload');
+        upload.classList.toggle('hidden',root.portalAccessRole!=='admin');
+        upload.onclick=async()=>{
+            upload.disabled=true;
             try {
-                await root.HarvestStore.publish((done, total) => text('harvest-cloud-status', `Enviando ${done} de ${total} arquivos…`));
-                text('harvest-cloud-status', 'Base de teste salva no Supabase.');
-                cache.clear(); clear(state);
-                await root.loadHarvestTest();
-                root.renderMap(true);
-            } catch (error) { text('harvest-cloud-status', error.message); }
-            finally { upload.disabled = false; }
+                await root.HarvestStore.publish((done,total)=>text('harvest-cloud-status','Enviando '+done+' de '+total+' blocos…'));
+                text('harvest-cloud-status','Pontos originais salvos no Supabase.');
+                cache.clear(); clear(state); await root.loadHarvestTest(); root.renderMap(true);
+            } catch(error) {text('harvest-cloud-status',error.message);}
+            finally {upload.disabled=false;}
         };
-        text('harvest-import-status', `${state.harvestSummary.records.length} talhões · Milho 2026`);
-        clear(state);
+        text('harvest-import-status',state.harvestSummary.records.length+' talhões · Milho 2026'); clear(state);
     }
-    root.HarvestView = Object.freeze({ init, select, clear, color });
+    root.HarvestView=Object.freeze({init,select,showAll,clear,color});
 })(window);

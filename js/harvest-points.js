@@ -1,0 +1,83 @@
+(function (root) {
+    'use strict';
+    const R = 6378137;
+    const mercator = (lon, lat) => [R * lon * Math.PI / 180, R * Math.log(Math.tan(Math.PI / 4 + lat * Math.PI / 360))];
+    const colors = ['#d73027', '#fc8d59', '#fee08b', '#91cf60', '#1a9850'];
+    const category = value => value < 80 ? 0 : value < 110 ? 1 : value < 140 ? 2 : value < 170 ? 3 : 4;
+    function shader(gl, type, source) {
+        const result = gl.createShader(type); gl.shaderSource(result, source); gl.compileShader(result);
+        if (!gl.getShaderParameter(result, gl.COMPILE_STATUS)) throw new Error('Falha ao preparar o desenho da produtividade.');
+        return result;
+    }
+    function create(origin) {
+        const Layer = L.Layer.extend({
+            initialize() { this.parts = []; this.origin = origin; this.center = mercator(...origin); this.frame = null; },
+            onAdd(map) {
+                this.map = map;
+                const pane = map.getPane('harvest-original') || map.createPane('harvest-original');
+                pane.style.zIndex = '350'; pane.style.pointerEvents = 'none';
+                this.canvas = L.DomUtil.create('canvas', 'harvest-original-canvas', pane);
+                this.canvas.style.pointerEvents = 'none';
+                this.gl = this.canvas.getContext('webgl', { alpha: true, antialias: false, premultipliedAlpha: false });
+                if (this.gl) {
+                    const gl = this.gl;
+                    this.program = gl.createProgram();
+                    gl.attachShader(this.program, shader(gl, gl.VERTEX_SHADER, 'attribute vec3 p; uniform vec2 viewport; uniform vec2 offset; uniform float scale; uniform float size; varying float c; void main(){ vec2 screen=offset+p.xy*vec2(scale,-scale); gl_Position=vec4(screen.x/viewport.x*2.0-1.0,1.0-screen.y/viewport.y*2.0,0.0,1.0); gl_PointSize=size; c=p.z; }'));
+                    gl.attachShader(this.program, shader(gl, gl.FRAGMENT_SHADER, 'precision mediump float; varying float c; void main(){vec3 rgb=c<0.5?vec3(0.843,0.188,0.153):c<1.5?vec3(0.988,0.553,0.349):c<2.5?vec3(0.996,0.878,0.545):c<3.5?vec3(0.569,0.812,0.376):vec3(0.102,0.596,0.314); gl_FragColor=vec4(rgb,1.0);}'));
+                    gl.linkProgram(this.program);
+                    if (!gl.getProgramParameter(this.program, gl.LINK_STATUS)) throw new Error('Falha ao iniciar o mapa de produtividade.');
+                    this.locations = { p: gl.getAttribLocation(this.program, 'p'), viewport: gl.getUniformLocation(this.program, 'viewport'), offset: gl.getUniformLocation(this.program, 'offset'), scale: gl.getUniformLocation(this.program, 'scale'), size: gl.getUniformLocation(this.program, 'size') };
+                } else this.ctx = this.canvas.getContext('2d');
+                map.on('move zoom resize', this.schedule, this);
+                this.draw();
+            },
+            addPoints(points, stride) {
+                const count = points.length / stride;
+                const vertices = new Float32Array(count * 3);
+                for (let i = 0; i < count; i++) {
+                    const pos = mercator(points[i * stride], points[i * stride + 1]);
+                    vertices[i * 3] = pos[0] - this.center[0]; vertices[i * 3 + 1] = pos[1] - this.center[1];
+                    vertices[i * 3 + 2] = category(points[i * stride + 2]);
+                }
+                const part = { vertices, count };
+                if (this.gl) { part.buffer = this.gl.createBuffer(); this.gl.bindBuffer(this.gl.ARRAY_BUFFER, part.buffer); this.gl.bufferData(this.gl.ARRAY_BUFFER, vertices, this.gl.STATIC_DRAW); }
+                this.parts.push(part); this.schedule();
+            },
+            schedule() { if (this.frame === null) this.frame = requestAnimationFrame(() => { this.frame = null; this.draw(); }); },
+            draw() {
+                if (!this.map) return;
+                const viewport = this.map.getSize();
+                const ratio = Math.min(root.devicePixelRatio || 1, 2);
+                const w = Math.round(viewport.x * ratio), h = Math.round(viewport.y * ratio);
+                if (this.canvas.width !== w || this.canvas.height !== h) { this.canvas.width = w; this.canvas.height = h; }
+                this.canvas.style.width = `${viewport.x}px`; this.canvas.style.height = `${viewport.y}px`;
+                L.DomUtil.setPosition(this.canvas, this.map.containerPointToLayerPoint([0,0]));
+                const pos = this.map.latLngToContainerPoint([this.origin[1], this.origin[0]]);
+                const scale = 256 * Math.pow(2, this.map.getZoom()) / (2 * Math.PI * R);
+                const size = Math.max(1.5, Math.min(12, 5 * scale * 1.05));
+                if (this.gl) {
+                    const gl = this.gl; gl.viewport(0,0,w,h); gl.clearColor(0,0,0,0); gl.clear(gl.COLOR_BUFFER_BIT); gl.useProgram(this.program);
+                    gl.uniform2f(this.locations.viewport, w, h); gl.uniform2f(this.locations.offset, pos.x * ratio, pos.y * ratio);
+                    gl.uniform1f(this.locations.scale, scale * ratio); gl.uniform1f(this.locations.size, size * ratio);
+                    gl.enableVertexAttribArray(this.locations.p);
+                    for (const part of this.parts) { gl.bindBuffer(gl.ARRAY_BUFFER, part.buffer); gl.vertexAttribPointer(this.locations.p,3,gl.FLOAT,false,0,0); gl.drawArrays(gl.POINTS,0,part.count); }
+                } else {
+                    const ctx = this.ctx; ctx.setTransform(ratio,0,0,ratio,0,0); ctx.clearRect(0,0,viewport.x,viewport.y);
+                    for (const part of this.parts) for (let i=0; i<part.count; i++) {
+                        const x=pos.x+part.vertices[i*3]*scale, y=pos.y-part.vertices[i*3+1]*scale;
+                        if(x< -size||y< -size||x>viewport.x+size||y>viewport.y+size) continue;
+                        ctx.fillStyle=colors[part.vertices[i*3+2]]; ctx.fillRect(x-size/2,y-size/2,size,size);
+                    }
+                }
+            },
+            onRemove(map) {
+                map.off('move zoom resize', this.schedule, this);
+                if (this.frame !== null) cancelAnimationFrame(this.frame);
+                if (this.gl) { for (const part of this.parts) this.gl.deleteBuffer(part.buffer); this.gl.deleteProgram(this.program); }
+                this.parts = []; this.canvas.remove(); this.map = null;
+            }
+        });
+        return new Layer();
+    }
+    root.HarvestPoints = Object.freeze({ create });
+})(window);

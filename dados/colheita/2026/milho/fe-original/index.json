@@ -1,0 +1,407 @@
+{
+  "representation": "original-points-v1",
+  "source": "FE.geojson",
+  "fazenda": "FE",
+  "name": "Fazenda Esperança",
+  "ano": 2026,
+  "cultura": "Milho",
+  "field": "prod_corig",
+  "unit": "sc/ha",
+  "columns": [
+    "longitude",
+    "latitude",
+    "prod_corig",
+    "No",
+    "X",
+    "Y",
+    "Predicted",
+    "SE_Pred"
+  ],
+  "points": 2619944,
+  "bounds": [
+    -52.3028887463642,
+    -10.372902143019877,
+    -52.18179872361133,
+    -10.282393344875782
+  ],
+  "records": [
+    {
+      "campo": "FE 01",
+      "fazenda": "FE",
+      "points": 18741,
+      "chunks": [
+        "fe-01.001.json"
+      ],
+      "file": "fe-01.001.json",
+      "sha256": "5fe3b133b60616b4dc742de68d95c2b69a04a0342ffdff4caba4041151577345",
+      "source_layer": "FE 01_Kriged",
+      "mean": 162.4897870247075,
+      "min": 73.49121846,
+      "max": 202.10854752,
+      "data_inicio": null,
+      "data_fim": null
+    },
+    {
+      "campo": "FE 02",
+      "fazenda": "FE",
+      "points": 220210,
+      "chunks": [
+        "fe-02.001.json",
+        "fe-02.002.json",
+        "fe-02.003.json",
+        "fe-02.004.json",
+        "fe-02.005.json"
+      ],
+      "file": "fe-02.001.json",
+      "sha256": "59fb71e01dae31f75fce1381efdef619b3971a487da42032ee11d01012c28732",
+      "source_layer": "FE 02_Kriged",
+      "mean": 166.54938151190322,
+      "min": 62.50903326,
+      "max": 199.73048435999996,
+      "data_inicio": null,
+      "data_fim": null
+    },
+    {
+      "campo": "FE 03",
+      "fazenda": "FE",
+      "points": 144426,
+      "chunks": [
+        "fe-03.001.json",
+        "fe-03.002.json",
+        "fe-03.003.json"
+      ],
+      "file": "fe-03.001.json",
+      "sha256": "75d9dbb9f9bf435a2a59728c19639f038f7e5a9bfe03940462266255a5984335",
+      "source_layer": "FE 03_Kriged",
+      "mean": 188.62914814506811,
+      "min": 84.68,
+      "max": 219.1,
+      "data_inicio": null,
+      "data_fim": null
+    },
+    {
+      "campo": "FE 04",
+      "fazenda": "FE",
+      "points": 73427,
+      "chunks": [
+        "fe-04.001.json",
+        "fe-04.002.json"
+      ],
+      "file": "fe-04.001.json",
+      "sha256": "a1e8712e81e873eb9ab94e11ce6d0b8bd7a0a01a21b59b983a5306cfbf1adadd",
+      "source_layer": "FE 04_Kriged",
+      "mean": 179.76709480164038,
+      "min": 101.76,
+      "max": 206.94,
+      "data_inicio": null,
+      "data_fim": null
+    },
+    {
+      "campo": "FE 05",
+      "fazenda": "FE",
+      "points": 144630,
+      "chunks": [
+        "fe-05.001.json",
+        "fe-05.002.json",
+        "fe-05.003.json"
+      ],
+      "file": "fe-05.001.json",
+      "sha256": "b50fb5764abec55efea9154e0175d56f9eafbf2bddc896d40e39a8c4cd7a5afd",
+      "source_layer": "FE 05_Kriged",
+      "mean": 161.87466784007043,
+      "min": 89.47181320999998,
+      "max": 196.50115620999998,
+      "data_inicio": null,
+      "data_fim": null
+    },
+    {
+      "campo": "FE 05.1",
+      "fazenda": "FE",
+      "points": 24993,
+      "chunks": [
+        "fe-05.1.001.json"
+      ],
+      "file": "fe-05.1.001.json",
+      "sha256": "a95d5a85f5affcb560b45a08665f630109a0b8d75f2339286201d1ec77bcf54f",
+      "source_layer": "FE 05.1_Kriged",
+      "mean": 156.1436248834577,
+      "min": 64.50257016,
+      "max": 184.04296848,
+      "data_inicio": null,
+      "data_fim": null
+    },
+    {
+      "campo": "FE 06",
+      "fazenda": "FE",
+      "points": 138520,
+      "chunks": [
+        "fe-06.001.json",
+        "fe-06.002.json",
+        "fe-06.003.json"
+      ],
+      "file": "fe-06.001.json",
+      "sha256": "8c3a100d4c832dbda436a8dfbbd61b7441080c8c60c385e8a65944406091e9e4",
+      "source_layer": "FE 06_Kriged",
+      "mean": 173.161147691722,
+      "min": 55.8609832,
+      "max": 202.3464674,
+      "data_inicio": null,
+      "data_fim": null
+    },
+    {
+      "campo": "FE 07",
+      "fazenda": "FE",
+      "points": 117072,
+      "chunks": [
+        "fe-07.001.json",
+        "fe-07.002.json",
+        "fe-07.003.json"
+      ],
+      "file": "fe-07.001.json",
+      "sha256": "d6e69d6fd9ba6a17f8c8a9467a0d57840c492b3f107a4b45627498822983dc39",
+      "source_layer": "FE 07_Kriged",
+      "mean": 184.90260835372752,
+      "min": 100.886634171,
+      "max": 215.872545009,
+      "data_inicio": null,
+      "data_fim": null
+    },
+    {
+      "campo": "FE 08",
+      "fazenda": "FE",
+      "points": 189447,
+      "chunks": [
+        "fe-08.001.json",
+        "fe-08.002.json",
+        "fe-08.003.json",
+        "fe-08.004.json"
+      ],
+      "file": "fe-08.001.json",
+      "sha256": "a6ada5c125b5c2763c8ae01d4bec892cb6fb21052e394b0edd597c362896ed67",
+      "source_layer": "FE 08_Kriged",
+      "mean": 174.50512750267774,
+      "min": 66.2,
+      "max": 214.42,
+      "data_inicio": null,
+      "data_fim": null
+    },
+    {
+      "campo": "FE 09",
+      "fazenda": "FE",
+      "points": 183887,
+      "chunks": [
+        "fe-09.001.json",
+        "fe-09.002.json",
+        "fe-09.003.json",
+        "fe-09.004.json"
+      ],
+      "file": "fe-09.001.json",
+      "sha256": "a2d8fd89a5e5233613c9c5c151c2c8e30145e8335be7831a8c7018d213915a30",
+      "source_layer": "FE 09_Kriged",
+      "mean": 179.85724880447967,
+      "min": 81.31301197100002,
+      "max": 207.60382776900002,
+      "data_inicio": null,
+      "data_fim": null
+    },
+    {
+      "campo": "FE 10",
+      "fazenda": "FE",
+      "points": 97424,
+      "chunks": [
+        "fe-10.001.json",
+        "fe-10.002.json"
+      ],
+      "file": "fe-10.001.json",
+      "sha256": "f4f82b7464029cc49cb5999e324df478bec9321c78da579e06f251b2a58e5aa7",
+      "source_layer": "FE 10_Kriged",
+      "mean": 163.4593581529088,
+      "min": 51.811840927999995,
+      "max": 197.653195209,
+      "data_inicio": null,
+      "data_fim": null
+    },
+    {
+      "campo": "FE 11",
+      "fazenda": "FE",
+      "points": 104960,
+      "chunks": [
+        "fe-11.001.json",
+        "fe-11.002.json",
+        "fe-11.003.json"
+      ],
+      "file": "fe-11.001.json",
+      "sha256": "d38971526a8d53c07e4e17c577e7549f3285f1e4f6a7408a26827475b41e8875",
+      "source_layer": "FE 11_Kriged",
+      "mean": 151.81724613185867,
+      "min": 55.617,
+      "max": 185.417,
+      "data_inicio": null,
+      "data_fim": null
+    },
+    {
+      "campo": "FE 12",
+      "fazenda": "FE",
+      "points": 104284,
+      "chunks": [
+        "fe-12.001.json",
+        "fe-12.002.json",
+        "fe-12.003.json"
+      ],
+      "file": "fe-12.001.json",
+      "sha256": "937ffd5859b18df809947b032ea51f34913c10319f6dd7002e0629de5d8fe8e8",
+      "source_layer": "FE 12_Kriged",
+      "mean": 133.88035790375412,
+      "min": 44.039665543000005,
+      "max": 259.746231985,
+      "data_inicio": null,
+      "data_fim": null
+    },
+    {
+      "campo": "FE 13",
+      "fazenda": "FE",
+      "points": 126333,
+      "chunks": [
+        "fe-13.001.json",
+        "fe-13.002.json",
+        "fe-13.003.json"
+      ],
+      "file": "fe-13.001.json",
+      "sha256": "5696ad821f5dfe0a8a4479c95fe6fe991b7c9571608c12a1f8f7b72157b476a2",
+      "source_layer": "FE 13_Kriged",
+      "mean": 164.23993693548493,
+      "min": 74.279535888,
+      "max": 194.02230644,
+      "data_inicio": null,
+      "data_fim": null
+    },
+    {
+      "campo": "FE 14",
+      "fazenda": "FE",
+      "points": 226176,
+      "chunks": [
+        "fe-14.001.json",
+        "fe-14.002.json",
+        "fe-14.003.json",
+        "fe-14.004.json",
+        "fe-14.005.json"
+      ],
+      "file": "fe-14.001.json",
+      "sha256": "3be44dd3fd3f26517b1be1f6ddfcd345c95b097746d46ec8160d90d77e0d46cf",
+      "source_layer": "FE 14_Kriged",
+      "mean": 164.9079219611551,
+      "min": 60.795267564,
+      "max": 192.493011528,
+      "data_inicio": null,
+      "data_fim": null
+    },
+    {
+      "campo": "FE 15",
+      "fazenda": "FE",
+      "points": 170496,
+      "chunks": [
+        "fe-15.001.json",
+        "fe-15.002.json",
+        "fe-15.003.json",
+        "fe-15.004.json"
+      ],
+      "file": "fe-15.001.json",
+      "sha256": "16a5cef95893ee3949995beaa74a174af4003e8fe4f7e505d7dd7010d39753ce",
+      "source_layer": "FE 15_Kriged",
+      "mean": 175.63453903743937,
+      "min": 67.716118588,
+      "max": 210.990285262,
+      "data_inicio": null,
+      "data_fim": null
+    },
+    {
+      "campo": "FE 16",
+      "fazenda": "FE",
+      "points": 61384,
+      "chunks": [
+        "fe-16.001.json",
+        "fe-16.002.json"
+      ],
+      "file": "fe-16.001.json",
+      "sha256": "6c3348cdf33670b41be786a73574cffb4d124a757fa8f7b978a39f322077422d",
+      "source_layer": "FE 16_Kriged",
+      "mean": 178.72789416564876,
+      "min": 62.236131056000005,
+      "max": 207.705181394,
+      "data_inicio": null,
+      "data_fim": null
+    },
+    {
+      "campo": "FE 17",
+      "fazenda": "FE",
+      "points": 110608,
+      "chunks": [
+        "fe-17.001.json",
+        "fe-17.002.json",
+        "fe-17.003.json"
+      ],
+      "file": "fe-17.001.json",
+      "sha256": "d0d13fd2ee324717721c0d745a4438619a89a1f076fb444e12c65ffa37d8ae0e",
+      "source_layer": "FE 17_Kriged",
+      "mean": 152.7922175583582,
+      "min": 67.36844448000001,
+      "max": 182.46272793600002,
+      "data_inicio": null,
+      "data_fim": null
+    },
+    {
+      "campo": "FE 18",
+      "fazenda": "FE",
+      "points": 102960,
+      "chunks": [
+        "fe-18.001.json",
+        "fe-18.002.json",
+        "fe-18.003.json"
+      ],
+      "file": "fe-18.001.json",
+      "sha256": "e3274c58665abbf6f8a7d7af9a59ba997d0bc4c2be439c2fed1dc8220553ac5a",
+      "source_layer": "FE 18_Kriged",
+      "mean": 145.9799221139271,
+      "min": 73.661687039,
+      "max": 176.149987701,
+      "data_inicio": null,
+      "data_fim": null
+    },
+    {
+      "campo": "FE 19",
+      "fazenda": "FE",
+      "points": 70592,
+      "chunks": [
+        "fe-19.001.json",
+        "fe-19.002.json"
+      ],
+      "file": "fe-19.001.json",
+      "sha256": "3e202ff210833b919b8b8116ff8d8b67097e08d4f26da27b97fb4c5fadf7361b",
+      "source_layer": "FE 19_Kriged",
+      "mean": 142.3668015420446,
+      "min": 48.91551,
+      "max": 176.471134,
+      "data_inicio": null,
+      "data_fim": null
+    },
+    {
+      "campo": "FE 20",
+      "fazenda": "FE",
+      "points": 189374,
+      "chunks": [
+        "fe-20.001.json",
+        "fe-20.002.json",
+        "fe-20.003.json",
+        "fe-20.004.json"
+      ],
+      "file": "fe-20.001.json",
+      "sha256": "f1965ac57a5d5c56a728202646cefcc5a60f8bf3638b21670b54f046e9d4e37a",
+      "source_layer": "FE 20_Kriged",
+      "mean": 155.35367668072368,
+      "min": 61.640468772,
+      "max": 188.392724868,
+      "data_inicio": null,
+      "data_fim": null
+    }
+  ]
+}
