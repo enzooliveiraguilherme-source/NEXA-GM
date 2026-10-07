@@ -8,11 +8,6 @@
     <!-- Favicon -->
     <link rel="icon" type="image/jpeg" href="apoio/GP Michels.jpg">
     
-    <!-- Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    
     <!-- FontAwesome for Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
@@ -21,6 +16,7 @@
     
     <!-- Custom CSS -->
     <link rel="stylesheet" href="style.css?v=3.0">
+    <link rel="stylesheet" href="brand.css?v=1">
 </head>
 <body data-page="portal">
     <div id="auth-loading-overlay" class="loading-overlay"><div class="spinner"></div><p>Validando seu acesso…</p></div>
@@ -32,12 +28,8 @@
             <div class="sidebar-header">
                 <div class="logo">
                     <img src="apoio/GP Michels.jpg" alt="Grupo Michels" class="brand-logo">
-                    <div class="logo-text">
-                        <span class="logo-grupo">GRUPO</span>
-                        <span class="logo-michels">MICHELS</span>
-                    </div>
                 </div>
-                <p class="subtitle">Gestão Agrícola Integrada</p>
+                <p class="subtitle">GEOPORTAL <span>Gestão agrícola integrada</span></p>
             </div>
 
             <div class="sidebar-content-scroll">
@@ -175,6 +167,10 @@
 
         <!-- Main Map Area -->
         <main class="map-area">
+            <header class="portal-heading">
+                <div><span class="portal-eyebrow">GESTÃO AGRÍCOLA</span><h1>Visão do campo</h1></div>
+                <span class="portal-heading-note"><i class="fa-solid fa-map-location-dot" aria-hidden="true"></i> Planejar. Acompanhar. Evoluir.</span>
+            </header>
             <!-- Barra Superior Informativa para Outras Operações -->
             <div class="generic-op-bar hidden" id="generic-op-bar">
                 <div class="generic-op-title">

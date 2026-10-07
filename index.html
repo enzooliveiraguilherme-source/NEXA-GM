@@ -4,25 +4,28 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Entrar | Geoportal Grupo Michels</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="login.css">
+    <link rel="stylesheet" href="brand.css?v=1">
+    <link rel="icon" type="image/jpeg" href="apoio/GP Michels.jpg">
 </head>
 <body data-page="login">
     <main class="login-layout">
         <section class="login-brand">
             <img src="apoio/GP Michels.jpg" alt="Grupo Michels">
-            <h1>Geoportal Grupo Michels</h1>
+            <span class="brand-eyebrow">GRUPO MICHELS · GEOPORTAL</span>
+            <h1>Uma visão completa.<br>Do campo ao resultado.</h1>
             <p>Gestão agrícola integrada, com informação espacial, planejamento e acompanhamento operacional em um só lugar.</p>
+            <div class="brand-capabilities"><span>Planejamento</span><span>Operações</span><span>Resultados</span></div>
+            <span class="brand-footer">Informação que aproxima. Gestão que transforma.</span>
         </section>
         <section class="login-card-wrap">
             <div class="login-card">
-                <h2>Bem-vindo</h2>
+                <span class="login-eyebrow">SEU CAMPO, CONECTADO</span>
+                <h2>Bem-vindo ao Geoportal</h2>
                 <p>Entre com seu acesso corporativo para continuar.</p>
                 <form class="login-form" id="login-form">
-                    <label>E-mail<input id="email" type="email" autocomplete="email" required></label>
-                    <label>Senha<input id="password" type="password" autocomplete="current-password" required></label>
+                    <label>E-mail corporativo<input id="email" type="email" autocomplete="email" placeholder="voce@grupomichels.com.br" required></label>
+                    <label>Senha<input id="password" type="password" autocomplete="current-password" placeholder="Digite sua senha" required></label>
                     <button type="submit">Entrar no geoportal</button>
                     <p class="login-message" id="login-message" aria-live="polite"></p>
                 </form>
