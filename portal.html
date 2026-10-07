@@ -16,7 +16,7 @@
     
     <!-- Custom CSS -->
     <link rel="stylesheet" href="style.css?v=3.0">
-    <link rel="stylesheet" href="brand.css?v=2">
+    <link rel="stylesheet" href="brand.css?v=3">
 </head>
 <body data-page="portal">
     <div id="auth-loading-overlay" class="loading-overlay"><div class="spinner"></div><p>Validando seu acesso…</p></div>
@@ -48,7 +48,7 @@
                         </button>
                         
                         <!-- Menu Adubação com Submenu Expansível / Retrátil Suave -->
-                        <div class="nav-group expanded" id="nav-adubacao-group">
+                        <div class="nav-group" id="nav-adubacao-group">
                             <button type="button" class="nav-item tab-btn active" data-tab="adubacao" id="btn-menu-adubacao">
                                 <i class="fa-solid fa-seedling tab-icon adubacao-icon"></i>
                                 <span>Adubação</span>
@@ -281,14 +281,14 @@
                 <div id="map"></div>
 
                 <!-- Dashboard de Indicadores do Calcário (Overlay Superior) -->
-                <div class="calcario-dashboard-panel" id="calcario-dashboard">
+                <div class="calcario-dashboard-panel collapsed" id="calcario-dashboard">
                     <div class="dashboard-header-toggle">
                         <div class="dashboard-title-box">
                             <i class="fa-solid fa-chart-column"></i>
                             <h3 id="dashboard-operation-title">Acompanhamento da Aplicação de Calcário</h3>
                             <span class="badge-farm" id="dash-fazenda-name">Fazenda: FE</span>
                         </div>
-                        <button class="btn-toggle-dash" id="btn-toggle-dash" title="Minimizar / Expandir Dashboard">
+                        <button type="button" class="btn-toggle-dash" id="btn-toggle-dash" title="Expandir indicadores" aria-label="Expandir indicadores" aria-expanded="false" aria-controls="dashboard-content">
                             <i class="fa-solid fa-chevron-up"></i>
                         </button>
                     </div>
@@ -951,6 +951,6 @@
     <script src="js/harvest-pyramid.js?v=6"></script>
     <script src="js/harvest-points.js?v=6"></script>
     <script src="js/harvest-view.js?v=5"></script>
-    <script src="app.js?v=3.1"></script>
+    <script src="app.js?v=3.2"></script>
 </body>
 </html>

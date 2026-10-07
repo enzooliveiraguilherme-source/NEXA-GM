@@ -2339,7 +2339,12 @@ function setupEventListeners() {
     if (btnToggleDash) {
         btnToggleDash.addEventListener('click', () => {
             const dash = document.getElementById('calcario-dashboard');
-            if (dash) dash.classList.toggle('collapsed');
+            if (!dash) return;
+            const collapsed = dash.classList.toggle('collapsed');
+            const label = collapsed ? 'Expandir indicadores' : 'Recolher indicadores';
+            btnToggleDash.setAttribute('aria-expanded', String(!collapsed));
+            btnToggleDash.setAttribute('aria-label', label);
+            btnToggleDash.title = label;
         });
     }
 
