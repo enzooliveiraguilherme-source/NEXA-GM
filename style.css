@@ -1576,7 +1576,9 @@ svg.leaflet-zoom-animated:focus,
 .progress-radio-row {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: 20px;
+    margin-top: 8px;
     margin-bottom: 10px;
 }
 
@@ -1592,11 +1594,31 @@ svg.leaflet-zoom-animated:focus,
 }
 
 .radio-option input[type="radio"] {
-    accent-color: var(--color-orange);
+    appearance: none;
+    display: inline-grid;
+    place-items: center;
+    flex: 0 0 16px;
     width: 16px;
     height: 16px;
+    margin: 0;
+    padding: 0;
+    border: 2px solid #94a3b8;
+    border-radius: 50%;
+    background: #fff;
     cursor: pointer;
 }
+
+.radio-option input[type="radio"]::after {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--color-orange);
+    visibility: hidden;
+}
+
+.radio-option input[type="radio"]:checked { border-color: var(--color-orange); }
+.radio-option input[type="radio"]:checked::after { visibility: visible; }
 
 .form-field-group {
     display: flex;
