@@ -1,5 +1,7 @@
 {
   "cleanUrls": true,
+  "buildCommand": "node scripts/build-site.cjs",
+  "outputDirectory": "site-dist",
   "rewrites": [
     { "source": "/Talhoes.geojson", "destination": "/api/private-data" },
     { "source": "/Talhoes.qmd", "destination": "/api/private-data" },
