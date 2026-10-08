@@ -7,7 +7,6 @@
     let redirecting = false;
     let loginPending = false;
     let allowedFarms = [];
-    const validPassword = password => /\p{Lu}/u.test(String(password)) && /[^\p{L}\p{N}\s]/u.test(String(password)) && String(password).length >= 8;
 
     function setMessage(text) {
         const message = document.getElementById('login-message');
@@ -185,8 +184,8 @@
         setMessage('Preparando seu acesso…');
         await window.portalReady;
         if (loginPending) return false;
-        if (!validPassword(password)) {
-            setMessage('A senha deve ter ao menos 8 caracteres, uma letra maiúscula e um caractere especial, como @, # ou !.');
+        if (!String(password || '').length) {
+            setMessage('Informe sua senha para entrar.');
             return false;
         }
         if (!window.supabaseClient) {
@@ -256,11 +255,8 @@
     window.registerGeoportal = async function (name, email, password, farm) {
         await window.portalReady;
         if (loginPending) return false;
-        if (!validPassword(password)) {
-            setMessage('Use ao menos 8 caracteres, uma letra maiúscula e um caractere especial.'); return false;
-        }
-        if (!/[a-z]/.test(password) || !/[A-Z]/.test(password) || !/[0-9]/.test(password) || !/[^a-zA-Z0-9\s]/.test(password)) {
-            setMessage('Inclua uma letra minúscula, uma maiúscula, um número e um símbolo na senha.'); return false;
+        if (String(password || '').length < 6) {
+            setMessage('Use uma senha com ao menos 6 caracteres. Pode ser somente números.'); return false;
         }
         if (!String(name).trim() || !farm) { setMessage('Informe seu nome e uma fazenda.'); return false; }
         loginPending = true;
@@ -276,7 +272,9 @@
             setMessage('Se o cadastro for elegível, você receberá um link para confirmar o e-mail. Após a confirmação, aguarde a liberação da fazenda pelo administrador.');
             return true;
         } catch (error) {
-            setMessage(error.status === 429 ? 'Aguarde alguns minutos antes de tentar novamente.' : 'Não foi possível solicitar o cadastro. Confira os dados ou consulte o administrador.');
+            setMessage(error.status === 429 ? 'Aguarde alguns minutos antes de tentar novamente.'
+                : error.code === 'weak_password' ? 'Use uma senha com ao menos 6 caracteres.'
+                : 'Não foi possível solicitar o cadastro. Confira os dados ou consulte o administrador.');
             return false;
         } finally { loginPending = false; button.disabled = false; }
     };

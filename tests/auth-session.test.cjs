@@ -24,14 +24,14 @@ function run({ page = 'portal', sessionMap = new Map(), initialSession, role = '
     const document = { body: { dataset: { page } }, documentElement: { classList: {
         add: c => classes.add(c), remove: c => classes.delete(c) } },
         getElementById(id) { if (!elements.has(id)) elements.set(id, element()); return elements.get(id); } };
-    const calls = { getUser: 0, signOut: [], signIn: [], profile: 0 };
+    const calls = { getUser: 0, signOut: [], signIn: [], signUp: [], profile: 0 };
     let clientOptions, authCallback;
     const window = {
         fetch: fetchImpl,
         GEO_PORTAL_CONFIG: configured ? { supabaseUrl: 'https://example.supabase.co', supabaseAnonKey: 'public-test-key' } : {},
         sessionStorage, localStorage: storage(localMap), crypto: { randomUUID: () => `tab-${++tabCounter}` },
         performance: { getEntriesByType: () => [{ type: navigation }] },
-        location: { search: '', replace: url => redirects.push(url), reload: () => redirects.push('reload') },
+        location: { href: 'https://example.test/index.html', search: '', replace: url => redirects.push(url), reload: () => redirects.push('reload') },
         addEventListener(event, fn) { listeners[event] = fn; },
         supabase: { createClient(url, key, options) {
             clientOptions = options;
@@ -51,6 +51,7 @@ function run({ page = 'portal', sessionMap = new Map(), initialSession, role = '
                         sessionStorage.setItem(options.auth.storageKey, JSON.stringify(signedIn));
                         return { data: { user: suppliedUser, session: signedIn }, error: null };
                     },
+                    async signUp(credentials) { calls.signUp.push(credentials); return { data: {}, error: null }; },
                     async signOut(optionsOut) {
                         calls.signOut.push(optionsOut.scope);
                         if (offlineLogout) throw Error('offline');
@@ -203,15 +204,28 @@ test('configuração ausente e armazenamento bloqueado não liberam acesso', asy
     }
 });
 
-test('senha exige maiúscula e caractere especial antes de consultar o banco', async () => {
-    for (const password of ['semmaiúscula!', 'SemEspecial123', 'SemEspecial123 ', '12345!', 'lowercase@']) {
+test('login aceita senha antiga somente numérica e consulta o banco sem impor complexidade', async () => {
+    for (const password of ['123456', '1234', 'somenteletras', 'SemEspecial123']) {
         const h = run({ page: 'login' }); await h.window.portalReady;
-        assert.equal(await h.window.loginGeoportal(user.email, password), false);
-        assert.equal(h.calls.signIn.length, 0);
-        assert.match(h.document.getElementById('login-message').textContent, /maiúscula.*especial/);
+        assert.equal(await h.window.loginGeoportal(user.email, password), true);
+        assert.equal(h.calls.signIn.length, 1);
+        assert.equal(h.calls.signIn[0].password, password);
     }
     const h = run({ page: 'login' }); await h.window.portalReady;
-    assert.equal(await h.window.loginGeoportal(user.email, 'Árvore!123'), true);
+    assert.equal(await h.window.loginGeoportal(user.email, ''), false);
+    assert.equal(h.calls.signIn.length, 0);
+    assert.match(h.document.getElementById('login-message').textContent, /Informe sua senha/);
+});
+
+test('cadastro aceita seis números, pede confirmação e não concede acesso automaticamente', async () => {
+    const h = run({ page: 'login' }); await h.window.portalReady;
+    assert.equal(await h.window.registerGeoportal('User', user.email, '123456', 'FE'), true);
+    assert.equal(h.calls.signUp[0].password, '123456');
+    assert.equal(h.calls.signUp[0].options.data.requested_farm, 'FE');
+    assert.equal(h.redirects.length, 0);
+    assert.match(h.document.getElementById('login-message').textContent, /confirmar o e-mail.*liberação/);
+    assert.equal(await h.window.registerGeoportal('User', user.email, '12345', 'FE'), false);
+    assert.equal(h.calls.signUp.length, 1);
 });
 
 test('abrir por endereço ou restaurar aba exige login; encaminhamento após login funciona uma vez', async () => {

@@ -26,8 +26,7 @@
                 <form class="login-form" id="login-form">
                     <div id="login-credentials">
                     <label>E-mail corporativo<input id="email" type="email" autocomplete="email" placeholder="voce@grupomichels.com.br" required></label>
-                    <label>Senha<input id="password" type="password" autocomplete="current-password" placeholder="Digite sua senha" aria-describedby="password-rules" required></label>
-                    <small class="password-rules" id="password-rules">Use ao menos 8 caracteres, uma letra maiúscula e um caractere especial, como @, # ou !.</small>
+                    <label>Senha<input id="password" type="password" autocomplete="current-password" placeholder="Digite sua senha" required></label>
                     </div>
                     <button type="submit" id="btn-login">Entrar no geoportal</button>
                 </form>
@@ -41,8 +40,8 @@
                 <form class="login-form" id="register-form" hidden>
                     <label>Nome completo<input id="register-name" autocomplete="name" maxlength="100" required></label>
                     <label>E-mail<input id="register-email" type="email" autocomplete="email" required></label>
-                    <label>Senha<input id="register-password" type="password" autocomplete="new-password" minlength="8" required></label>
-                    <small>Use ao menos 8 caracteres, letras maiúsculas e minúsculas, um número e um caractere especial.</small>
+                    <label>Senha<input id="register-password" type="password" autocomplete="new-password" minlength="6" required></label>
+                    <small>Use ao menos 6 caracteres. Pode ser somente números.</small>
                     <label>Qual fazenda você faz parte?<select id="register-farm" required><option value="">Selecione uma fazenda</option></select></label>
                     <small>Este pedido será analisado pelo administrador. Escolher uma fazenda não libera o acesso.</small>
                     <button type="submit" id="btn-register">Solicitar cadastro e confirmar e-mail</button>
@@ -67,7 +66,7 @@
                     password: 'Informe sua senha para entrar. Se ainda não tem uma conta, solicite seu cadastro abaixo.',
                     'register-name': 'Informe seu nome completo.',
                     'register-email': 'Informe seu e-mail para solicitar o cadastro.',
-                    'register-password': 'Informe uma senha com ao menos 8 caracteres.',
+                    'register-password': 'Informe uma senha com ao menos 6 caracteres.',
                     'register-farm': 'Selecione a fazenda para solicitar o cadastro.',
                     'login-farm': 'Selecione uma fazenda para continuar.'
                 };
