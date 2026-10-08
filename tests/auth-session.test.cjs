@@ -10,19 +10,20 @@ let tabCounter = 0;
 function run({ page = 'portal', sessionMap = new Map(), initialSession, role = 'visualizador',
     profileError = false, userError = false, loginError, offlineLogout = false, storageBlocked = false,
     suppliedUser = user, configured = true, failProfile = false, navigation = 'reload',
-    farms = [{code:'FE',name:'Esperança'}], farmError = false, chosenFarm = 'FE', fetchImpl } = {}) {
+    farms = [{code:'FE',name:'Esperança'}], farmError = false, chosenFarm = 'FE', fetchImpl,
+    localMap = new Map([['sb-example-auth-token', JSON.stringify(session)], ['geoportal_calcario_records_v1', 'preserved']]) } = {}) {
     const elements = new Map(), classes = new Set(['portal-loading']), redirects = [], listeners = {};
-    const localMap = new Map([['sb-example-auth-token', JSON.stringify(session)], ['geoportal_calcario_records_v1', 'preserved']]);
     const storage = map => ({ getItem: key => map.get(key) || null,
         setItem(key, value) { if (storageBlocked) throw Error('blocked'); map.set(key, value); }, removeItem: key => map.delete(key) });
     const sessionStorage = storage(sessionMap);
     function element() {
-        return { textContent: '', value: 'typed-password', disabled: false, hidden: false,
+        return { textContent: '', value: 'typed-password', disabled: false, hidden: false, children: [],
             classList: { toggle() {} }, remove() { this.removed = true; }, addEventListener() {},
-            replaceChildren() {}, add() {} };
+            replaceChildren() { this.children = []; }, appendChild(child) { this.children.push(child); }, add() {} };
     }
     const document = { body: { dataset: { page } }, documentElement: { classList: {
         add: c => classes.add(c), remove: c => classes.delete(c) } },
+        createElement: () => element(),
         getElementById(id) { if (!elements.has(id)) elements.set(id, element()); return elements.get(id); } };
     const calls = { getUser: 0, signOut: [], signIn: [], signUp: [], profile: 0 };
     let clientOptions, authCallback;
@@ -39,7 +40,7 @@ function run({ page = 'portal', sessionMap = new Map(), initialSession, role = '
             if (initialSession) sessionStorage.setItem(options.auth.storageKey, JSON.stringify(initialSession));
             if (initialSession && chosenFarm) sessionStorage.setItem(`${options.auth.storageKey}.farm`, chosenFarm);
             return {
-                async rpc(name) { assert.equal(name,'list_accessible_farms'); return {data:farms,error:farmError ? Error('denied'):null}; },
+                async rpc(name) { assert.equal(name,'list_accessible_farms_by_gleba'); return {data:farms,error:farmError ? Error('denied'):null}; },
                 auth: {
                     onAuthStateChange(fn) { authCallback = fn; },
                     async getSession() { return { data: { session: read() }, error: null }; },
@@ -112,7 +113,7 @@ test('a página inicial sempre pede email e senha, sem redirecionar uma sessão 
 });
 
 test('credenciais válidas pedem uma fazenda liberada antes de entrar e apagam senha do formulário', async () => {
-    const h = run({ page: 'login', role: 'projetista' }); await h.window.portalReady;
+    const h = run({ page: 'login', role: 'projetista', farms: [{code:'FE',name:'Esperança',gleba:'FE'}, {code:'FE2',name:'Esperança 2',gleba:'FE'}] }); await h.window.portalReady;
     assert.equal(await h.window.loginGeoportal(' user@example.test ', 'Fixture-password!'), true);
     assert.equal(h.calls.signIn[0].email, 'user@example.test');
     assert.equal(h.redirects.length, 0);
@@ -256,4 +257,39 @@ test('e-mail sem confirmação e fazenda adulterada não abrem o mapa',async()=>
     assert.equal(await unconfirmed.window.portalReady,false);assert.match(unconfirmed.redirects[0],/erro=email/);
     const other=run({initialSession:session,chosenFarm:'FE2'});
     assert.equal(await other.window.portalReady,false);assert.match(other.redirects[0],/erro=fazenda/);
+});
+
+test('única fazenda entra direto e preferência não substitui o login', async () => {
+    const h = run({page:'login'});
+    assert.equal(await h.window.loginGeoportal(user.email, '123456'), true);
+    assert.deepEqual(h.redirects, ['./portal.html']);
+    assert.equal(h.localMap.get('geoportal.preference.example.user-1.farm'), 'FE');
+    const next = run({page:'login', localMap:h.localMap});
+    await next.window.portalReady;
+    assert.equal(next.redirects.length, 0);
+    assert.equal(next.calls.signIn.length, 0);
+});
+
+test('última fazenda liberada entra direto; revogação e outra conta exigem escolha', async () => {
+    const farms = [{code:'FE',name:'Esperança',gleba:'FE'}, {code:'FE2',name:'Esperança 2',gleba:'FE'}];
+    const localMap = new Map([['geoportal.preference.example.user-1.farm','FE2']]);
+    const valid = run({page:'login', farms, localMap});
+    await valid.window.loginGeoportal(user.email, '123456');
+    assert.equal(valid.redirects[0], './portal.html');
+    assert.equal(valid.sessionMap.get(`${valid.options().auth.storageKey}.farm`), 'FE2');
+    const revoked = run({page:'login', farms:[farms[0], {code:'FPAR',name:'Paraíso',gleba:'FPAR'}], localMap});
+    await revoked.window.loginGeoportal(user.email, '123456');
+    assert.equal(revoked.redirects.length, 0);
+    const other = run({page:'login', farms, localMap, suppliedUser:{...user,id:'user-2'}});
+    await other.window.loginGeoportal(user.email, '123456');
+    assert.equal(other.redirects.length, 0);
+});
+
+test('lista agrupa fazendas pela gleba real, mantendo cada código separado', async () => {
+    const h = run({page:'login', farms:[{code:'FPAR',name:'Paraíso',gleba:'FPAR'},
+        {code:'FE2',name:'Esperança 2',gleba:'FE'}, {code:'FE',name:'Esperança',gleba:'FE'}]});
+    await h.window.loginGeoportal(user.email, '123456');
+    const groups = h.elements.get('login-farm').children;
+    assert.deepEqual(Array.from(groups, group => group.label), ['Gleba FE','Gleba FPAR']);
+    assert.deepEqual(Array.from(groups[0].children, option => option.value), ['FE','FE2']);
 });

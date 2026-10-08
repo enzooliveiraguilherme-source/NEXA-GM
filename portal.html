@@ -16,7 +16,7 @@
     
     <!-- Custom CSS -->
     <link rel="stylesheet" href="style.css?v=3.5">
-    <link rel="stylesheet" href="brand.css?v=6">
+    <link rel="stylesheet" href="brand.css?v=7">
 </head>
 <body data-page="portal">
     <div id="auth-loading-overlay" class="loading-overlay"><div class="spinner"></div><p>Validando seu acesso…</p></div>
@@ -161,6 +161,7 @@
                 <div class="portal-account">
                     <div class="portal-account-details"><strong id="portal-account-name"></strong><span id="portal-account-role"></span></div>
                     <button type="button" class="btn-logout" id="btn-logout">Sair</button>
+                    <button type="button" class="btn-logout" id="btn-switch-farm" hidden>Trocar fazenda</button>
                 </div>
                 <div class="stats-box">
                     <span class="stats-label">Talhões no filtro:</span>
@@ -950,7 +951,17 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="config.js"></script>
-    <script src="auth.js?v=4"></script>
+    <dialog id="farm-switch-dialog" class="farm-switch-dialog">
+        <form id="farm-switch-form" class="login-form">
+            <h2>Trocar fazenda</h2>
+            <label>Fazendas por gleba<select id="switch-farm" required></select></label>
+            <small>A lista mostra somente as fazendas liberadas para sua conta. Sua escolha será lembrada na próxima entrada.</small>
+            <p id="farm-switch-message" role="status" aria-live="polite"></p>
+            <button id="btn-confirm-farm" type="submit">Acessar fazenda</button>
+            <button id="btn-cancel-farm" type="button">Cancelar</button>
+        </form>
+    </dialog>
+    <script src="auth.js?v=5"></script>
 
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>

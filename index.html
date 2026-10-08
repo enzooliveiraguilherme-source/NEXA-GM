@@ -31,8 +31,8 @@
                     <button type="submit" id="btn-login">Entrar no geoportal</button>
                 </form>
                 <form class="login-form" id="farm-choice" hidden>
-                    <label>Em qual fazenda você vai trabalhar?<select id="login-farm" required></select></label>
-                    <small>Somente as fazendas liberadas pelo administrador aparecem aqui.</small>
+                    <label>Escolha a fazenda, organizada por gleba<select id="login-farm" required></select></label>
+                    <small>Somente as fazendas liberadas aparecem aqui. Sua última escolha será lembrada nas próximas entradas.</small>
                     <button type="submit">Acessar fazenda</button>
                     <button type="button" id="btn-login-reset">Entrar com outra conta</button>
                 </form>
@@ -54,7 +54,7 @@
     </main>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="config.js"></script>
-    <script src="auth.js?v=3"></script>
+    <script src="auth.js?v=5"></script>
     <script>
         document.querySelectorAll('.login-form').forEach(form => {
             form.addEventListener('invalid', event => {
@@ -93,11 +93,12 @@
                 return;
             }
             try {
-            const { data, error } = await window.supabaseClient.from('farms').select('code,name').order('name');
+            const { data, error } = await window.supabaseClient.from('farms').select('code,name,gleba').order('gleba');
             if (error) { document.getElementById('login-message').textContent = 'O cadastro ainda não está disponível. Consulte o administrador.'; return; }
             const select = document.getElementById('register-farm');
-            select.replaceChildren(new Option('Selecione uma fazenda', ''));
-            data.forEach(farm => select.add(new Option(`${farm.name} (${farm.code})`, farm.code)));
+            window.populateFarmChoices(select, data);
+            select.insertBefore(new Option('Selecione uma fazenda', ''), select.firstChild);
+            select.value = '';
             document.getElementById('login-form').hidden = true;
             document.getElementById('btn-show-register').hidden = true;
             document.getElementById('register-form').hidden = false;

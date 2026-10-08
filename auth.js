@@ -7,11 +7,48 @@
     let redirecting = false;
     let loginPending = false;
     let allowedFarms = [];
+    let preferencePrefix;
+
+    function rememberedFarm(user) {
+        try { return window.localStorage.getItem(`${preferencePrefix}.${user.id}.farm`); }
+        catch (_) { return null; }
+    }
+
+    function rememberFarm(user, code) {
+        // Guarda somente a preferência. As permissões são conferidas novamente no banco.
+        try { window.localStorage.setItem(`${preferencePrefix}.${user.id}.farm`, code); }
+        catch (_) { /* A escolha continua disponível para esta sessão. */ }
+    }
+
+    function enterFarm(user, code) {
+        rememberFarm(user, code);
+        window.sessionStorage.setItem(`${storageKey}.farm`, code);
+        window.sessionStorage.setItem(`${storageKey}.entry`, '1');
+        window.location.replace('./portal.html');
+        return true;
+    }
 
     function setMessage(text) {
-        const message = document.getElementById('login-message');
+        const message = document.getElementById('login-message') || document.getElementById('farm-switch-message');
         if (message) message.textContent = text;
     }
+
+    window.populateFarmChoices = function (select, farms, selected) {
+        select.replaceChildren();
+        const groups = new Map();
+        [...farms].sort((a, b) => (a.gleba || '').localeCompare(b.gleba || '', 'pt-BR') ||
+            a.name.localeCompare(b.name, 'pt-BR') || a.code.localeCompare(b.code)).forEach(farm => {
+            const label = farm.gleba ? `Gleba ${farm.gleba}` : 'Sem gleba cadastrada';
+            if (!groups.has(label)) {
+                const group = document.createElement('optgroup');
+                group.label = label;
+                groups.set(label, group);
+                select.appendChild(group);
+            }
+            groups.get(label).appendChild(new Option(`${farm.name} (${farm.code})`, farm.code));
+        });
+        if (farms.some(farm => farm.code === selected)) select.value = selected;
+    };
 
     function lockAccess() {
         document.documentElement.classList.add('portal-loading');
@@ -62,14 +99,16 @@
         const name = document.getElementById('portal-account-name');
         if (name) name.textContent = profile.full_name || user.email;
         const role = document.getElementById('portal-account-role');
-        if (role) role.textContent = `${window.portalFarm.name} · ${ { admin: 'Administrador', projetista: 'Projetista', visualizador: 'Visualizador' }[profile.role] }`;
+        if (role) role.textContent = `${window.portalFarm.gleba ? `Gleba ${window.portalFarm.gleba} · ` : ''}${window.portalFarm.name} · ${ { admin: 'Administrador', projetista: 'Projetista', visualizador: 'Visualizador' }[profile.role] }`;
+        const switchButton = document.getElementById('btn-switch-farm');
+        if (switchButton) switchButton.hidden = allowedFarms.length < 2;
         document.getElementById('admin-view-switch')?.classList.toggle('hidden', profile.role !== 'admin');
         document.documentElement.classList.remove('portal-loading');
         document.getElementById('auth-loading-overlay')?.remove();
     }
 
     async function getFarms() {
-        const { data, error } = await window.supabaseClient.rpc('list_accessible_farms');
+        const { data, error } = await window.supabaseClient.rpc('list_accessible_farms_by_gleba');
         if (error || !Array.isArray(data)) throw new Error('Não foi possível consultar as fazendas liberadas.');
         return data;
     }
@@ -86,6 +125,7 @@
         }
 
         const project = new URL(config.supabaseUrl).hostname.split('.')[0];
+        preferencePrefix = `geoportal.preference.${project}`;
         const tabKey = `geoportal.auth.${project}.tab`;
         let tabId = window.sessionStorage.getItem(tabKey);
         if (!tabId) {
@@ -171,6 +211,7 @@
             goToLogin('fazenda'); await endSession(); return false;
         }
         showAccount(profile, user);
+        rememberFarm(user, window.portalFarm.code);
         return true;
     })().catch(() => {
         clearSession();
@@ -218,9 +259,12 @@
             if (!allowedFarms.length) {
                 await endSession(); setMessage('Sua conta aguarda a liberação de uma fazenda pelo administrador.'); return false;
             }
+            const previous = rememberedFarm(data.user);
+            const automatic = allowedFarms.length === 1 ? allowedFarms[0]
+                : allowedFarms.find(farm => farm.code === previous);
+            if (automatic) return enterFarm(data.user, automatic.code);
             const select = document.getElementById('login-farm');
-            select.replaceChildren();
-            allowedFarms.forEach(farm => select.add(new Option(`${farm.name} (${farm.code})`, farm.code)));
+            window.populateFarmChoices(select, allowedFarms);
             document.getElementById('login-credentials').hidden = true;
             document.getElementById('farm-choice').hidden = false;
             document.getElementById('btn-login').hidden = true;
@@ -244,10 +288,7 @@
             if (error || !user?.email_confirmed_at) throw new Error('Seu acesso expirou. Entre novamente.');
             const available = await getFarms();
             if (!available.some(farm => farm.code === code)) throw new Error('Esta fazenda não está liberada para sua conta.');
-            window.sessionStorage.setItem(`${storageKey}.farm`, code);
-            window.sessionStorage.setItem(`${storageKey}.entry`, '1');
-            window.location.replace('./portal.html');
-            return true;
+            return enterFarm(user, code);
         } catch (error) { setMessage(error.message); return false; }
         finally { loginPending = false; }
     };
@@ -285,6 +326,23 @@
         window.location.replace('./index.html');
     };
     document.getElementById('btn-logout')?.addEventListener('click', () => window.logoutGeoportal());
+    document.getElementById('btn-switch-farm')?.addEventListener('click', async () => {
+        const dialog = document.getElementById('farm-switch-dialog');
+        try {
+            allowedFarms = await getFarms();
+            window.populateFarmChoices(document.getElementById('switch-farm'), allowedFarms, window.portalFarm.code);
+            setMessage('');
+            dialog.showModal();
+        } catch (_) { setMessage('Não foi possível consultar as fazendas. Tente novamente.'); dialog.showModal(); }
+    });
+    document.getElementById('farm-switch-form')?.addEventListener('submit', async event => {
+        event.preventDefault();
+        const button = document.getElementById('btn-confirm-farm');
+        button.disabled = true;
+        try { await window.choosePortalFarm(document.getElementById('switch-farm').value); }
+        finally { button.disabled = false; }
+    });
+    document.getElementById('btn-cancel-farm')?.addEventListener('click', () => document.getElementById('farm-switch-dialog').close());
     window.addEventListener('pageshow', event => {
         if (event.persisted) {
             if (!isLoginPage) lockAccess();
