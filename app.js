@@ -254,7 +254,7 @@ const TalhaoSelection = {
         document.getElementById('operation-selection-bar')?.classList.toggle('hidden', !visible);
         const count = state.selectedFeatures.size;
         const summary = document.getElementById('operation-selection-summary');
-        if (summary) summary.textContent = count ? `${count} talhão${count === 1 ? '' : 's'} selecionado${count === 1 ? '' : 's'}. Clique com o botão direito em um deles para editar.` : 'Segure Shift e clique nos talhões; depois use o botão direito para editar a seleção.';
+        if (summary) summary.textContent = count ? `${count} ${count === 1 ? 'talhão selecionado' : 'talhões selecionados'}. Clique com o botão direito em um deles para editar.` : 'Segure Shift e clique nos talhões; depois use o botão direito para editar a seleção.';
         const edit = document.getElementById('btn-edit-selected-talhoes');
         if (edit) edit.disabled = count === 0;
         const clear = document.getElementById('btn-clear-selected-talhoes');
@@ -1767,7 +1767,7 @@ const AdubacaoModal = {
         } else if (status === 'em_andamento') {
             if (this.elements.condAndamento) this.elements.condAndamento.classList.remove('hidden');
             this.setProgressMode(this.currentProgressMode);
-        } else {
+        } else if (status === 'nao_iniciado') {
             if (this.elements.condNaoIniciado) this.elements.condNaoIniciado.classList.remove('hidden');
         }
     },
