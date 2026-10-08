@@ -4,7 +4,7 @@ const SUPABASE_URL = 'https://qdvlwszyehblmrjnqglx.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_NW6brFRZlyc9vP0KkzhDPA_rBlALIn3';
 
 module.exports = async (_request, response) => {
-    const endpoint = `${SUPABASE_URL}/rest/v1/profiles?select=id&limit=1`;
+    const endpoint = `${SUPABASE_URL}/rest/v1/farms?select=code&limit=1`;
     const requestOptions = {
         headers: {
             apikey: SUPABASE_PUBLISHABLE_KEY,
