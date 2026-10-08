@@ -59,6 +59,7 @@
                 if (!this.map||this.zooming) return;
                 root.HarvestPyramid.captureView(this);
                 const viewport = this.map.getSize();
+                if (!viewport.x || !viewport.y) return;
                 const ratio = Math.min(root.devicePixelRatio || 1, 2);
                 const w = Math.round(viewport.x * ratio), h = Math.round(viewport.y * ratio);
                 if (this.canvas.width !== w || this.canvas.height !== h) { this.canvas.width = w; this.canvas.height = h; }

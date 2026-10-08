@@ -126,6 +126,10 @@
                 finally{restore.disabled=false;files.value='';}
             };
             document.getElementById('harvest-import-section').append(restore,files);
+            restore.hidden=true;
+            root.supabaseClient.from('harvest_raster_files').select('path',{count:'exact',head:true}).eq('version_id',state.harvestDataset.version)
+                .then(({count,error})=>{restore.hidden=!error&&count===127;})
+                .catch(()=>{restore.hidden=false;});
         }
         text('harvest-import-status',state.harvestSummary.records.length+' talhões · Milho 2026'); clear(state);
     }
