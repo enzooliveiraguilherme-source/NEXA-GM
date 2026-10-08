@@ -48,6 +48,8 @@ const state = {
     // Talhão atualmente selecionado para edição
     selectedFeature: null,
     selectedTalhaoRecord: null,
+    selectedFeatures: new Map(),
+    shiftPressed: false,
 
     // Modo Operacional ('aplicacao' | 'planejamento')
     operationalMode: 'aplicacao'
@@ -91,7 +93,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 function initMap() {
     state.map = L.map('map', {
         zoomControl: false,
-        attributionControl: false
+        attributionControl: false,
+        boxZoom: false
     }).setView([-10.35, -52.25], 11);
     
     L.control.zoom({ position: 'topright' }).addTo(state.map);
@@ -226,6 +229,38 @@ function isPlantioMode() {
 function isOperationalMapMode() {
     return state.currentTab === 'adubacao' || state.currentTab === 'plantio';
 }
+
+const TalhaoSelection = {
+    key(feature) {
+        const p = feature.properties;
+        return getRecordKey(p.Fazenda, p.Campo, state.currentAno, state.currentCultura, state.currentProduto);
+    },
+    toggle(feature) {
+        if (state.userRole === 'viewer' || !isOperationalMapMode() || state.operationalMode !== 'aplicacao') return;
+        const key = this.key(feature);
+        if (state.selectedFeatures.has(key)) state.selectedFeatures.delete(key);
+        else state.selectedFeatures.set(key, feature);
+        updateMapStylesAndKPIs();
+    },
+    clear() {
+        state.selectedFeatures.clear();
+        updateMapStylesAndKPIs();
+    },
+    updateUI() {
+        const visible = isOperationalMapMode() && state.operationalMode === 'aplicacao' && state.userRole !== 'viewer';
+        if (!visible || Array.from(state.selectedFeatures).some(([key, feature]) => key !== this.key(feature))) {
+            state.selectedFeatures.clear();
+        }
+        document.getElementById('operation-selection-bar')?.classList.toggle('hidden', !visible);
+        const count = state.selectedFeatures.size;
+        const summary = document.getElementById('operation-selection-summary');
+        if (summary) summary.textContent = count ? `${count} talhão${count === 1 ? '' : 's'} selecionado${count === 1 ? '' : 's'}. Clique com o botão direito em um deles para editar.` : 'Segure Shift e clique nos talhões; depois use o botão direito para editar a seleção.';
+        const edit = document.getElementById('btn-edit-selected-talhoes');
+        if (edit) edit.disabled = count === 0;
+        const clear = document.getElementById('btn-clear-selected-talhoes');
+        if (clear) clear.disabled = count === 0;
+    }
+};
 
 function featureMatchesFilters(feature) {
     const properties = feature && feature.properties ? feature.properties : {};
@@ -500,8 +535,10 @@ function updateRoleUI() {
     if (btnAddProduto) btnAddProduto.classList.toggle('hidden', isViewer);
 
     const modalBackdrop = document.getElementById('adubacao-modal-backdrop');
+    if (isViewer) TalhaoSelection.clear();
+    else TalhaoSelection.updateUI();
     if (modalBackdrop && !modalBackdrop.classList.contains('hidden') && state.selectedFeature) {
-        AdubacaoModal.open(state.selectedFeature);
+        AdubacaoModal.open(isViewer ? state.selectedFeature : AdubacaoModal.currentFeatures);
     }
 }
 
@@ -795,6 +832,9 @@ function getFeatureStyle(feature) {
     }
 
     const p = feature.properties || {};
+    if (state.operationalMode === 'aplicacao' && state.selectedFeatures.has(TalhaoSelection.key(feature))) {
+        return { fillColor: '#0284c7', fillOpacity: 0.75, weight: 3, opacity: 1, color: '#facc15', dashArray: null };
+    }
     const isPlanned = PlanningManager.isTalhaoPlanned(p.Fazenda, p.Campo, state.currentAno, state.currentCultura, state.currentProduto);
 
     if (state.operationalMode === 'planejamento') {
@@ -944,6 +984,21 @@ function bindTalhaoTooltip(layer, feature) {
 function onEachFeature(feature, layer) {
     bindTalhaoTooltip(layer, feature);
 
+    layer.on('contextmenu', function(event) {
+        if (!isOperationalMapMode() || state.operationalMode !== 'aplicacao' || state.userRole === 'viewer') return;
+        if (event?.originalEvent) {
+            L.DomEvent.preventDefault(event.originalEvent);
+            L.DomEvent.stopPropagation(event.originalEvent);
+        }
+        const key = TalhaoSelection.key(feature);
+        if (!state.selectedFeatures.has(key)) {
+            state.selectedFeatures.clear();
+            state.selectedFeatures.set(key, feature);
+            updateMapStylesAndKPIs();
+        }
+        AdubacaoModal.open(Array.from(state.selectedFeatures.values()));
+    });
+
     layer.on('mouseover', function() {
         if (!isCalcarioMode()) {
             layer.setStyle({
@@ -983,7 +1038,9 @@ function onEachFeature(feature, layer) {
                 updateMapStylesAndKPIs();
                 updatePlanningBannerUI();
             } else {
-                AdubacaoModal.open(feature);
+                const shift = state.shiftPressed || e?.shiftKey || e?.originalEvent?.shiftKey || e?.originalEvent?.getModifierState?.('Shift');
+                if (state.userRole !== 'viewer' && (shift || state.selectedFeatures.size)) TalhaoSelection.toggle(feature);
+                else AdubacaoModal.open(feature);
             }
         } else {
             const p = feature.properties || {};
@@ -1021,6 +1078,7 @@ function onEachFeature(feature, layer) {
 
 // Atualização de estilos e KPIs sem destruir o GeoJSON Layer
 function updateMapStylesAndKPIs() {
+    TalhaoSelection.updateUI();
     try {
         if (state.geojsonLayer) {
             state.geojsonLayer.setStyle(getFeatureStyle);
@@ -1041,6 +1099,8 @@ function updateMapStylesAndKPIs() {
 }
 
 function renderMap(shouldFitBounds = true) {
+    state.selectedFeatures.clear();
+    TalhaoSelection.updateUI();
     HarvestView.clear(state);
     if (state.geojsonLayer && state.map) {
         state.map.removeLayer(state.geojsonLayer);
@@ -1283,6 +1343,8 @@ function escapeHtml(value) {
 const AdubacaoModal = {
     elements: {},
     currentFeature: null,
+    currentFeatures: [],
+    currentRecords: [],
     currentRecord: null,
     currentArea: 0,
     currentStatus: 'nao_iniciado',
@@ -1519,6 +1581,8 @@ const AdubacaoModal = {
     },
 
     open(feature) {
+        const features = Array.isArray(feature) ? feature : [feature];
+        feature = features[0];
         if (!feature || !feature.properties) return;
 
         this.cacheDom();
@@ -1532,6 +1596,22 @@ const AdubacaoModal = {
         this.currentFeature = feature;
         this.currentArea = area;
         this.currentRecord = getTalhaoRecord(fazenda, campo, state.currentAno, state.currentCultura, state.currentProduto, area);
+        this.currentFeatures = features;
+        this.currentRecords = features.map(item => {
+            const props = item.properties;
+            return getTalhaoRecord(props.Fazenda, props.Campo, state.currentAno, state.currentCultura, state.currentProduto, props.Area);
+        });
+        const bulk = features.length > 1;
+        if (bulk) {
+            this.currentArea = features.reduce((sum, item) => sum + (parseFloat(item.properties.Area) || 0), 0);
+            const common = key => this.currentRecords.every(record => record[key] === this.currentRecords[0][key]) ? this.currentRecords[0][key] : '';
+            this.currentRecord = {
+                ...this.currentRecord,
+                status: common('status'), tipoProgresso: 'percentual',
+                taxaAplicada: common('taxaAplicada'), variedadeSemente: common('variedadeSemente'),
+                dataPlantio: common('dataPlantio'), percentualRealizado: common('percentualRealizado'), areaRealizada: '', historico: []
+            };
+        }
         const variedadeSemente = this.currentRecord.variedadeSemente || p.Variedade || '';
         const dataPlantio = this.currentRecord.dataPlantio || '';
 
@@ -1553,6 +1633,20 @@ const AdubacaoModal = {
         if (this.elements.cadastralVariedadeSemente) this.elements.cadastralVariedadeSemente.textContent = variedadeSemente || 'Não informada';
         if (this.elements.cadastralDataPlantio) this.elements.cadastralDataPlantio.textContent = formatDateBR(dataPlantio);
         this.populateVariedadeSuggestions();
+        const bulkHelp = document.getElementById('operation-bulk-help');
+        if (bulkHelp) bulkHelp.classList.toggle('hidden', !bulk);
+        if (this.elements.historyAccordion) this.elements.historyAccordion.classList.toggle('hidden', bulk);
+        if (bulk) {
+            this.elements.title.textContent = `Atualizar ${features.length} talhões`;
+            const unique = key => [...new Set(features.map(item => item.properties[key] || 'N/A'))].join(', ');
+            this.elements.cadastralFazenda.textContent = unique('Fazenda');
+            this.elements.cadastralGleba.textContent = unique('Gleba');
+            this.elements.cadastralTalhao.textContent = unique('Campo');
+            this.elements.cadastralArea.textContent = `${this.currentArea.toFixed(2)} ha`;
+            this.elements.previewTotalHa.textContent = `${this.currentArea.toFixed(2)} ha`;
+            this.elements.cadastralVariedadeSemente.textContent = this.currentRecord.variedadeSemente || 'Valores diferentes ou não informados';
+            this.elements.cadastralDataPlantio.textContent = this.currentRecord.dataPlantio ? formatDateBR(this.currentRecord.dataPlantio) : 'Valores diferentes ou não informados';
+        }
 
         // Histórico
         this.renderHistory(this.currentRecord.historico);
@@ -1584,6 +1678,7 @@ const AdubacaoModal = {
                 this.elements.formEdit.style.display = 'flex';
             }
             this.renderEditorMode();
+            if (bulk && !this.currentRecord.status) this.setStatus('');
         }
 
         if (this.elements.backdrop) {
@@ -1641,7 +1736,7 @@ const AdubacaoModal = {
 
         if (this.elements.inputTaxa) this.elements.inputTaxa.value = (rec.taxaAplicada != null) ? rec.taxaAplicada : '';
         if (this.elements.inputVariedadeSemente) {
-            this.elements.inputVariedadeSemente.value = rec.variedadeSemente || this.currentFeature?.properties?.Variedade || '';
+            this.elements.inputVariedadeSemente.value = rec.variedadeSemente || (this.currentFeatures.length === 1 ? this.currentFeature?.properties?.Variedade : '') || '';
         }
         if (this.elements.inputDataPlantio) this.elements.inputDataPlantio.value = rec.dataPlantio || '';
         if (this.elements.inputPct) this.elements.inputPct.value = (rec.percentualRealizado != null && rec.percentualRealizado > 0) ? rec.percentualRealizado : '';
@@ -1700,7 +1795,7 @@ const AdubacaoModal = {
 
     updatePreviewFromHa() {
         const val = this.elements.inputHa ? (parseFloat(this.elements.inputHa.value) || 0) : 0;
-        const calcPct = this.currentArea > 0 ? ((val / this.currentArea) * 100).toFixed(1) : '0.0';
+        const calcPct = this.currentArea > 0 ? ((val * this.currentFeatures.length / this.currentArea) * 100).toFixed(1) : '0.0';
         if (this.elements.previewCalcPct) this.elements.previewCalcPct.textContent = `${calcPct}%`;
     },
 
@@ -1750,6 +1845,8 @@ const AdubacaoModal = {
 
             this.currentFeature = null;
             this.currentRecord = null;
+            this.currentFeatures = [];
+            this.currentRecords = [];
             state.selectedFeature = null;
             state.selectedTalhaoRecord = null;
             this.hideError();
@@ -1778,6 +1875,10 @@ const AdubacaoModal = {
         }
 
         const status = this.currentStatus;
+        if (!STATUS_COLORS[status]) {
+            this.showError('Selecione o status que será aplicado aos talhões selecionados.');
+            return;
+        }
         const totalArea = this.currentArea;
         let taxaAplicada = null;
         let areaRealizada = 0;
@@ -1804,7 +1905,7 @@ const AdubacaoModal = {
         if (status === 'concluido') {
             if (!isPlantioMode()) {
                 const taxaVal = this.elements.inputTaxa ? parseFloat(this.elements.inputTaxa.value) : NaN;
-                if (isNaN(taxaVal) || taxaVal <= 0) {
+                if (!Number.isFinite(taxaVal) || taxaVal <= 0) {
                     this.showError('A Taxa Aplicada (t/ha) é obrigatória para talhões concluídos e deve ser maior que zero.');
                     return;
                 }
@@ -1819,7 +1920,7 @@ const AdubacaoModal = {
         } else if (status === 'em_andamento') {
             if (tipoProgresso === 'percentual') {
                 const pctVal = this.elements.inputPct ? parseFloat(this.elements.inputPct.value) : NaN;
-                if (isNaN(pctVal) || pctVal <= 0 || pctVal >= 100) {
+                if (!Number.isFinite(pctVal) || pctVal <= 0 || pctVal >= 100) {
                     this.showError('O percentual de progresso deve ser um valor entre 0,1% e 99,9%.');
                     return;
                 }
@@ -1828,7 +1929,7 @@ const AdubacaoModal = {
                 historicoDetalhe = `Progresso informado: ${pctVal}% (${areaRealizada} ha)`;
             } else {
                 const haVal = this.elements.inputHa ? parseFloat(this.elements.inputHa.value) : NaN;
-                if (isNaN(haVal) || haVal <= 0) {
+                if (!Number.isFinite(haVal) || haVal <= 0) {
                     this.showError('A área concluída em hectares deve ser maior que zero.');
                     return;
                 }
@@ -1861,29 +1962,52 @@ const AdubacaoModal = {
             detalhe: historicoDetalhe
         };
 
-        const historicoAtual = Array.isArray(this.currentRecord.historico) ? this.currentRecord.historico : [];
-        historicoAtual.push(historyEntry);
-
-        const updatedRecord = {
-            ...this.currentRecord,
-            status: status,
-            areaRealizada: areaRealizada,
-            percentualRealizado: percentualRealizado,
-            taxaAplicada: taxaAplicada,
-            variedadeSemente: variedadeSemente,
-            dataPlantio: dataPlantio,
-            tipoProgresso: tipoProgresso,
-            usuario: state.currentUser,
-            ultimaAlteracao: now.toISOString(),
-            historico: historicoAtual
-        };
-
-        saveTalhaoRecord(updatedRecord);
+        const updatedRecords = this.currentRecords.map((record, index) => {
+            const areaTotal = parseFloat(this.currentFeatures[index].properties.Area) || 0;
+            const completedArea = status === 'concluido' ? areaTotal : status === 'em_andamento'
+                ? (tipoProgresso === 'hectares' ? areaRealizada : parseFloat((areaTotal * percentualRealizado / 100).toFixed(2))) : 0;
+            const completedPct = status === 'concluido' ? 100 : status === 'em_andamento'
+                ? (tipoProgresso === 'hectares' ? (areaTotal > 0 ? parseFloat((completedArea / areaTotal * 100).toFixed(1)) : 0) : percentualRealizado) : 0;
+            return {
+                ...record,
+                areaTotal,
+                status: status,
+                areaRealizada: completedArea,
+                percentualRealizado: completedPct,
+                taxaAplicada: taxaAplicada,
+                variedadeSemente: variedadeSemente,
+                dataPlantio: dataPlantio,
+                tipoProgresso: tipoProgresso,
+                usuario: state.currentUser,
+                ultimaAlteracao: now.toISOString(),
+                historico: [...(Array.isArray(record.historico) ? record.historico : []), {
+                    ...historyEntry,
+                    detalhe: status === 'em_andamento' ? `${historicoDetalhe} • Neste talhão: ${completedArea} ha (${completedPct}%)` : historicoDetalhe
+                }]
+            };
+        });
+        if (status === 'em_andamento' && tipoProgresso === 'hectares') {
+            const exceeded = updatedRecords.find(record => record.areaRealizada > record.areaTotal);
+            if (exceeded) {
+                this.showError(`A área informada é aplicada a cada talhão e excede a área de ${exceeded.campo} (${exceeded.areaTotal} ha). Use percentual ou reduza os hectares.`);
+                return;
+            }
+        }
+        const records = getAllRecords();
+        updatedRecords.forEach(record => {
+            records[getRecordKey(record.fazenda, record.campo, record.ano, record.cultura, record.produto)] = record;
+        });
+        try {
+            localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify(records));
+        } catch (error) {
+            this.showError('Não foi possível salvar as alterações. Verifique o espaço disponível no navegador e tente novamente.');
+            return;
+        }
         if (isPlantioMode() && variedadeSemente) {
             SharedSeedCatalog.add(variedadeSemente);
         }
         this.close();
-        updateMapStylesAndKPIs();
+        TalhaoSelection.clear();
     }
 };
 
@@ -2027,6 +2151,22 @@ function handleNovaCulturaSubmit(e) {
 // CONFIGURAÇÃO DOS EVENT LISTENERS
 // ==========================================================================
 function setupEventListeners() {
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Shift') state.shiftPressed = true;
+    });
+    document.addEventListener('keyup', event => {
+        if (event.key === 'Shift') state.shiftPressed = false;
+    });
+    window.addEventListener('blur', () => { state.shiftPressed = false; });
+    document.getElementById('btn-edit-selected-talhoes')?.addEventListener('click', () => {
+        if (state.userRole !== 'viewer' && state.selectedFeatures.size) AdubacaoModal.open(Array.from(state.selectedFeatures.values()));
+    });
+    document.getElementById('btn-clear-selected-talhoes')?.addEventListener('click', () => TalhaoSelection.clear());
+    document.addEventListener('keydown', event => {
+        if (event.key !== 'Escape') return;
+        if (AdubacaoModal.currentFeature) AdubacaoModal.close();
+        else TalhaoSelection.clear();
+    });
     const harvestFile = document.getElementById('harvest-file');
     if (harvestFile) harvestFile.addEventListener('change', async () => {
         const file = harvestFile.files[0];
@@ -2263,6 +2403,7 @@ function setupEventListeners() {
     if (btnModePlanejamento) {
         btnModePlanejamento.addEventListener('click', () => {
             state.operationalMode = 'planejamento';
+            TalhaoSelection.clear();
             btnModePlanejamento.classList.add('active');
             if (btnModeAplicacao) btnModeAplicacao.classList.remove('active');
             updateMapStylesAndKPIs();

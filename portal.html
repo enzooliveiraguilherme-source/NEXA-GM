@@ -15,7 +15,7 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
     
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="style.css?v=3.0">
+    <link rel="stylesheet" href="style.css?v=3.2">
     <link rel="stylesheet" href="brand.css?v=3">
 </head>
 <body data-page="portal">
@@ -273,6 +273,14 @@
                     <button type="button" class="btn-plan-opt btn-plan-clear" id="btn-plan-clear-all" title="Limpar planejamento deste produto">
                         <i class="fa-solid fa-trash-can"></i> Limpar
                     </button>
+                </div>
+            </div>
+
+            <div class="operation-selection-bar hidden" id="operation-selection-bar">
+                <span id="operation-selection-summary" role="status" aria-live="polite">Segure Shift e clique nos talhões; depois use o botão direito para editar a seleção.</span>
+                <div class="operation-selection-actions">
+                    <button type="button" class="btn-primary" id="btn-edit-selected-talhoes" disabled>Atualizar selecionados</button>
+                    <button type="button" class="btn-secondary" id="btn-clear-selected-talhoes" disabled>Limpar seleção</button>
                 </div>
             </div>
 
@@ -595,6 +603,7 @@
 
             <!-- Corpo -->
             <div class="modal-body">
+                <p class="operation-bulk-help hidden" id="operation-bulk-help">Os valores deste formulário serão aplicados a todos os talhões listados abaixo. O percentual é calculado sobre a área de cada talhão; em hectares, o mesmo valor é aplicado a cada um. Campos com valores diferentes ficam vazios para você preencher.</p>
                 <!-- Informações Cadastrais em Grid -->
                 <div class="talhao-cadastral-card">
                     <div class="cadastral-col">
@@ -951,6 +960,6 @@
     <script src="js/harvest-pyramid.js?v=6"></script>
     <script src="js/harvest-points.js?v=6"></script>
     <script src="js/harvest-view.js?v=5"></script>
-    <script src="app.js?v=3.2"></script>
+    <script src="app.js?v=3.4"></script>
 </body>
 </html>

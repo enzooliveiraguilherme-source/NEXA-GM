@@ -2122,3 +2122,19 @@ svg.leaflet-zoom-animated:focus,
 .harvest-sync { width:100%;border:1px solid #dbe5ef;border-radius:8px;padding:9px;background:#fff;font-size:11px;color:#64748b;cursor:pointer; }
 .harvest-sync:disabled { opacity:.5;cursor:wait; }
 .harvest-point-tooltip { border:0;border-radius:8px;font-weight:700;color:#16324f;box-shadow:0 4px 16px #16324f20; }
+.operation-selection-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 10px 20px;
+    background: #eff6ff;
+    color: #075985;
+    border-bottom: 1px solid #bae6fd;
+    font-size: 13px;
+}
+.operation-selection-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.operation-selection-actions button { padding: 8px 12px; }
+.operation-selection-actions button:disabled { opacity: .5; cursor: default; }
+.operation-bulk-help { padding: 12px; border-radius: 8px; background: #eff6ff; color: #075985; font-size: 13px; line-height: 1.5; }
