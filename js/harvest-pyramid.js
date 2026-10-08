@@ -1,7 +1,6 @@
 (function(root){
  'use strict';
- const BASE='dados/colheita/2026/milho/fe-original/pyramid/';
- let manifest;
+ const manifests=new Map();
  // O bitmap e sua máscara permanecem juntos durante a animação.
  // Transforme a última imagem pronta e só redesenhe ao encerrar o zoom.
  function bindCanvas(layer){
@@ -24,8 +23,9 @@
   for(const polygon of polygons(features))for(const ring of polygon){ring.forEach((coord,i)=>{const p=map.latLngToContainerPoint([coord[1],coord[0]]);if(i)ctx.lineTo(p.x,p.y);else ctx.moveTo(p.x,p.y);});ctx.closePath();}
   ctx.clip('evenodd');
  }
- async function create(records,features){
-  manifest ||= fetch(BASE+'index.json?v=values1').then(r=>{if(!r.ok)throw new Error('Pirâmide indisponível.');return r.json();});
+ async function create(records,features,dataset){
+  let manifest=manifests.get(dataset.version);
+  if(!manifest){manifest=root.HarvestStore.loadRaster(dataset,'index.json');manifests.set(dataset.version,manifest);manifest.catch(()=>manifests.delete(dataset.version));}
   const index=await manifest,allowed=new Set(records.map(r=>r.campo));
   const Layer=L.Layer.extend({
    initialize(){this.images=new Map();this.colored=new Map();this.records=index.records.filter(r=>allowed.has(r.campo));},
@@ -36,7 +36,7 @@
     const level=Math.max(0,Math.min(5,15-Math.floor(map.getZoom())));
     for(const record of this.records){
      let item=record.levels[level];const key=item.valuesFile;let img=this.images.get(key);
-     if(!img){img={values:null};this.images.set(key,img);loadValues(item).then(values=>{img.values=values;this.draw();}).catch(error=>{this.images.delete(key);console.error('Não foi possível carregar a produtividade:',error);});}
+     if(!img){img={values:null};this.images.set(key,img);loadValues(item,dataset).then(values=>{img.values=values;this.draw();}).catch(error=>{this.images.delete(key);console.error('Não foi possível carregar a produtividade:',error);});}
      if(!img.values){const fallback=record.levels.map((value,i)=>({value,distance:Math.abs(i-level)})).sort((a,b)=>a.distance-b.distance).find(({value})=>this.images.get(value.valuesFile)?.values);if(!fallback)continue;item=fallback.value;img=this.images.get(item.valuesFile);}
      const matching=features.filter(f=>f.properties.Campo===record.campo);ctx.save();clip(ctx,map,matching);
      const bounds=item.bounds||record.bounds,a=map.latLngToContainerPoint([bounds[1][0],bounds[0][1]]),b=map.latLngToContainerPoint([bounds[0][0],bounds[1][1]]);
@@ -46,7 +46,7 @@
    onRemove(map){this.unbindStyle();this.unbindZoom();map.off('move zoom resize',this.draw,this);this.map=null;this.canvas.remove();}
   });return new Layer();
  }
- async function loadValues(item){const response=await fetch(BASE+item.valuesFile);if(!response.ok)throw new Error('Resolução indisponível.');const p=await response.json();if(p.format!=='harvest-values-f64-v1'||p.width!==item.width||p.height!==item.height)throw new Error('Resolução inválida.');const compressed=Uint8Array.from(atob(p.gzip_base64),c=>c.charCodeAt(0)),buffer=await new Response(new Blob([compressed]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();if(buffer.byteLength!==item.width*item.height*8)throw new Error('Resolução incompleta.');return new Float64Array(buffer);}
+ async function loadValues(item,dataset){const p=await root.HarvestStore.loadRaster(dataset,item.valuesFile);if(p.format!=='harvest-values-f64-v1'||p.width!==item.width||p.height!==item.height)throw new Error('Resolução inválida.');const compressed=Uint8Array.from(atob(p.gzip_base64),c=>c.charCodeAt(0)),buffer=await new Response(new Blob([compressed]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();if(buffer.byteLength!==item.width*item.height*8)throw new Error('Resolução incompleta.');return new Float64Array(buffer);}
  function valuesPixels(values,style){const data=new Uint8ClampedArray(values.length*4),rgb=style.colors.map(hex=>[parseInt(hex.slice(1,3),16),parseInt(hex.slice(3,5),16),parseInt(hex.slice(5,7),16)]),b=style.breaks;for(let i=0;i<values.length;i++){const v=values[i];if(!Number.isFinite(v))continue;const c=rgb[v<b[0]?0:v<b[1]?1:v<b[2]?2:v<b[3]?3:v<=b[4]?4:5];data.set([...c,255],i*4);}return data;}
  function renderValues(values,width,height,style){const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;const ctx=canvas.getContext('2d'),pixels=ctx.createImageData(width,height);pixels.data.set(valuesPixels(values,style));ctx.putImageData(pixels,0,0);return canvas;}
  const sourceColors=[0xd73027,0xfc8d59,0xfee08b,0xd9ef8b,0x91cf60,0x1a9850];

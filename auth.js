@@ -116,7 +116,7 @@
                 const abort = () => controller.abort();
                 if (options.signal?.aborted) abort();
                 options.signal?.addEventListener('abort', abort, { once: true });
-                const timeout = setTimeout(abort, 15000);
+                const timeout = setTimeout(abort, String(url).includes('/auth/v1/') ? 15000 : 60000);
                 try { return await window.fetch(url, { ...options, signal: controller.signal }); }
                 finally {
                     clearTimeout(timeout);

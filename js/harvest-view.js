@@ -23,7 +23,7 @@
         const fields=new Set(records.map(r=>r.campo)),features=state.harvestData.features.filter(f=>fields.has(f.properties.Campo));
         const group=L.layerGroup().addTo(state.map);state.harvestDetailLayer=group;
         const overview=()=>text('harvest-selection-hint','Datas: Dados não importados.');
-        try {const pyramid=await root.HarvestPyramid.create(records,features);if(token!==request)return;pyramid.addTo(group);overview();}
+        try {const pyramid=await root.HarvestPyramid.create(records,features,state.harvestDataset);if(token!==request)return;pyramid.addTo(group);overview();}
         catch(error){if(token===request)text('harvest-selection-hint','Não foi possível carregar a visualização. Selecione novamente para tentar.');return;}
         let started=false,loaded=0,complete=false;
         const detail=async()=>{
@@ -102,6 +102,31 @@
             } catch(error) {text('harvest-cloud-status',error.message);}
             finally {upload.disabled=false;}
         };
+        if(root.portalAccessRole==='admin'&&!document.getElementById('harvest-restore-rasters')){
+            const restore=document.createElement('button');restore.type='button';restore.id='harvest-restore-rasters';restore.className='harvest-sync';restore.textContent='Restaurar visualização da colheita';
+            const files=document.createElement('input');files.type='file';files.multiple=true;files.accept='.json';files.hidden=true;
+            restore.onclick=()=>files.click();
+            files.onchange=async()=>{
+                const selected=Array.from(files.files);if(!selected.length)return;
+                restore.disabled=true;let done=0;
+                try{
+                    for(let at=0;at<selected.length;at+=4){
+                        await Promise.all(selected.slice(at,at+4).map(async file=>{
+                            if(!/^(index\.json|fe-[\d.]+-[0-5]\.json)$/.test(file.name))throw Error('Arquivo de visualização inválido.');
+                            const contents=JSON.parse(await file.text());
+                            if(file.name==='index.json'?!Array.isArray(contents.records):contents.format!=='harvest-values-f64-v1')throw Error('Formato de visualização inválido.');
+                            const {error}=await root.supabaseClient.from('harvest_raster_files').upsert({version_id:state.harvestDataset.version,path:file.name,contents},{onConflict:'version_id,path',ignoreDuplicates:true});
+                            if(error)throw error;
+                            text('harvest-cloud-status',`Restaurando visualização: ${++done} de ${selected.length}.`);
+                        }));
+                    }
+                    text('harvest-cloud-status','Visualização restaurada no banco.');restore.hidden=true;
+                    showAll(state);
+                }catch(error){text('harvest-cloud-status','Não foi possível restaurar todos os arquivos. Tente novamente.');console.error('Restauração da colheita:',error);}
+                finally{restore.disabled=false;files.value='';}
+            };
+            document.getElementById('harvest-import-section').append(restore,files);
+        }
         text('harvest-import-status',state.harvestSummary.records.length+' talhões · Milho 2026'); clear(state);
     }
     root.HarvestView=Object.freeze({init,select,showAll,clear,color});

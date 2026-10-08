@@ -473,12 +473,12 @@ async function loadData() {
         populateGlebaFilter(state.geojsonData);
         populateDropdowns();
         updateOperationUI();
-        await loadHarvestTest();
         renderMap(true);
         window.GeoLegacyImport.mount(state, () => updateMapStylesAndKPIs());
         
         const overlay = document.getElementById('loading-overlay');
         if (overlay) overlay.classList.add('hidden');
+        loadHarvestTest();
         
     } catch (error) {
         console.error('Erro ao carregar dados espaciais:', error);
@@ -516,10 +516,8 @@ async function loadHarvestTest() {
 function refreshMapFilters() {
     const data = getActiveMapData();
     if (!data) return;
-    const previous = state.currentFazenda;
     populateFazendaFilter(data);
-    const available = new Set(data.features.map(feature => feature.properties?.Fazenda));
-    state.currentFazenda = available.has(previous) ? previous : 'ALL';
+    state.currentFazenda = window.portalFarm?.code || state.currentFazenda;
     const select = document.getElementById('fazenda-filter');
     if (select) select.value = state.currentFazenda;
     populateGlebaFilter(data);
@@ -530,6 +528,7 @@ function refreshMapFilters() {
 // ==========================================================================
 function populateFazendaFilter(data) {
     const fazendas = new Set();
+    if (window.portalFarm) fazendas.add(window.portalFarm.code);
     data.features.forEach(feature => {
         if (feature.properties && feature.properties.Fazenda) {
             fazendas.add(feature.properties.Fazenda);
@@ -2210,7 +2209,7 @@ function setupEventListeners() {
         const previousTab = state.currentTab;
         state.currentTab = tabKey;
         if (tabKey === 'colheita' && previousTab !== 'colheita') {
-            state.currentFazenda = 'ALL';
+            state.currentFazenda = window.portalFarm?.code || state.currentFazenda;
             state.currentGleba = 'ALL';
         }
         refreshMapFilters();

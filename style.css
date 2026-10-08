@@ -67,10 +67,13 @@ body {
 .portal-loading .app-container { visibility: hidden; pointer-events: none; }
 body[data-access-role="visualizador"] .editor-control,
 body:not([data-access-role="admin"]) #admin-view-switch { display: none !important; }
-.portal-account { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.portal-account { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; }
 .portal-account-details { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 3px; font-size: 12px; }
 .portal-account-details strong { overflow-wrap: anywhere; color: var(--color-blue); }
 .portal-account-details span { font-size: 10px; color: var(--text-muted); }
+.portal-account-details { flex: 0 0 100%; }
+.portal-account .btn-logout { flex: 1 1 100px; min-width: 0; font: inherit; font-size: 12px; }
+.legacy-restore-status { margin: 8px 0; font-size: 12px; line-height: 1.4; color: var(--color-blue); }
 .btn-logout { background: #fff; color: var(--color-blue); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; cursor: pointer; }
 
 /* App Layout */

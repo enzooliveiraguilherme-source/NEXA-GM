@@ -42,6 +42,15 @@
         if (hash !== payload.sha256) throw new Error('A integridade dos pontos não foi confirmada.');
         return { values: new Float64Array(buffer), count: payload.count, stride: payload.columns.length };
     }
+    async function loadRaster(dataset, name, signal) {
+        if (root.portalFarm?.code !== 'FE' || dataset?.source !== 'supabase' ||
+            !/^(index\.json|fe-[\d.]+-[0-5]\.json)$/.test(name)) throw new Error('Resolução de colheita inválida.');
+        let query = root.supabaseClient.from('harvest_raster_files').select('contents').eq('version_id', dataset.version).eq('path', name);
+        if (signal) query = query.abortSignal(signal);
+        const { data, error } = await query.single();
+        if (error || !data) throw new Error('Não foi possível carregar a resolução da colheita no banco.');
+        return data.contents;
+    }
     async function publish(onProgress) {
         if (root.portalAccessRole !== 'admin' || !root.supabaseClient) throw new Error('Apenas administradores podem enviar esta base.');
         const index = validateIndex(await localFile('index.json'));
@@ -57,5 +66,5 @@
         if (error) throw new Error('O envio não foi ativado. A base anterior continua disponível.');
         return version;
     }
-    root.HarvestStore = Object.freeze({ load, loadChunk, publish });
+    root.HarvestStore = Object.freeze({ load, loadChunk, loadRaster, publish });
 })(window);
