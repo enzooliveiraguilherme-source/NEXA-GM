@@ -18,14 +18,13 @@ O build publica somente as páginas e os recursos de interface em `site-dist`. G
 
 Validação: 41 testes de autenticação, cache, importação, seleção múltipla e transporte Supabase, além de sintaxe. `tests/farm-access.sql` foi executado no banco com usuários temporários e rollback: isolamento de fazendas, visualizador, e-mail não confirmado, lote, conflito e auditoria passaram. Consulta administrativa confirmou 2 contas existentes, 16 fazendas e 225 talhões. Não foram usadas senhas reais em testes ou enviadas confirmações para terceiros.
 
-## Envio de confirmação pendente
+## Envio de confirmação por Gmail temporário
 
-O SMTP padrão ainda restringe destinatários fora da equipe. O usuário autorizou criar um serviço; a página de criação Resend foi aberta para conclusão pessoal da senha e aceite dos termos. Conexão Resend e domínio verificado dependem do usuário. É preciso habilitar o SMTP e verificar a entrega para colaboradores antes de considerar o envio concluído.
+SMTP personalizado configurado no painel Supabase com `smtp.gmail.com`, porta `465`, remetente e usuário `enzo.geox@gmail.com` e nome `Geoportal Grupo Michels`. A senha de app foi informada pelo proprietário e armazenada somente no painel; nenhuma credencial foi escrita no código ou no Git. O SMTP ativo, host e senha armazenada foram verificados após recarregar o painel em 08/10/2026. Teste autorizado em 08/10/2026 às 15:40 (America/Sao_Paulo): solicitação de recuperação para a conta confirmada do proprietário retornou HTTP 200; o banco registrou `recovery_sent_at` correspondente. A senha existente não foi alterada. O proprietário confirmou a chegada na caixa de entrada. O envio SMTP e a entrega foram validados; este teste não valida o fluxo completo de cadastro de um novo colaborador.
 
-Resend gratuito: 3.000 e-mails/mês, até 100/dia. A integração oficial Resend–Supabase configura o SMTP sem copiar chaves pela conversa. Configuração manual, se necessária, deve ser feita privadamente no painel: host `smtp.resend.com`, porta `465`, usuário `resend`, chave de envio como senha. Nunca colocar essa chave no código, no navegador do portal ou no Git.
+O remetente pode ser substituído depois, sem remover contas, fazendas ou registros. O nome escolhido para a senha de app no Google não altera o remetente. Para produção com maior volume, configurar um serviço de e-mails com domínio verificado.
 
-Referências: [SMTP Supabase](https://supabase.com/docs/guides/auth/auth-smtp), [integração Resend](https://supabase.com/partners/catalog/resend), [SMTP Resend](https://resend.com/docs/send-with-supabase-smtp), [plano gratuito](https://resend.com/pricing).
-
+Referências: [SMTP Supabase](https://supabase.com/docs/guides/auth/auth-smtp), [Google SMTP no Supabase](https://supabase.com/docs/guides/troubleshooting/using-google-smtp-with-supabase-custom-smtp-ZZzU4Y), [senhas de app Google](https://support.google.com/accounts/answer/185833?hl=pt-BR).
 ## Retorno sem apagar dados
 
 Restaurar frontend e `vercel.json` da branch de backup em um novo commit, sem force push. Isso reativa a persistência local antiga; os registros gravados no banco permanecem. Não remover tabelas de operações, histórico, fazendas ou atribuições. As regras por fazenda podem permanecer; visualizadores sem atribuição não consultarão a colheita no banco pelo frontend antigo. Configurações de senha, confirmação e URLs são independentes do frontend. Não utilizar o fallback antigo de administrador para liberar novas contas.

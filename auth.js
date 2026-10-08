@@ -112,6 +112,18 @@
         } catch (_) { /* Nenhum token antigo é lido pelo cliente novo. */ }
 
         window.supabaseClient = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey, {
+            global: { fetch: async (url, options = {}) => {
+                const controller = new AbortController();
+                const abort = () => controller.abort();
+                if (options.signal?.aborted) abort();
+                options.signal?.addEventListener('abort', abort, { once: true });
+                const timeout = setTimeout(abort, 15000);
+                try { return await window.fetch(url, { ...options, signal: controller.signal }); }
+                finally {
+                    clearTimeout(timeout);
+                    options.signal?.removeEventListener('abort', abort);
+                }
+            } },
             auth: { storage: window.sessionStorage, storageKey, persistSession: true,
                 autoRefreshToken: true, detectSessionInUrl: false }
         });
@@ -169,6 +181,8 @@
     });
 
     window.loginGeoportal = async function (email, password) {
+        if (loginPending) return false;
+        setMessage('Preparando seu acesso…');
         await window.portalReady;
         if (loginPending) return false;
         if (!validPassword(password)) {
@@ -188,7 +202,7 @@
                 setMessage(error?.code === 'email_not_confirmed'
                     ? 'Confirme seu e-mail antes de entrar. Consulte o administrador se precisar de ajuda.'
                     : error?.status === 429 ? 'Muitas tentativas. Aguarde alguns minutos e tente novamente.'
-                    : 'Não foi possível entrar. Confira seu e-mail e senha.');
+                    : 'Não foi possível entrar. Confira seu e-mail e senha. Se ainda não tem uma conta, solicite seu cadastro abaixo.');
                 return false;
             }
             if (!data.user.email_confirmed_at) {

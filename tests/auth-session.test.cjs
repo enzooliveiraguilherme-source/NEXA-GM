@@ -10,7 +10,7 @@ let tabCounter = 0;
 function run({ page = 'portal', sessionMap = new Map(), initialSession, role = 'visualizador',
     profileError = false, userError = false, loginError, offlineLogout = false, storageBlocked = false,
     suppliedUser = user, configured = true, failProfile = false, navigation = 'reload',
-    farms = [{code:'FE',name:'Esperança'}], farmError = false, chosenFarm = 'FE' } = {}) {
+    farms = [{code:'FE',name:'Esperança'}], farmError = false, chosenFarm = 'FE', fetchImpl } = {}) {
     const elements = new Map(), classes = new Set(['portal-loading']), redirects = [], listeners = {};
     const localMap = new Map([['sb-example-auth-token', JSON.stringify(session)], ['geoportal_calcario_records_v1', 'preserved']]);
     const storage = map => ({ getItem: key => map.get(key) || null,
@@ -27,6 +27,7 @@ function run({ page = 'portal', sessionMap = new Map(), initialSession, role = '
     const calls = { getUser: 0, signOut: [], signIn: [], profile: 0 };
     let clientOptions, authCallback;
     const window = {
+        fetch: fetchImpl,
         GEO_PORTAL_CONFIG: configured ? { supabaseUrl: 'https://example.supabase.co', supabaseAnonKey: 'public-test-key' } : {},
         sessionStorage, localStorage: storage(localMap), crypto: { randomUUID: () => `tab-${++tabCounter}` },
         performance: { getEntriesByType: () => [{ type: navigation }] },
@@ -71,7 +72,9 @@ function run({ page = 'portal', sessionMap = new Map(), initialSession, role = '
             };
         } }
     };
-    vm.runInNewContext(source, { window, document, URL, URLSearchParams, Option: function(label,value){this.label=label;this.value=value;} });
+    vm.runInNewContext(source, { window, document, URL, URLSearchParams, AbortController,
+        setTimeout: fn => setTimeout(fn, 5), clearTimeout,
+        Option: function(label,value){this.label=label;this.value=value;} });
     return { window, document, elements, classes, calls, sessionMap, localMap, redirects,
         options: () => clientOptions, emit: event => authCallback(event, null), pageShow: () => listeners.pageshow({ persisted: true }) };
 }
@@ -129,6 +132,31 @@ test('senha incorreta e e-mail não confirmado não liberam o mapa', async () =>
         assert.equal(h.document.getElementById('btn-login').disabled, false);
         assert.notEqual(h.document.getElementById('login-message').textContent, '');
     }
+});
+
+test('tentativa de conta inexistente oferece cadastro sem revelar se o email existe', async () => {
+    const h = run({ page: 'login', loginError: { code: 'invalid_credentials' } });
+    await h.window.loginGeoportal('missing@example.test', 'Fixture-password!');
+    assert.match(h.document.getElementById('login-message').textContent, /solicite seu cadastro/);
+    assert.equal(h.redirects.length, 0);
+});
+
+test('requisição sem resposta é cancelada e não fica pendurada', async () => {
+    const h = run({ page: 'login', fetchImpl: (url, { signal }) => new Promise((resolve, reject) => {
+        signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
+    }) });
+    await h.window.portalReady;
+    await assert.rejects(h.options().global.fetch('https://example.test'), /aborted/);
+});
+
+test('sinal de cancelamento do chamador também cancela o transporte', async () => {
+    const h = run({ page: 'login', fetchImpl: async (url, { signal }) => {
+        assert.equal(signal.aborted, true);
+        throw new Error('aborted');
+    } });
+    await h.window.portalReady;
+    const controller = new AbortController(); controller.abort();
+    await assert.rejects(h.options().global.fetch('https://example.test', { signal: controller.signal }), /aborted/);
 });
 
 test('ausência de perfil nunca promove alguém a administrador pelo e-mail', async () => {
