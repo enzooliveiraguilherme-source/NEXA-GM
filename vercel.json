@@ -1,5 +1,12 @@
 {
   "cleanUrls": true,
+  "rewrites": [
+    { "source": "/Talhoes.geojson", "destination": "/api/private-data" },
+    { "source": "/Talhoes.qmd", "destination": "/api/private-data" },
+    { "source": "/dados/:path*", "destination": "/api/private-data" },
+    { "source": "/supabase/:path*", "destination": "/api/private-data" },
+    { "source": "/tests/:path*", "destination": "/api/private-data" }
+  ],
   "headers": [
     { "source": "/(.*)", "headers": [
       { "key": "X-Content-Type-Options", "value": "nosniff" },

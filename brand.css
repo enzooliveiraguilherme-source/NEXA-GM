@@ -42,6 +42,8 @@ body[data-page="login"] { margin: 0; min-height: 100vh; background: #f5f7fa; col
 .login-form input { border: 1px solid var(--border); font: inherit; }
 .login-form button { border: 0; color: #fff; cursor: pointer; font-weight: 700; margin-top: 4px; }
 .login-message { min-height: 1.25rem; color: #a23c18; font-size: .88rem; margin: 2px 0 0; }
+.login-card .login-session-help { font-size: 11px; line-height: 1.6; margin-top: 18px; }
+.password-rules { color: var(--text-muted); font-size: 11px; line-height: 1.6; }
 .config-notice { margin-top: 22px; padding: 13px; border-radius: 8px; background: #fff4e7; color: #85430d; font-size: .82rem; line-height: 1.45; }
 .login-brand {
     position: relative;
@@ -226,3 +228,7 @@ body[data-page="login"] { margin: 0; min-height: 100vh; background: #f5f7fa; col
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+.login-form[hidden], [hidden] { display: none !important; }
+.login-form select { width:100%; padding:12px; border:1px solid #d8e0eb; border-radius:8px; background:white; color:#142334; font:inherit; }
+#login-credentials { display:grid; gap:16px; }
+.login-secondary { margin-top:16px; background:transparent; border:0; color:#2454a6; cursor:pointer; font:inherit; }

@@ -1,0 +1,63 @@
+(function (root) {
+    'use strict';
+    root.GeoLegacyImport = {
+        prepare(data, features, existing, farm) {
+            const allowed = new Set(features.filter(feature => feature.properties?.Fazenda === farm).map(feature => feature.properties.Campo));
+            const seen = new Set(Object.keys(existing));
+            const records = [];
+            let skipped = 0;
+            for (const source of Object.values(data)) {
+                if (!source || source.fazenda !== farm || !allowed.has(source.campo) || source.usuario === 'Operador Inicial') { skipped++; continue; }
+                const record = { ...source, operationType: source.produto === 'Plantio' ? 'plantio' : 'adubacao' };
+                const key = root.GeoCloudStore.recordKey(record);
+                if (seen.has(key)) { skipped++; continue; }
+                // A importação cria um registro novo. Não reutiliza identificadores ou versões locais.
+                delete record.id; delete record.version;
+                seen.add(key); records.push(record);
+            }
+            return { records, skipped };
+        },
+        mount(state, onSaved) {
+            if (state.userRole !== 'editor') return;
+            const open = document.createElement('button'); open.type = 'button'; open.className = 'btn-logout';
+            open.textContent = 'Importar registros deste navegador';
+            document.querySelector('.portal-account').append(open);
+            open.addEventListener('click', () => {
+                let original;
+                try { original = JSON.parse(localStorage.getItem('geoportal_calcario_records_v1') || '{}'); }
+                catch (_) { window.alert('Não foi possível ler os registros antigos deste navegador.'); return; }
+                const preview = this.prepare(original, state.geojsonData.features, state.cloudStore.getRecords(), root.portalFarm.code);
+                const dialog = document.createElement('dialog'); dialog.className = 'access-dialog';
+                const title = document.createElement('h2'); title.textContent = 'Revisar importação';
+                const description = document.createElement('p'); description.textContent = `${preview.records.length} registros da fazenda ${root.portalFarm.name} podem ser importados. ${preview.skipped} foram ignorados por serem de outra fazenda, demonstrativos ou já existirem no banco. Os dados deste navegador serão preservados.`;
+                const list = document.createElement('ul');
+                preview.records.forEach(record => { const item = document.createElement('li'); item.textContent = `${record.campo} · ${record.ano} · ${record.cultura} · ${record.produto} · ${record.status}`; list.append(item); });
+                const status = document.createElement('p'); status.setAttribute('aria-live','polite');
+                const backup = document.createElement('button'); backup.type = 'button'; backup.textContent = 'Baixar cópia dos registros antigos';
+                backup.addEventListener('click', () => {
+                    const url = URL.createObjectURL(new Blob([JSON.stringify(original,null,2)], {type:'application/json'}));
+                    const link = document.createElement('a'); link.href = url; link.download = 'registros-anteriores-geoportal.json'; link.click();
+                    setTimeout(() => URL.revokeObjectURL(url), 1000);
+                });
+                const save = document.createElement('button'); save.type = 'button'; save.textContent = 'Salvar estes registros no banco'; save.disabled = !preview.records.length;
+                const close = document.createElement('button'); close.type = 'button'; close.textContent = 'Fechar';
+                close.addEventListener('click', () => dialog.close());
+                dialog.addEventListener('close', () => dialog.remove());
+                save.addEventListener('click', async () => {
+                    save.disabled = true; close.disabled = true;
+                    try {
+                        for (const type of ['plantio','adubacao']) {
+                            const records = preview.records.filter(record => record.operationType === type);
+                            for (let offset=0;offset<records.length;offset+=500) await state.cloudStore.saveRecords(records.slice(offset,offset+500),type);
+                        }
+                        onSaved(); status.textContent = 'Importação confirmada no banco. A cópia local foi preservada. O histórico anterior permanece na cópia baixada.';
+                    } catch (error) {
+                        status.textContent = `${error.message} Reabra a revisão para verificar os registros que ainda não foram importados.`;
+                        onSaved();
+                    } finally { close.disabled = false; }
+                });
+                dialog.append(title,description,list,backup,save,close,status); document.body.append(dialog); dialog.showModal();
+            });
+        }
+    };
+})(typeof window !== 'undefined' ? window : globalThis);

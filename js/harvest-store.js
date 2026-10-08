@@ -19,6 +19,7 @@
         return data.contents;
     }
     async function load() {
+        if (root.portalFarm?.code !== 'FE') throw new Error('Colheita disponível somente na Fazenda Esperança.');
         if (root.supabaseClient) {
             const { data, error } = await root.supabaseClient.from('harvest_test_datasets').select('active_version').eq('slug', SLUG).maybeSingle();
             if (!error && data) {
@@ -27,7 +28,7 @@
             }
             if (error && !['42P01', 'PGRST205'].includes(error.code)) throw new Error('Não foi possível consultar a base de colheita.');
         }
-        return { index: validateIndex(await localFile('index.json')), version: null, source: 'site' };
+        throw new Error('A base de colheita ainda não está disponível no banco.');
     }
     async function loadChunk(dataset, name, signal) {
         if (!/^fe-[\d.]+\.json$/.test(name)) throw new Error('Talhão inválido.');

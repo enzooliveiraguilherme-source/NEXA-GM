@@ -32,7 +32,7 @@ const state = {
     sharedSeedVarieties: [],
     
     // Perfil / Permissão ('editor' | 'viewer')
-    userRole: 'editor',
+    userRole: 'viewer',
     currentUser: 'Enzo Oliveira',
     
     // Configurações Dinâmicas (Persistidas)
@@ -75,11 +75,13 @@ const STATUS_COLORS = {
 // INICIALIZAÇÃO DO SISTEMA
 // ==========================================================================
 document.addEventListener('DOMContentLoaded', async () => {
-    const authenticated = await (window.portalReady || Promise.resolve(true));
+    const authenticated = await (window.portalReady || Promise.resolve(false));
     if (!authenticated) return;
     const accessRole = window.portalAccessRole;
     state.userRole = accessRole === 'visualizador' ? 'viewer' : 'editor';
     state.currentUser = window.portalProfile?.full_name || window.portalUser?.email || 'Usuário';
+    state.currentFazenda = window.portalFarm.code;
+    state.cloudStore = window.GeoCloudStore.create(window.supabaseClient, window.portalFarm.code);
     loadListsFromStorage();
     initMap();
     setupEventListeners();
@@ -278,20 +280,7 @@ function getCurrentOperationLabel() {
 // ==========================================================================
 const PlanningManager = {
     getAllPlanning() {
-        try {
-            const raw = localStorage.getItem(STORAGE_KEYS.PLANNING);
-            return raw ? JSON.parse(raw) : {};
-        } catch (e) {
-            return {};
-        }
-    },
-
-    saveAllPlanning(data) {
-        try {
-            localStorage.setItem(STORAGE_KEYS.PLANNING, JSON.stringify(data));
-        } catch (e) {
-            console.error('Erro ao salvar planejamento no LocalStorage:', e);
-        }
+        return state.cloudStore?.getPlanning() || {};
     },
 
     getKey(fazenda, ano, cultura, produto) {
@@ -330,11 +319,15 @@ const PlanningManager = {
         return [];
     },
 
-    setPlannedFields(fazenda, ano, cultura, produto, fieldList) {
-        let all = this.getAllPlanning();
-        const key = this.getKey(fazenda, ano, cultura, produto);
-        all[key] = fieldList;
-        this.saveAllPlanning(all);
+    async setPlannedFields(fazenda, ano, cultura, produto, fieldList) {
+        if (state.userRole !== 'editor') return;
+        try {
+            if (!state.cloudStore) throw new Error('A conexão com o banco está indisponível.');
+            await state.cloudStore.savePlan({ operationType: state.currentTab, fazenda: window.portalFarm.code,
+                gleba: state.currentGleba, ano, cultura, produto }, fieldList);
+            updateMapStylesAndKPIs();
+            updatePlanningBannerUI();
+        } catch (error) { window.alert(error.message || 'Não foi possível salvar o planejamento.'); }
     },
 
     isTalhaoPlanned(fazenda, campo, ano, cultura, produto) {
@@ -350,8 +343,7 @@ const PlanningManager = {
         } else {
             planned.push(campo);
         }
-        this.setPlannedFields(fazenda, ano, cultura, produto, planned);
-        return planned.includes(campo);
+        return this.setPlannedFields(fazenda, ano, cultura, produto, planned);
     },
 
     selectAll(fazenda, ano, cultura, produto) {
@@ -359,11 +351,11 @@ const PlanningManager = {
         const allFields = state.geojsonData.features
             .filter(featureMatchesFilters)
             .map(f => f.properties.Campo);
-        this.setPlannedFields(fazenda, ano, cultura, produto, allFields);
+        return this.setPlannedFields(fazenda, ano, cultura, produto, allFields);
     },
 
     clearAll(fazenda, ano, cultura, produto) {
-        this.setPlannedFields(fazenda, ano, cultura, produto, []);
+        return this.setPlannedFields(fazenda, ano, cultura, produto, []);
     }
 };
 
@@ -381,7 +373,6 @@ function loadListsFromStorage() {
         // O perfil vem do Supabase. O navegador não é fonte de permissão.
     } catch (e) {
         console.warn('Aviso ao carregar dados do LocalStorage:', e);
-        state.userRole = 'editor';
     }
 }
 
@@ -407,12 +398,7 @@ function getRecordKey(fazenda, campo, ano, cultura, produto) {
 }
 
 function getAllRecords() {
-    try {
-        const raw = localStorage.getItem(STORAGE_KEYS.RECORDS);
-        return raw ? JSON.parse(raw) : {};
-    } catch (e) {
-        return {};
-    }
+    return state.cloudStore?.getRecords() || {};
 }
 
 function getTalhaoRecord(fazenda, campo, ano, cultura, produto, areaTotal = 0) {
@@ -441,78 +427,6 @@ function getTalhaoRecord(fazenda, campo, ano, cultura, produto, areaTotal = 0) {
         ultimaAlteracao: new Date().toISOString(),
         historico: []
     };
-}
-
-function saveTalhaoRecord(record) {
-    const records = getAllRecords();
-    const key = getRecordKey(record.fazenda, record.campo, record.ano, record.cultura, record.produto);
-    records[key] = record;
-    try {
-        localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify(records));
-    } catch (e) {
-        console.error('Erro ao salvar registro de talhão:', e);
-    }
-}
-
-// Semeia dados demonstrativos realistas caso não haja registros para a fazenda FE
-function seedSampleDataIfEmpty() {
-    const records = getAllRecords();
-    const sampleKey = getRecordKey('FE', 'FE 02', '2026', 'Soja', 'Calcário PRNT 80');
-    
-    if (!records[sampleKey] && state.geojsonData) {
-        const feFeatures = state.geojsonData.features.filter(f => f.properties && f.properties.Fazenda === 'FE');
-        
-        feFeatures.forEach((f, idx) => {
-            const campo = f.properties.Campo;
-            const area = parseFloat(f.properties.Area) || 100;
-            let status = 'nao_iniciado';
-            let taxa = null;
-            let areaReal = 0;
-            let pctReal = 0;
-            let tipoProgresso = 'percentual';
-            
-            if (idx % 3 === 0) {
-                status = 'concluido';
-                taxa = 2.50;
-                areaReal = area;
-                pctReal = 100;
-            } else if (idx % 3 === 1) {
-                status = 'em_andamento';
-                pctReal = 60;
-                areaReal = parseFloat((area * 0.6).toFixed(2));
-                tipoProgresso = 'percentual';
-            }
-            
-            const rec = {
-                fazenda: 'FE',
-                campo: campo,
-                ano: '2026',
-                cultura: 'Soja',
-                produto: 'Calcário PRNT 80',
-                status: status,
-                areaTotal: area,
-                areaRealizada: areaReal,
-                percentualRealizado: pctReal,
-                taxaAplicada: taxa,
-                tipoProgresso: tipoProgresso,
-                usuario: 'Operador Inicial',
-                ultimaAlteracao: new Date(Date.now() - (idx * 86400000)).toISOString(),
-                historico: [
-                    {
-                        data: new Date(Date.now() - (idx * 86400000)).toLocaleString('pt-BR'),
-                        usuario: 'Enzo Oliveira',
-                        status: status === 'concluido' ? 'Concluído' : (status === 'em_andamento' ? 'Em Andamento' : 'Não Iniciado'),
-                        detalhe: status === 'concluido' ? `Taxa: ${taxa} t/ha` : (status === 'em_andamento' ? `${pctReal}% (${areaReal} ha)` : 'Inicializado')
-                    }
-                ]
-            };
-            
-            const key = getRecordKey('FE', campo, '2026', 'Soja', 'Calcário PRNT 80');
-            records[key] = rec;
-        });
-        
-        localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify(records));
-    }
 }
 
 // ==========================================================================
@@ -547,18 +461,21 @@ function updateRoleUI() {
 // ==========================================================================
 async function loadData() {
     try {
-        const response = await fetch('Talhoes.geojson');
-        if (!response.ok) throw new Error('Falha ao carregar o arquivo GeoJSON');
-        
-        state.geojsonData = await response.json();
+        state.geojsonData = await state.cloudStore.load();
+        if (!state.geojsonData.features.length) throw new Error('Os talhões desta fazenda ainda precisam ser cadastrados pelo administrador.');
+        Object.values(getAllRecords()).forEach(record => {
+            if (!state.anos.includes(record.ano)) state.anos.push(record.ano);
+            if (!state.culturas.includes(record.cultura)) state.culturas.push(record.cultura);
+            if (record.operationType === 'adubacao' && !state.produtos.includes(record.produto)) state.produtos.push(record.produto);
+        });
         
         populateFazendaFilter(state.geojsonData);
         populateGlebaFilter(state.geojsonData);
         populateDropdowns();
         updateOperationUI();
-        seedSampleDataIfEmpty();
         await loadHarvestTest();
         renderMap(true);
+        window.GeoLegacyImport.mount(state, () => updateMapStylesAndKPIs());
         
         const overlay = document.getElementById('loading-overlay');
         if (overlay) overlay.classList.add('hidden');
@@ -566,7 +483,7 @@ async function loadData() {
     } catch (error) {
         console.error('Erro ao carregar dados espaciais:', error);
         const overlayText = document.querySelector('.loading-overlay p');
-        if (overlayText) overlayText.textContent = 'Erro ao carregar os dados. Verifique o console.';
+        if (overlayText) overlayText.textContent = error.message || 'Não foi possível carregar os dados do banco. Atualize a página para tentar novamente.';
         const spinner = document.querySelector('.spinner');
         if (spinner) spinner.style.display = 'none';
     }
@@ -579,6 +496,7 @@ function getActiveMapData() {
 }
 
 async function loadHarvestTest() {
+    if (window.portalFarm?.code !== 'FE') return;
     const status = document.getElementById('harvest-import-status');
     try {
         state.harvestDataset = await HarvestStore.load();
@@ -621,7 +539,7 @@ function populateFazendaFilter(data) {
     const select = document.getElementById('fazenda-filter');
     if (!select) return;
     
-    select.innerHTML = '<option value="ALL">Todas as Fazendas</option>';
+    select.innerHTML = '';
     
     const sorted = Array.from(fazendas).sort();
     sorted.forEach(fazenda => {
@@ -631,9 +549,9 @@ function populateFazendaFilter(data) {
         select.appendChild(option);
     });
     
-    if (fazendas.has('FE')) {
-        select.value = 'FE';
-        state.currentFazenda = 'FE';
+    if (window.portalFarm && fazendas.has(window.portalFarm.code)) {
+        select.value = window.portalFarm.code;
+        state.currentFazenda = window.portalFarm.code;
     }
 }
 
@@ -1649,7 +1567,15 @@ const AdubacaoModal = {
         }
 
         // Histórico
-        this.renderHistory(this.currentRecord.historico);
+        this.renderHistory([]);
+        if (this.currentFeatures.length === 1 && state.cloudStore) {
+            const openedRecord = this.currentRecord;
+            state.cloudStore.history(openedRecord).then(history => {
+                if (this.currentRecord === openedRecord) this.renderHistory(history);
+            }).catch(() => {
+                if (this.currentRecord === openedRecord && this.elements.historyList) this.elements.historyList.textContent = 'Não foi possível consultar o histórico no banco.';
+            });
+        }
         if (this.elements.historyAccordion) {
             this.elements.historyAccordion.classList.remove('expanded');
         }
@@ -1837,6 +1763,7 @@ const AdubacaoModal = {
     },
 
     close() {
+        if (this.saving) return;
         try {
             if (this.elements && this.elements.backdrop) {
                 this.elements.backdrop.classList.add('hidden');
@@ -1868,7 +1795,8 @@ const AdubacaoModal = {
         }
     },
 
-    save() {
+    async save() {
+        if (this.saving) return;
         if (state.userRole === 'viewer' || !this.currentRecord) {
             this.close();
             return;
@@ -1993,15 +1921,17 @@ const AdubacaoModal = {
                 return;
             }
         }
-        const records = getAllRecords();
-        updatedRecords.forEach(record => {
-            records[getRecordKey(record.fazenda, record.campo, record.ano, record.cultura, record.produto)] = record;
-        });
+        this.saving = true;
+        if (this.elements.btnSave) this.elements.btnSave.disabled = true;
         try {
-            localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify(records));
+            if (!state.cloudStore) throw new Error('A conexão com o banco está indisponível.');
+            await state.cloudStore.saveRecords(updatedRecords, state.currentTab);
         } catch (error) {
-            this.showError('Não foi possível salvar as alterações. Verifique o espaço disponível no navegador e tente novamente.');
+            this.showError(error.message || 'Não foi possível salvar no banco. A alteração não foi confirmada.');
             return;
+        } finally {
+            this.saving = false;
+            if (this.elements.btnSave) this.elements.btnSave.disabled = false;
         }
         if (isPlantioMode() && variedadeSemente) {
             SharedSeedCatalog.add(variedadeSemente);
@@ -2248,6 +2178,7 @@ function setupEventListeners() {
     const btnEditor = document.getElementById('role-editor-btn');
     if (btnEditor) {
         btnEditor.addEventListener('click', () => {
+            if (window.portalAccessRole !== 'admin') return;
             state.userRole = 'editor';
             saveListsToStorage();
             updateRoleUI();
@@ -2257,6 +2188,7 @@ function setupEventListeners() {
     const btnViewer = document.getElementById('role-viewer-btn');
     if (btnViewer) {
         btnViewer.addEventListener('click', () => {
+            if (window.portalAccessRole !== 'admin') return;
             state.userRole = 'viewer';
             saveListsToStorage();
             updateRoleUI();

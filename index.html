@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Entrar | Geoportal Grupo Michels</title>
-    <link rel="stylesheet" href="brand.css?v=3">
+    <link rel="stylesheet" href="brand.css?v=4">
     <link rel="icon" type="image/jpeg" href="apoio/GP Michels.jpg">
 </head>
 <body data-page="login">
@@ -23,24 +23,70 @@
                 <h2>Bem-vindo ao Geoportal</h2>
                 <p>Entre com seu acesso corporativo para continuar.</p>
                 <form class="login-form" id="login-form">
+                    <div id="login-credentials">
                     <label>E-mail corporativo<input id="email" type="email" autocomplete="email" placeholder="voce@grupomichels.com.br" required></label>
-                    <label>Senha<input id="password" type="password" autocomplete="current-password" placeholder="Digite sua senha" required></label>
-                    <button type="submit">Entrar no geoportal</button>
-                    <p class="login-message" id="login-message" aria-live="polite"></p>
+                    <label>Senha<input id="password" type="password" autocomplete="current-password" placeholder="Digite sua senha" aria-describedby="password-rules" required></label>
+                    <small class="password-rules" id="password-rules">Use ao menos 8 caracteres, uma letra maiúscula e um caractere especial, como @, # ou !.</small>
+                    </div>
+                    <button type="submit" id="btn-login">Entrar no geoportal</button>
                 </form>
+                <form class="login-form" id="farm-choice" hidden>
+                    <label>Em qual fazenda você vai trabalhar?<select id="login-farm" required></select></label>
+                    <small>Somente as fazendas liberadas pelo administrador aparecem aqui.</small>
+                    <button type="submit">Acessar fazenda</button>
+                    <button type="button" id="btn-login-reset">Entrar com outra conta</button>
+                </form>
+                <button type="button" class="login-secondary" id="btn-show-register">Solicitar meu cadastro</button>
+                <form class="login-form" id="register-form" hidden>
+                    <label>Nome completo<input id="register-name" autocomplete="name" maxlength="100" required></label>
+                    <label>E-mail<input id="register-email" type="email" autocomplete="email" required></label>
+                    <label>Senha<input id="register-password" type="password" autocomplete="new-password" minlength="8" required></label>
+                    <small>Use ao menos 8 caracteres, letras maiúsculas e minúsculas, um número e um caractere especial.</small>
+                    <label>Qual fazenda você faz parte?<select id="register-farm" required><option value="">Selecione uma fazenda</option></select></label>
+                    <small>Este pedido será analisado pelo administrador. Escolher uma fazenda não libera o acesso.</small>
+                    <button type="submit" id="btn-register">Solicitar cadastro e confirmar e-mail</button>
+                    <button type="button" id="btn-back-login">Voltar para entrar</button>
+                </form>
+                <p class="login-message" id="login-message" aria-live="polite"></p>
+                <p class="login-session-help">Entre com sua conta cadastrada. Ao fechar esta aba, será necessário fazer login novamente.</p>
                 <div class="config-notice" id="config-notice" hidden>O acesso ainda está sendo configurado. Conecte este projeto ao Supabase antes de publicar.</div>
             </div>
         </section>
     </main>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="config.js"></script>
-    <script src="auth.js"></script>
+    <script src="auth.js?v=2"></script>
     <script>
         document.getElementById('login-form').addEventListener('submit', async (event) => {
             event.preventDefault();
             await window.portalReady;
             if (!window.supabaseClient) return;
-            window.loginGeoportal(document.getElementById('email').value, document.getElementById('password').value);
+            await window.loginGeoportal(document.getElementById('email').value, document.getElementById('password').value);
+        });
+        document.getElementById('farm-choice').addEventListener('submit', async event => {
+            event.preventDefault();
+            await window.choosePortalFarm(document.getElementById('login-farm').value);
+        });
+        document.getElementById('btn-login-reset').addEventListener('click', () => location.reload());
+        document.getElementById('btn-show-register').addEventListener('click', async () => {
+            await window.portalReady;
+            if (!window.supabaseClient) return;
+            const { data, error } = await window.supabaseClient.from('farms').select('code,name').order('name');
+            if (error) { document.getElementById('login-message').textContent = 'O cadastro ainda não está disponível. Consulte o administrador.'; return; }
+            const select = document.getElementById('register-farm');
+            select.replaceChildren(new Option('Selecione uma fazenda', ''));
+            data.forEach(farm => select.add(new Option(`${farm.name} (${farm.code})`, farm.code)));
+            document.getElementById('login-form').hidden = true;
+            document.getElementById('btn-show-register').hidden = true;
+            document.getElementById('register-form').hidden = false;
+            document.getElementById('login-message').textContent = '';
+        });
+        document.getElementById('btn-back-login').addEventListener('click', () => location.reload());
+        document.getElementById('register-form').addEventListener('submit', async event => {
+            event.preventDefault();
+            await window.registerGeoportal(document.getElementById('register-name').value,
+                document.getElementById('register-email').value, document.getElementById('register-password').value,
+                document.getElementById('register-farm').value);
         });
     </script>
 </body>

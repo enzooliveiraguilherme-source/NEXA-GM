@@ -64,6 +64,15 @@ body {
     display: none !important;
 }
 
+.portal-loading .app-container { visibility: hidden; pointer-events: none; }
+body[data-access-role="visualizador"] .editor-control,
+body:not([data-access-role="admin"]) #admin-view-switch { display: none !important; }
+.portal-account { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.portal-account-details { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 3px; font-size: 12px; }
+.portal-account-details strong { overflow-wrap: anywhere; color: var(--color-blue); }
+.portal-account-details span { font-size: 10px; color: var(--text-muted); }
+.btn-logout { background: #fff; color: var(--color-blue); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; cursor: pointer; }
+
 /* App Layout */
 .app-container {
     display: flex;
@@ -2160,3 +2169,8 @@ svg.leaflet-zoom-animated:focus,
 .operation-selection-actions button { padding: 8px 12px; }
 .operation-selection-actions button:disabled { opacity: .5; cursor: default; }
 .operation-bulk-help { padding: 12px; border-radius: 8px; background: #eff6ff; color: #075985; font-size: 13px; line-height: 1.5; }
+.access-dialog { width:min(900px,92vw); max-height:90vh; border:1px solid #dbe3ef; border-radius:14px; padding:24px; color:#182439; }
+.access-dialog::backdrop { background:rgba(10,20,35,.55); }
+.access-person { padding:20px 0; border-bottom:1px solid #dbe3ef; display:grid; gap:12px; }
+.access-person fieldset { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:8px; padding:12px; }
+.access-person button,.access-dialog>button { padding:10px 16px; border-radius:8px; cursor:pointer; }

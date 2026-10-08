@@ -91,7 +91,8 @@
         document.getElementById('harvest-back').onclick=()=>showAll(state);
         document.getElementById('harvest-all').onclick=()=>showAll(state);
         const upload=document.getElementById('harvest-cloud-upload');
-        upload.classList.toggle('hidden',root.portalAccessRole!=='admin');
+        // Esta base já está no banco. Os arquivos públicos anteriores foram retirados do acesso direto.
+        upload.classList.add('hidden');
         upload.onclick=async()=>{
             upload.disabled=true;
             try {
