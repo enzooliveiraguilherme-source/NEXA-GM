@@ -241,3 +241,5 @@ body[data-page="login"] { margin: 0; min-height: 100vh; background: #f5f7fa; col
 .farm-switch-dialog h2 { margin: 0 0 12px; font-size: 21px; }
 .farm-switch-dialog small { line-height: 1.5; }
 .farm-switch-dialog select { width: 100%; }
+.account-menu-trigger { margin-left:auto; border:1px solid #ffffff40; border-radius:8px; background:transparent; color:white; padding:8px 12px; font:inherit; font-size:12px; cursor:pointer; }
+.account-menu-close { margin-top:20px; width:100%; }

@@ -80,8 +80,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const accessRole = window.portalAccessRole;
     state.userRole = accessRole === 'visualizador' ? 'viewer' : 'editor';
     state.currentUser = window.portalProfile?.full_name || window.portalUser?.email || 'Usuário';
-    state.currentFazenda = window.portalFarm.code;
-    state.cloudStore = window.GeoCloudStore.create(window.supabaseClient, window.portalFarm.code);
+    state.currentFazenda = 'ALL';
+    state.currentGleba = window.portalFarm.gleba || 'ALL';
+    state.cloudStore = window.GeoCloudStore.create(window.supabaseClient, window.portalFarms.map(farm => farm.code));
     loadListsFromStorage();
     initMap();
     setupEventListeners();
@@ -253,8 +254,8 @@ const TalhaoSelection = {
         if (!visible || Array.from(state.selectedFeatures).some(([key, feature]) => key !== this.key(feature))) {
             state.selectedFeatures.clear();
         }
-        document.getElementById('operation-selection-bar')?.classList.toggle('hidden', !visible);
         const count = state.selectedFeatures.size;
+        document.getElementById('operation-selection-bar')?.classList.toggle('hidden', !visible || count === 0);
         const summary = document.getElementById('operation-selection-summary');
         if (summary) summary.textContent = count ? `${count} ${count === 1 ? 'talhão selecionado' : 'talhões selecionados'}. Clique com o botão direito em um deles para editar.` : 'Segure Shift e clique nos talhões; depois use o botão direito para editar a seleção.';
         const edit = document.getElementById('btn-edit-selected-talhoes');
@@ -283,9 +284,9 @@ const PlanningManager = {
         return state.cloudStore?.getPlanning() || {};
     },
 
-    getKey(fazenda, ano, cultura, produto) {
-        const f = (state.currentFazenda || 'ALL').trim().toUpperCase();
-        const g = (state.currentGleba || 'ALL').trim().toUpperCase();
+    getKey(fazenda, ano, cultura, produto, gleba = state.currentGleba) {
+        const f = (fazenda || state.currentFazenda || 'ALL').trim().toUpperCase();
+        const g = (gleba || 'ALL').trim().toUpperCase();
         const a = (ano || state.currentAno).trim();
         const c = (cultura || state.currentCultura).trim().toUpperCase();
         const p = (produto || state.currentProduto).trim().toUpperCase();
@@ -293,11 +294,15 @@ const PlanningManager = {
     },
 
     getPlannedFields(fazenda, ano, cultura, produto) {
+        if (fazenda === 'ALL') return [...new Set([...new Set(state.geojsonData.features.filter(featureMatchesFilters)
+            .map(feature => feature.properties.Fazenda))].flatMap(code => this.getPlannedFields(code, ano, cultura, produto)))];
         const all = this.getAllPlanning();
         const key = this.getKey(fazenda, ano, cultura, produto);
         if (all && Array.isArray(all[key])) {
             return all[key];
         }
+        const farmKey = this.getKey(fazenda, ano, cultura, produto, 'ALL');
+        if (Array.isArray(all[farmKey])) return all[farmKey];
 
         // Compatibilidade com planejamentos salvos antes da inclusão de Gleba e Plantio.
         if (state.currentTab === 'adubacao' && state.currentGleba === 'ALL') {
@@ -312,7 +317,7 @@ const PlanningManager = {
         // Se ainda não tem planejamento customizado para este produto, inclui inicialmente todos os talhões da fazenda
         if (state.geojsonData) {
             const defaultList = state.geojsonData.features
-                .filter(featureMatchesFilters)
+                .filter(feature => featureMatchesFilters(feature) && feature.properties.Fazenda === fazenda)
                 .map(f => f.properties.Campo);
             return defaultList;
         }
@@ -323,8 +328,12 @@ const PlanningManager = {
         if (state.userRole !== 'editor') return;
         try {
             if (!state.cloudStore) throw new Error('A conexão com o banco está indisponível.');
-            await state.cloudStore.savePlan({ operationType: state.currentTab, fazenda: window.portalFarm.code,
-                gleba: state.currentGleba, ano, cultura, produto }, fieldList);
+            const farms = fazenda === 'ALL' ? [...new Set(state.geojsonData.features.filter(featureMatchesFilters).map(feature => feature.properties.Fazenda))] : [fazenda];
+            for (const code of farms) {
+                const valid = new Set(state.geojsonData.features.filter(feature => featureMatchesFilters(feature) && feature.properties.Fazenda === code).map(feature => feature.properties.Campo));
+                await state.cloudStore.savePlan({ operationType: state.currentTab, fazenda: code,
+                    gleba: state.currentGleba, ano, cultura, produto }, fieldList.filter(campo => valid.has(campo)));
+            }
             updateMapStylesAndKPIs();
             updatePlanningBannerUI();
         } catch (error) { window.alert(error.message || 'Não foi possível salvar o planejamento.'); }
@@ -496,7 +505,7 @@ function getActiveMapData() {
 }
 
 async function loadHarvestTest() {
-    if (window.portalFarm?.code !== 'FE') return;
+    if (!window.portalFarms.some(farm => farm.code === 'FE')) return;
     const status = document.getElementById('harvest-import-status');
     try {
         state.harvestDataset = await HarvestStore.load();
@@ -516,11 +525,10 @@ async function loadHarvestTest() {
 function refreshMapFilters() {
     const data = getActiveMapData();
     if (!data) return;
+    populateGlebaFilter(data);
     populateFazendaFilter(data);
-    state.currentFazenda = window.portalFarm?.code || state.currentFazenda;
     const select = document.getElementById('fazenda-filter');
     if (select) select.value = state.currentFazenda;
-    populateGlebaFilter(data);
 }
 
 // ==========================================================================
@@ -528,9 +536,8 @@ function refreshMapFilters() {
 // ==========================================================================
 function populateFazendaFilter(data) {
     const fazendas = new Set();
-    if (window.portalFarm) fazendas.add(window.portalFarm.code);
     data.features.forEach(feature => {
-        if (feature.properties && feature.properties.Fazenda) {
+        if (feature.properties && feature.properties.Fazenda && (state.currentGleba === 'ALL' || feature.properties.Gleba === state.currentGleba)) {
             fazendas.add(feature.properties.Fazenda);
         }
     });
@@ -539,6 +546,7 @@ function populateFazendaFilter(data) {
     if (!select) return;
     
     select.innerHTML = '';
+    select.appendChild(new Option('Todas as fazendas', 'ALL'));
     
     const sorted = Array.from(fazendas).sort();
     sorted.forEach(fazenda => {
@@ -548,18 +556,15 @@ function populateFazendaFilter(data) {
         select.appendChild(option);
     });
     
-    if (window.portalFarm && fazendas.has(window.portalFarm.code)) {
-        select.value = window.portalFarm.code;
-        state.currentFazenda = window.portalFarm.code;
-    }
+    if (!fazendas.has(state.currentFazenda)) state.currentFazenda = 'ALL';
+    select.value = state.currentFazenda;
 }
 
 function populateGlebaFilter(data) {
     const glebas = new Set();
     data.features.forEach(feature => {
         const properties = feature.properties || {};
-        const matchesFazenda = state.currentFazenda === 'ALL' || properties.Fazenda === state.currentFazenda;
-        if (matchesFazenda && properties.Gleba) glebas.add(properties.Gleba);
+        if (properties.Gleba) glebas.add(properties.Gleba);
     });
 
     const select = document.getElementById('gleba-filter');
@@ -1116,7 +1121,6 @@ function renderMap(shouldFitBounds = true) {
 // CÁLCULOS DO DASHBOARD OPERACIONAL DE CALCÁRIO (BASEADO NO PLANEJAMENTO REAL)
 // ==========================================================================
 function updateDashboardKPIs(features) {
-    const plannedFields = PlanningManager.getPlannedFields(state.currentFazenda, state.currentAno, state.currentCultura, state.currentProduto);
 
     let areaPlanejada = 0;
     let areaRealizada = 0;
@@ -1137,7 +1141,7 @@ function updateDashboardKPIs(features) {
         const campo = p.Campo;
 
         // Apenas talhões planejados para o produto atual compõem os KPIs operacionais
-        if (!plannedFields.includes(campo)) {
+        if (!PlanningManager.isTalhaoPlanned(p.Fazenda, campo, state.currentAno, state.currentCultura, state.currentProduto)) {
             return;
         }
 
@@ -1216,12 +1220,11 @@ function updatePlanningBannerUI() {
     if (!state.geojsonData) return;
     const filteredFeatures = state.geojsonData.features.filter(featureMatchesFilters);
 
-    const plannedFields = PlanningManager.getPlannedFields(state.currentFazenda, state.currentAno, state.currentCultura, state.currentProduto);
     
     let totalHa = 0;
     let count = 0;
     filteredFeatures.forEach(f => {
-        if (plannedFields.includes(f.properties?.Campo)) {
+        if (PlanningManager.isTalhaoPlanned(f.properties?.Fazenda, f.properties?.Campo, state.currentAno, state.currentCultura, state.currentProduto)) {
             totalHa += parseFloat(f.properties?.Area) || 0;
             count++;
         }
@@ -2140,6 +2143,8 @@ function setupEventListeners() {
     if (glebaFilter) {
         glebaFilter.addEventListener('change', (e) => {
             state.currentGleba = e.target.value;
+            state.currentFazenda = 'ALL';
+            populateFazendaFilter(getActiveMapData());
             updateFilterTag();
             renderMap(true);
         });
@@ -2209,7 +2214,7 @@ function setupEventListeners() {
         const previousTab = state.currentTab;
         state.currentTab = tabKey;
         if (tabKey === 'colheita' && previousTab !== 'colheita') {
-            state.currentFazenda = window.portalFarm?.code || state.currentFazenda;
+            state.currentFazenda = 'ALL';
             state.currentGleba = 'ALL';
         }
         refreshMapFilters();

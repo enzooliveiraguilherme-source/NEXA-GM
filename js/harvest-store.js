@@ -19,7 +19,7 @@
         return data.contents;
     }
     async function load() {
-        if (root.portalFarm?.code !== 'FE') throw new Error('Colheita disponível somente na Fazenda Esperança.');
+        if (!(root.portalFarms || [root.portalFarm]).some(farm => farm?.code === 'FE')) throw new Error('Colheita disponível somente na Fazenda Esperança.');
         if (root.supabaseClient) {
             const { data, error } = await root.supabaseClient.from('harvest_test_datasets').select('active_version').eq('slug', SLUG).maybeSingle();
             if (!error && data) {
@@ -43,7 +43,7 @@
         return { values: new Float64Array(buffer), count: payload.count, stride: payload.columns.length };
     }
     async function loadRaster(dataset, name, signal) {
-        if (root.portalFarm?.code !== 'FE' || dataset?.source !== 'supabase' ||
+        if (!(root.portalFarms || [root.portalFarm]).some(farm => farm?.code === 'FE') || dataset?.source !== 'supabase' ||
             !/^(index\.json|fe-[\d.]+-[0-5]\.json)$/.test(name)) throw new Error('Resolução de colheita inválida.');
         let query = root.supabaseClient.from('harvest_raster_files').select('contents').eq('version_id', dataset.version).eq('path', name);
         if (signal) query = query.abortSignal(signal);

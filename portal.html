@@ -16,7 +16,7 @@
     
     <!-- Custom CSS -->
     <link rel="stylesheet" href="style.css?v=3.5">
-    <link rel="stylesheet" href="brand.css?v=8">
+    <link rel="stylesheet" href="brand.css?v=9">
 </head>
 <body data-page="portal">
     <div id="auth-loading-overlay" class="loading-overlay"><div class="spinner"></div><p>Validando seu acesso…</p></div>
@@ -112,17 +112,17 @@
 
                 <!-- SEÇÃO 2: FILTRO DE FAZENDAS -->
                 <div class="sidebar-section section-fazendas">
-                    <h3 class="section-title"><i class="fa-solid fa-tractor"></i> Filtro de Fazendas</h3>
-                    <label class="sidebar-filter-label" for="fazenda-filter">Fazenda</label>
-                    <div class="select-wrapper">
-                        <select id="fazenda-filter">
-                            <option value="ALL">Todas as Fazendas</option>
-                        </select>
-                    </div>
+                    <h3 class="section-title"><i class="fa-solid fa-tractor"></i> Glebas e fazendas</h3>
                     <label class="sidebar-filter-label" for="gleba-filter">Gleba</label>
                     <div class="select-wrapper">
                         <select id="gleba-filter">
                             <option value="ALL">Todas as Glebas</option>
+                        </select>
+                    </div>
+                    <label class="sidebar-filter-label" for="fazenda-filter">Fazenda</label>
+                    <div class="select-wrapper">
+                        <select id="fazenda-filter">
+                            <option value="ALL">Todas as Fazendas</option>
                         </select>
                     </div>
                 </div>
@@ -142,27 +142,10 @@
                     </div>
                 </div>
 
-                <!-- SEÇÃO 4: PERMISSÃO DE USUÁRIO -->
-                <div class="sidebar-section section-permissao" id="admin-view-switch">
-                    <h3 class="section-title"><i class="fa-solid fa-user-shield"></i> Permissão de Usuário</h3>
-                    <div class="role-switch-container">
-                        <button type="button" class="role-btn active" id="role-editor-btn" data-role="editor">
-                            <i class="fa-solid fa-pen-to-square"></i> Editor
-                        </button>
-                        <button type="button" class="role-btn" id="role-viewer-btn" data-role="viewer">
-                            <i class="fa-solid fa-eye"></i> Visualizador
-                        </button>
-                    </div>
-                </div>
             </div>
 
             <!-- Footer Stats -->
             <div class="sidebar-footer">
-                <div class="portal-account">
-                    <div class="portal-account-details"><strong id="portal-account-name"></strong><span id="portal-account-role"></span></div>
-                    <button type="button" class="btn-logout" id="btn-logout">Sair</button>
-                    <button type="button" class="btn-logout" id="btn-switch-farm" hidden>Trocar fazenda</button>
-                </div>
                 <div class="stats-box">
                     <span class="stats-label">Talhões no filtro:</span>
                     <span class="stats-value" id="stats-count">0</span>
@@ -174,7 +157,7 @@
         <main class="map-area">
             <header class="portal-heading">
                 <div><span class="portal-eyebrow">GESTÃO AGRÍCOLA</span><h1>Visão do campo</h1></div>
-                <span class="portal-heading-note"><i class="fa-solid fa-map-location-dot" aria-hidden="true"></i> Planejar. Acompanhar. Evoluir.</span>
+                <button type="button" id="btn-account-menu" class="account-menu-trigger"><i class="fa-solid fa-gear" aria-hidden="true"></i> Opções</button>
             </header>
             <!-- Barra Superior Informativa para Outras Operações -->
             <div class="generic-op-bar hidden" id="generic-op-bar">
@@ -951,6 +934,28 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="config.js"></script>
+    <dialog id="account-menu" class="farm-switch-dialog">
+        <h2>Opções</h2>
+                <!-- SEÇÃO 4: PERMISSÃO DE USUÁRIO -->
+                <div class="sidebar-section section-permissao" id="admin-view-switch">
+                    <h3 class="section-title"><i class="fa-solid fa-user-shield"></i> Permissão de Usuário</h3>
+                    <div class="role-switch-container">
+                        <button type="button" class="role-btn active" id="role-editor-btn" data-role="editor">
+                            <i class="fa-solid fa-pen-to-square"></i> Editor
+                        </button>
+                        <button type="button" class="role-btn" id="role-viewer-btn" data-role="viewer">
+                            <i class="fa-solid fa-eye"></i> Visualizador
+                        </button>
+                    </div>
+                </div>
+
+        <div class="portal-account">
+            <div class="portal-account-details"><strong id="portal-account-name"></strong><span id="portal-account-role"></span></div>
+            <button type="button" class="btn-logout" id="btn-switch-farm" hidden>Trocar fazenda de entrada</button>
+            <button type="button" class="btn-logout" id="btn-logout">Sair</button>
+        </div>
+        <button type="button" id="btn-close-account" class="btn-logout account-menu-close">Fechar</button>
+    </dialog>
     <dialog id="farm-switch-dialog" class="farm-switch-dialog">
         <form id="farm-switch-form" class="login-form">
             <h2>Trocar fazenda</h2>
@@ -961,22 +966,22 @@
             <button id="btn-cancel-farm" type="button">Cancelar</button>
         </form>
     </dialog>
-    <script src="auth.js?v=5"></script>
+    <script src="auth.js?v=6"></script>
 
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     
     <!-- Custom JS -->
     <script src="js/harvest-import.js?v=3"></script>
-    <script src="js/harvest-store.js?v=4"></script>
+    <script src="js/harvest-store.js?v=5"></script>
     <script src="js/harvest-legend.js?v=2"></script>
     <script src="js/harvest-pyramid.js?v=7"></script>
     <script src="js/harvest-points.js?v=7"></script>
     <script src="js/harvest-view.js?v=8"></script>
     <script src="js/operations/supabase-repository.js?v=1"></script>
-    <script src="js/operations/cloud-store.js?v=1"></script>
-    <script src="js/operations/legacy-import.js?v=2"></script>
+    <script src="js/operations/cloud-store.js?v=2"></script>
+    <script src="js/operations/legacy-import.js?v=3"></script>
     <script src="js/access-admin.js?v=1"></script>
-    <script src="app.js?v=3.7"></script>
+    <script src="app.js?v=3.8"></script>
 </body>
 </html>

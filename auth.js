@@ -205,6 +205,7 @@
             goToLogin('perfil'); await endSession(); return false;
         }
         allowedFarms = await getFarms();
+        window.portalFarms = allowedFarms;
         const chosen = window.sessionStorage.getItem(`${storageKey}.farm`);
         window.portalFarm = allowedFarms.find(farm => farm.code === chosen);
         if (!window.portalFarm) {
@@ -325,9 +326,12 @@
         try { await endSession(); } catch (_) { clearSession(); }
         window.location.replace('./index.html');
     };
+    document.getElementById('btn-account-menu')?.addEventListener('click', () => document.getElementById('account-menu').showModal());
+    document.getElementById('btn-close-account')?.addEventListener('click', () => document.getElementById('account-menu').close());
     document.getElementById('btn-logout')?.addEventListener('click', () => window.logoutGeoportal());
     document.getElementById('btn-switch-farm')?.addEventListener('click', async () => {
         const dialog = document.getElementById('farm-switch-dialog');
+        document.getElementById('account-menu')?.close();
         try {
             allowedFarms = await getFarms();
             window.populateFarmChoices(document.getElementById('switch-farm'), allowedFarms, window.portalFarm.code);

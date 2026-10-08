@@ -9,15 +9,22 @@
             .map(value => String(value || '').trim().toUpperCase()).join('__');
     }
     function create(client, farm) {
+        const farms = Array.isArray(farm) ? [...new Set(farm)] : [farm];
         const repository = root.GeoOperations.createRepository(client);
         let records = {}, plans = {}, pending = false;
         async function load() {
-            const [features, rows, planRows] = await Promise.all([
-                repository.listFields(farm), repository.listFarmRecords(farm), repository.listFarmPlans(farm)
-            ]);
-            if (features.some(feature => feature?.properties?.Fazenda !== farm) || rows.some(row => row.fazenda !== farm)) {
-                throw new Error('O banco retornou uma fazenda diferente do acesso selecionado.');
-            }
+            const batches = await Promise.all(farms.map(async code => {
+                const [features, rows, plans] = await Promise.all([
+                    repository.listFields(code), repository.listFarmRecords(code), repository.listFarmPlans(code)
+                ]);
+                if (features.some(feature => feature?.properties?.Fazenda !== code) || rows.some(row => row.fazenda !== code) || plans.some(row => row.fazenda !== code)) {
+                    throw new Error('O banco retornou uma fazenda diferente do acesso selecionado.');
+                }
+                return {features, rows, plans};
+            }));
+            const features = batches.flatMap(batch => batch.features);
+            const rows = batches.flatMap(batch => batch.rows);
+            const planRows = batches.flatMap(batch => batch.plans);
             records = Object.fromEntries(rows.map(row => [recordKey(row), row]));
             plans = Object.fromEntries(planRows.map(row => [planKey(row), row]));
             return { type: 'FeatureCollection', features };
@@ -32,7 +39,7 @@
             getRecords: () => ({ ...records }),
             getPlanning: () => Object.fromEntries(Object.entries(plans).map(([key, plan]) => [key, plan.plannedFields.map(field => field.campo)])),
             async saveRecords(input, type) {
-                if (input.some(record => record.fazenda !== farm)) throw new Error('Escolha talhões da fazenda selecionada.');
+                if (input.some(record => !farms.includes(record.fazenda))) throw new Error('Escolha talhões das fazendas liberadas.');
                 return write(async () => {
                     const saved = await repository.saveRecords(input, type);
                     for (const row of saved) records[recordKey(row)] = row;
@@ -40,11 +47,11 @@
                 });
             },
             async savePlan(context, fields) {
-                if (context.fazenda !== farm) throw new Error('Planejamento fora da fazenda selecionada.');
+                if (!farms.includes(context.fazenda)) throw new Error('Planejamento fora das fazendas liberadas.');
                 const key = planKey(context);
                 return write(async () => {
                     const saved = await repository.savePlan({ ...plans[key], ...context,
-                        plannedFields: fields.map(campo => ({ fazenda: farm, campo })) });
+                        plannedFields: fields.map(campo => ({ fazenda: context.fazenda, campo })) });
                     plans[key] = saved;
                     return saved;
                 });

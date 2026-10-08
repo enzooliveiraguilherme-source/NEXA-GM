@@ -2,12 +2,13 @@
     'use strict';
     root.GeoLegacyImport = {
         prepare(data, features, existing, farm) {
-            const allowed = new Set(features.filter(feature => feature.properties?.Fazenda === farm).map(feature => feature.properties.Campo));
+            const farms = Array.isArray(farm) ? farm : [farm];
+            const allowed = new Set(features.filter(feature => farms.includes(feature.properties?.Fazenda)).map(feature => `${feature.properties.Fazenda}__${feature.properties.Campo}`));
             const seen = new Set(Object.keys(existing));
             const records = [];
             let skipped = 0;
             for (const source of Object.values(data)) {
-                if (!source || source.fazenda !== farm || !allowed.has(source.campo)) { skipped++; continue; }
+                if (!source || !farms.includes(source.fazenda) || !allowed.has(`${source.fazenda}__${source.campo}`)) { skipped++; continue; }
                 const record = { ...source, operationType: source.produto === 'Plantio' ? 'plantio' : 'adubacao' };
                 const key = root.GeoCloudStore.recordKey(record);
                 if (seen.has(key)) { skipped++; continue; }
@@ -18,7 +19,7 @@
             return { records, skipped };
         },
         async restore(state, original, onProgress = () => {}) {
-            const preview = this.prepare(original, state.geojsonData.features, state.cloudStore.getRecords(), root.portalFarm.code);
+            const preview = this.prepare(original, state.geojsonData.features, state.cloudStore.getRecords(), (root.portalFarms || [root.portalFarm]).map(farm => farm.code));
             let saved = 0;
             for (const type of ['plantio', 'adubacao']) {
                 const records = preview.records.filter(record => record.operationType === type);
@@ -37,12 +38,12 @@
             document.querySelector('.portal-account').append(open);
             const recoveryStatus = document.createElement('p'); recoveryStatus.className = 'legacy-restore-status';
             recoveryStatus.setAttribute('role', 'status');
-            document.querySelector('.sidebar-footer').append(recoveryStatus);
+            document.querySelector('.portal-account').append(recoveryStatus);
             // Recupera o trabalho anterior neste navegador; nunca apaga a cópia local nem substitui registros do banco.
             let original;
             try { original = JSON.parse(localStorage.getItem('geoportal_calcario_records_v1') || '{}'); }
             catch (_) { recoveryStatus.textContent = 'Os registros antigos precisam ser revisados. Use Importar registros deste navegador.'; }
-            if (original && this.prepare(original, state.geojsonData.features, state.cloudStore.getRecords(), root.portalFarm.code).records.length) {
+            if (original && this.prepare(original, state.geojsonData.features, state.cloudStore.getRecords(), (root.portalFarms || [root.portalFarm]).map(farm => farm.code)).records.length) {
                 open.disabled = true; recoveryStatus.textContent = 'Recuperando os registros anteriores deste navegador…';
                 this.restore(state, original, (done, total) => {
                     onSaved(); recoveryStatus.textContent = `Recuperando registros: ${done} de ${total}.`;
@@ -58,10 +59,10 @@
                 let original;
                 try { original = JSON.parse(localStorage.getItem('geoportal_calcario_records_v1') || '{}'); }
                 catch (_) { window.alert('Não foi possível ler os registros antigos deste navegador.'); return; }
-                const preview = this.prepare(original, state.geojsonData.features, state.cloudStore.getRecords(), root.portalFarm.code);
+                const preview = this.prepare(original, state.geojsonData.features, state.cloudStore.getRecords(), (root.portalFarms || [root.portalFarm]).map(farm => farm.code));
                 const dialog = document.createElement('dialog'); dialog.className = 'access-dialog';
                 const title = document.createElement('h2'); title.textContent = 'Revisar importação';
-                const description = document.createElement('p'); description.textContent = `${preview.records.length} registros da fazenda ${root.portalFarm.name} podem ser importados. ${preview.skipped} foram ignorados por serem de outra fazenda, talhões inválidos ou já existirem no banco. Os dados deste navegador serão preservados.`;
+                const description = document.createElement('p'); description.textContent = `${preview.records.length} registros das fazendas liberadas podem ser importados. ${preview.skipped} foram ignorados por serem de outra fazenda, talhões inválidos ou já existirem no banco. Os dados deste navegador serão preservados.`;
                 const list = document.createElement('ul');
                 preview.records.forEach(record => { const item = document.createElement('li'); item.textContent = `${record.campo} · ${record.ano} · ${record.cultura} · ${record.produto} · ${record.status}`; list.append(item); });
                 const status = document.createElement('p'); status.setAttribute('aria-live','polite');
