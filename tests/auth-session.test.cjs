@@ -361,3 +361,15 @@ test('seleção e troca de fazenda só aparecem com mais de uma fazenda liberada
   assert.equal(h.document.getElementById('farm-filter-section').hidden,farms.length<2);
  }
 });
+test('recuperação e convite aceitam senha numérica de dez caracteres sem exigir letras', async () => {
+ for (const type of ['recovery', 'invite']) {
+  const h=run({page:'login',hash:'#type='+type+'&access_token=test&refresh_token=test'}); await h.window.portalReady;
+  assert.equal(await h.window.saveRecoveredPassword('9876543210','9876543210'),true);
+  assert.equal(h.calls.update[0].password,'9876543210');
+ }
+});
+test('recusa do servidor não informa falsamente que a senha longa tem menos de seis caracteres', async () => {
+ const h=run({page:'login',hash:'#type=recovery&access_token=test&refresh_token=test',updateError:{code:'weak_password'}}); await h.window.portalReady;
+ assert.equal(await h.window.saveRecoveredPassword('9876543210','9876543210'),false);
+ assert.doesNotMatch(h.document.getElementById('login-message').textContent,/6 caracteres/);
+});

@@ -102,7 +102,7 @@
         document.getElementById('new-password-form').hidden = !active;
         document.getElementById('login-title').textContent = active ? (passwordPurpose === 'invite' ? 'Crie sua senha de acesso' : 'Defina sua nova senha') : 'Bem-vindo ao Geoportal';
         document.getElementById('btn-save-password').textContent = active && passwordPurpose === 'invite' ? 'Criar senha e concluir convite' : 'Salvar nova senha';
-        document.getElementById('login-intro').textContent = active ? 'Use ao menos 6 caracteres e confirme a senha abaixo.' : 'Entre com seu acesso corporativo para continuar.';
+        document.getElementById('login-intro').textContent = active ? 'Use ao menos 6 caracteres. Pode ser somente números. Confirme a senha abaixo.' : 'Entre com seu acesso corporativo para continuar.';
     }
 
     function showAccount(profile, user) {
@@ -380,7 +380,7 @@
             setMessage(passwordPurpose === 'invite' ? 'Convite concluído. Entre com seu e-mail e a senha que você criou.' : 'Senha atualizada. Entre com seu e-mail e a nova senha.');
             return true;
         } catch (error) {
-            setMessage(error.code === 'weak_password' ? 'A senha não atende aos requisitos. Use ao menos 6 caracteres.'
+            setMessage(error.code === 'weak_password' ? 'A senha foi recusada pelo serviço de acesso. Tente outra senha ou consulte o administrador.'
                 : error.code === 'same_password' ? 'Escolha uma senha diferente da anterior.'
                 : 'Não foi possível atualizar a senha. O link pode ter expirado; solicite um novo e tente novamente.');
             return false;
