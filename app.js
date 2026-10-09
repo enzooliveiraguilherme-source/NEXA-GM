@@ -702,6 +702,17 @@ function isCalcarioMode() {
 function updateOperationUI() {
     const plantio = isPlantioMode();
     const harvest = state.currentTab === 'colheita';
+    const operational = isOperationalMapMode();
+    const operation = OPERACOES_CONFIG[state.currentTab];
+    const heading = document.querySelector('.portal-heading h1');
+    if (heading && operation) heading.textContent = operation.name;
+    document.getElementById('calcario-dashboard')?.classList.toggle('hidden', !operational);
+    document.getElementById('calcario-filter-bar')?.classList.toggle('hidden', !operational);
+    document.getElementById('generic-op-bar')?.classList.toggle('hidden', operational);
+    if (operation) {
+        const name = document.getElementById('generic-op-name');
+        if (name) name.textContent = operation.name;
+    }
     document.getElementById('harvest-import-section')?.classList.toggle('hidden', !harvest);
     document.querySelectorAll('.harvest-detail').forEach(element => element.classList.toggle('hidden', !harvest));
     const setText = (id, value) => {
@@ -2275,6 +2286,7 @@ function setupEventListeners() {
 
         updateOperationUI();
         updateFilterTag();
+        window.dispatchEvent(new CustomEvent('geoportal:operation-change'));
 
         try {
             renderMap(tabKey === 'colheita' && previousTab !== 'colheita');

@@ -36,7 +36,7 @@
     const level=Math.max(0,Math.min(5,15-Math.floor(map.getZoom())));
     for(const record of this.records){
      let item=record.levels[level];const key=item.valuesFile;let img=this.images.get(key);
-     if(!img){img={values:null};this.images.set(key,img);loadValues(item,dataset).then(values=>{img.values=values;this.draw();}).catch(error=>{this.images.delete(key);console.error('Não foi possível carregar a produtividade:',error);});}
+     if(!img){const requestedImage={values:null};img=requestedImage;this.images.set(key,requestedImage);loadValues(item,dataset).then(values=>{requestedImage.values=values;this.draw();}).catch(error=>{this.images.delete(key);console.error('Não foi possível carregar a produtividade:',error);});}
      if(!img.values){const fallback=record.levels.map((value,i)=>({value,distance:Math.abs(i-level)})).sort((a,b)=>a.distance-b.distance).find(({value})=>this.images.get(value.valuesFile)?.values);if(!fallback)continue;item=fallback.value;img=this.images.get(item.valuesFile);}
      const matching=features.filter(f=>f.properties.Campo===record.campo);ctx.save();clip(ctx,map,matching);
      const bounds=item.bounds||record.bounds,a=map.latLngToContainerPoint([bounds[1][0],bounds[0][1]]),b=map.latLngToContainerPoint([bounds[0][0],bounds[1][1]]);

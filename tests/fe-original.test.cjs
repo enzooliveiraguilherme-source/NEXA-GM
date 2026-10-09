@@ -36,6 +36,14 @@ async function main(){
     assert.equal(total,2619944);
     const context=vm.createContext({window:{},document:{addEventListener(){}},console,Blob,Response,DecompressionStream,atob,crypto:crypto.webcrypto});
     context.window=context;
+    context.portalFarms=[{code:'FE'}];
+    context.supabaseClient={from(table){
+        const filters={};
+        return {select(){return this;},eq(key,value){filters[key]=value;return this;},
+            async maybeSingle(){assert.equal(table,'harvest_test_datasets');return {data:{active_version:'test-version'},error:null};},
+            async single(){assert.equal(table,'harvest_test_files');assert.equal(filters.version_id,'test-version');return {data:{contents:JSON.parse(fs.readFileSync(path.join(folder,filters.path)))},error:null};}
+        };
+    }};
     context.fetch=async url=>({ok:true,json:async()=>JSON.parse(fs.readFileSync(path.join(folder,path.basename(url))))});
     vm.runInContext(fs.readFileSync(path.resolve(__dirname,'../js/harvest-store.js'),'utf8'),context);
     const dataset=await context.HarvestStore.load();

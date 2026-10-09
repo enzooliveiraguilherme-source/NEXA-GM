@@ -16,7 +16,7 @@
     
     <!-- Custom CSS -->
     <link rel="stylesheet" href="style.css?v=3.5">
-    <link rel="stylesheet" href="brand.css?v=9">
+    <link rel="stylesheet" href="brand.css?v=12">
 </head>
 <body data-page="portal">
     <div id="auth-loading-overlay" class="loading-overlay"><div class="spinner"></div><p>Validando seu acesso…</p></div>
@@ -24,12 +24,14 @@
         <!-- ============================================== -->
         <!-- SIDEBAR REORGANIZADA COM ESPAÇAMENTO CLARO -->
         <!-- ============================================== -->
-        <aside class="sidebar">
+        <button type="button" class="mobile-menu-backdrop" id="mobile-menu-backdrop" aria-label="Fechar menu" hidden></button>
+        <aside class="sidebar" id="portal-sidebar" aria-label="Menu do Geoportal">
             <div class="sidebar-header">
                 <div class="logo">
                     <img src="apoio/GP Michels.jpg" alt="Grupo Michels" class="brand-logo">
                 </div>
                 <p class="subtitle">GEOPORTAL <span>Gestão agrícola integrada</span></p>
+                <button type="button" class="mobile-control mobile-menu-close" id="mobile-menu-close" aria-label="Fechar menu">✕</button>
             </div>
 
             <div class="sidebar-content-scroll">
@@ -156,7 +158,9 @@
         <!-- Main Map Area -->
         <main class="map-area">
             <header class="portal-heading">
+                <button type="button" class="mobile-control" id="mobile-menu-toggle" aria-label="Abrir menu" aria-expanded="false" aria-controls="portal-sidebar"><i class="fa-solid fa-bars" aria-hidden="true"></i></button>
                 <div><span class="portal-eyebrow">GESTÃO AGRÍCOLA</span><h1>Visão do campo</h1></div>
+                <button type="button" class="mobile-control" id="mobile-filter-toggle" aria-expanded="false" aria-controls="calcario-filter-bar"><i class="fa-solid fa-sliders" aria-hidden="true"></i> Filtros</button>
                 <button type="button" id="btn-account-menu" class="account-menu-trigger"><i class="fa-solid fa-gear" aria-hidden="true"></i> Opções</button>
             </header>
             <!-- Barra Superior Informativa para Outras Operações -->
@@ -974,14 +978,15 @@
     <!-- Custom JS -->
     <script src="js/harvest-import.js?v=3"></script>
     <script src="js/harvest-store.js?v=5"></script>
-    <script src="js/harvest-legend.js?v=2"></script>
-    <script src="js/harvest-pyramid.js?v=7"></script>
+    <script src="js/harvest-legend.js?v=3"></script>
+    <script src="js/harvest-pyramid.js?v=8"></script>
     <script src="js/harvest-points.js?v=7"></script>
     <script src="js/harvest-view.js?v=8"></script>
     <script src="js/operations/supabase-repository.js?v=1"></script>
     <script src="js/operations/cloud-store.js?v=2"></script>
     <script src="js/operations/legacy-import.js?v=3"></script>
     <script src="js/access-admin.js?v=1"></script>
-    <script src="app.js?v=3.8"></script>
+    <script src="app.js?v=3.9"></script>
+    <script src="js/mobile-layout.js?v=2"></script>
 </body>
 </html>
