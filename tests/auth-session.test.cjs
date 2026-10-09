@@ -117,15 +117,14 @@ test('a página inicial sempre pede email e senha, sem redirecionar uma sessão 
     assert.equal(h.sessionMap.has(h.options().auth.storageKey), false);
 });
 
-test('credenciais válidas pedem uma fazenda liberada antes de entrar e apagam senha do formulário', async () => {
+test('credenciais válidas entram direto na primeira fazenda liberada e apagam a senha', async () => {
     const h = run({ page: 'login', role: 'projetista', farms: [{code:'FE',name:'Esperança',gleba:'FE'}, {code:'FE2',name:'Esperança 2',gleba:'FE'}] }); await h.window.portalReady;
     assert.equal(await h.window.loginGeoportal(' user@example.test ', 'Fixture-password!'), true);
     assert.equal(h.calls.signIn[0].email, 'user@example.test');
-    assert.equal(h.redirects.length, 0);
+    assert.deepEqual(h.redirects, ['./portal.html']);
+    assert.equal(h.sessionMap.get(`${h.options().auth.storageKey}.farm`), 'FE');
     assert.equal(await h.window.choosePortalFarm('Y'), false);
-    assert.equal(h.redirects.length, 0);
-    assert.equal(await h.window.choosePortalFarm('FE'), true);
-    assert.equal(h.redirects[0], './portal.html');
+    assert.equal(h.redirects.length, 1);
     assert.equal(h.document.getElementById('password').value, '');
     assert.equal(h.sessionMap.has(h.options().auth.storageKey), true);
     assert.equal(h.localMap.has(h.options().auth.storageKey), false);
@@ -271,7 +270,7 @@ test('única fazenda entra direto e preferência não substitui o login', async 
     assert.equal(next.calls.signIn.length, 0);
 });
 
-test('última fazenda liberada entra direto; revogação e outra conta exigem escolha', async () => {
+test('última fazenda entra direto; preferência revogada ou de outra conta usa a primeira liberada', async () => {
     const farms = [{code:'FE',name:'Esperança',gleba:'FE'}, {code:'FE2',name:'Esperança 2',gleba:'FE'}];
     const localMap = new Map([['geoportal.preference.example.user-1.farm','FE2']]);
     const valid = run({page:'login', farms, localMap});
@@ -280,17 +279,21 @@ test('última fazenda liberada entra direto; revogação e outra conta exigem es
     assert.equal(valid.sessionMap.get(`${valid.options().auth.storageKey}.farm`), 'FE2');
     const revoked = run({page:'login', farms:[farms[0], {code:'FPAR',name:'Paraíso',gleba:'FPAR'}], localMap});
     await revoked.window.loginGeoportal(user.email, '123456');
-    assert.equal(revoked.redirects.length, 0);
+    assert.deepEqual(revoked.redirects, ['./portal.html']);
+    assert.equal(revoked.sessionMap.get(`${revoked.options().auth.storageKey}.farm`), 'FE');
     const other = run({page:'login', farms, localMap, suppliedUser:{...user,id:'user-2'}});
     await other.window.loginGeoportal(user.email, '123456');
-    assert.equal(other.redirects.length, 0);
+    assert.deepEqual(other.redirects, ['./portal.html']);
+    assert.equal(other.sessionMap.get(`${other.options().auth.storageKey}.farm`), 'FE');
 });
 
 test('lista agrupa fazendas pela gleba real, mantendo cada código separado', async () => {
-    const h = run({page:'login', farms:[{code:'FPAR',name:'Paraíso',gleba:'FPAR'},
-        {code:'FE2',name:'Esperança 2',gleba:'FE'}, {code:'FE',name:'Esperança',gleba:'FE'}]});
-    await h.window.loginGeoportal(user.email, '123456');
-    const groups = h.elements.get('login-farm').children;
+    const farms = [{code:'FPAR',name:'Paraíso',gleba:'FPAR'},
+        {code:'FE2',name:'Esperança 2',gleba:'FE'}, {code:'FE',name:'Esperança',gleba:'FE'}];
+    const h = run({initialSession:session,farms}); await h.window.portalReady;
+    const select = h.document.getElementById('switch-farm');
+    h.window.populateFarmChoices(select, farms);
+    const groups = select.children;
     assert.deepEqual(Array.from(groups, group => group.label), ['Gleba FE','Gleba FPAR']);
     assert.deepEqual(Array.from(groups[0].children, option => option.value), ['FE','FE2']);
 });

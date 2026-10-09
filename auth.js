@@ -310,18 +310,8 @@
                 await endSession(); setMessage('Sua conta aguarda a liberação de uma fazenda pelo administrador.'); return false;
             }
             const previous = rememberedFarm(data.user);
-            const automatic = allowedFarms.length === 1 ? allowedFarms[0]
-                : allowedFarms.find(farm => farm.code === previous);
-            if (automatic) return enterFarm(data.user, automatic.code);
-            const select = document.getElementById('login-farm');
-            window.populateFarmChoices(select, allowedFarms);
-            document.getElementById('login-credentials').hidden = true;
-            document.getElementById('farm-choice').hidden = false;
-            document.getElementById('btn-login').hidden = true;
-            document.getElementById('invite-only-help').hidden = true;
-            document.getElementById('btn-forgot-password').hidden = true;
-            setMessage('Escolha uma fazenda para este acesso.');
-            return true;
+            const automatic = allowedFarms.find(farm => farm.code === previous) || allowedFarms[0];
+            return enterFarm(data.user, automatic.code);
         } catch (_) {
             try { await endSession(); } catch (_) { clearSession(); }
             setMessage('Não foi possível conectar ao serviço de acesso. Tente novamente.'); return false;

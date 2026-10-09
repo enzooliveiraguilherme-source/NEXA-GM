@@ -42,12 +42,6 @@
                     <button type="submit" id="btn-save-password">Salvar nova senha</button>
                     <button type="button" id="btn-cancel-password-reset">Voltar para entrar</button>
                 </form>
-                <form class="login-form" id="farm-choice" hidden>
-                    <label>Escolha a fazenda, organizada por gleba<select id="login-farm" required></select></label>
-                    <small>Somente as fazendas liberadas aparecem aqui. Sua última escolha será lembrada nas próximas entradas.</small>
-                    <button type="submit">Acessar fazenda</button>
-                    <button type="button" id="btn-login-reset">Entrar com outra conta</button>
-                </form>
                 <p class="invite-only-help" id="invite-only-help">Ainda não tem acesso? Solicite um convite ao administrador.</p>
                 <p class="login-session-help">Entre com sua conta cadastrada. Ao fechar esta aba, será necessário fazer login novamente.</p>
                 <div class="config-notice" id="config-notice" hidden>O acesso ainda está sendo configurado. Conecte este projeto ao Supabase antes de publicar.</div>
@@ -56,7 +50,7 @@
     </main>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="config.js"></script>
-    <script src="auth.js?v=8"></script>
+    <script src="auth.js?v=9"></script>
     <script src="js/password-visibility.js?v=1"></script>
     <script>
         document.querySelectorAll('.login-form').forEach(form => {
@@ -67,7 +61,6 @@
                 const messages = {
                     email: 'Informe seu e-mail corporativo para entrar.',
                     password: 'Informe sua senha para entrar. Se ainda não tem uma conta, solicite um convite ao administrador.',
-                    'login-farm': 'Selecione uma fazenda para continuar.',
                     'reset-email': 'Informe seu e-mail cadastrado.',
                     'new-password': 'Informe uma nova senha com ao menos 6 caracteres.',
                     'confirm-password': 'Confirme sua nova senha.'
@@ -82,11 +75,6 @@
             event.preventDefault();
             await window.loginGeoportal(document.getElementById('email').value, document.getElementById('password').value);
         });
-        document.getElementById('farm-choice').addEventListener('submit', async event => {
-            event.preventDefault();
-            await window.choosePortalFarm(document.getElementById('login-farm').value);
-        });
-        document.getElementById('btn-login-reset').addEventListener('click', () => location.reload());
         document.getElementById('btn-forgot-password').addEventListener('click', () => {
             document.getElementById('login-form').hidden = true;
             document.getElementById('invite-only-help').hidden = true;
