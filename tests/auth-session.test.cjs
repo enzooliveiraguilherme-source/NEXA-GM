@@ -9,6 +9,7 @@ let tabCounter = 0;
 
 function run({ page = 'portal', sessionMap = new Map(), initialSession, role = 'visualizador',
     profileError = false, userError = false, loginError, offlineLogout = false, storageBlocked = false,
+    hash = '', resetError, recoveryError, updateError,
     suppliedUser = user, configured = true, failProfile = false, navigation = 'reload',
     farms = [{code:'FE',name:'Esperança'}], farmError = false, chosenFarm = 'FE', fetchImpl,
     localMap = new Map([['sb-example-auth-token', JSON.stringify(session)], ['geoportal_calcario_records_v1', 'preserved']]) } = {}) {
@@ -25,14 +26,15 @@ function run({ page = 'portal', sessionMap = new Map(), initialSession, role = '
         add: c => classes.add(c), remove: c => classes.delete(c) } },
         createElement: () => element(),
         getElementById(id) { if (!elements.has(id)) elements.set(id, element()); return elements.get(id); } };
-    const calls = { getUser: 0, signOut: [], signIn: [], signUp: [], profile: 0 };
+    const calls = { getUser: 0, signOut: [], signIn: [], signUp: [], profile: 0, reset: [], setSession: [], update: [] };
     let clientOptions, authCallback;
     const window = {
         fetch: fetchImpl,
         GEO_PORTAL_CONFIG: configured ? { supabaseUrl: 'https://example.supabase.co', supabaseAnonKey: 'public-test-key' } : {},
         sessionStorage, localStorage: storage(localMap), crypto: { randomUUID: () => `tab-${++tabCounter}` },
         performance: { getEntriesByType: () => [{ type: navigation }] },
-        location: { href: 'https://example.test/index.html', search: '', replace: url => redirects.push(url), reload: () => redirects.push('reload') },
+        location: { href: 'https://example.test/index.html', pathname: '/index.html', hash, search: '', replace: url => redirects.push(url), reload: () => redirects.push('reload') },
+        history: { replaceState(){window.location.hash='';} },
         addEventListener(event, fn) { listeners[event] = fn; },
         supabase: { createClient(url, key, options) {
             clientOptions = options;
@@ -43,6 +45,9 @@ function run({ page = 'portal', sessionMap = new Map(), initialSession, role = '
                 async rpc(name) { assert.equal(name,'list_accessible_farms_by_gleba'); return {data:farms,error:farmError ? Error('denied'):null}; },
                 auth: {
                     onAuthStateChange(fn) { authCallback = fn; },
+                    async resetPasswordForEmail(email,options) { calls.reset.push({email,options}); return {error:resetError}; },
+                    async setSession(tokens) { calls.setSession.push(tokens); if(recoveryError)return {error:recoveryError};sessionStorage.setItem(options.auth.storageKey,JSON.stringify(session));return {data:{session},error:null}; },
+                    async updateUser(attributes) { calls.update.push(attributes); return {data:{user},error:updateError}; },
                     async getSession() { return { data: { session: read() }, error: null }; },
                     async getUser() { calls.getUser++; return { data: { user: userError ? null : read()?.user }, error: userError ? Error('revoked') : null }; },
                     async signInWithPassword(credentials) {
@@ -292,4 +297,51 @@ test('lista agrupa fazendas pela gleba real, mantendo cada código separado', as
     const groups = h.elements.get('login-farm').children;
     assert.deepEqual(Array.from(groups, group => group.label), ['Gleba FE','Gleba FPAR']);
     assert.deepEqual(Array.from(groups[0].children, option => option.value), ['FE','FE2']);
+});
+
+test('recuperação solicita link para endereço oficial sem revelar existência da conta', async () => {
+    const h=run({page:'login'});await h.window.portalReady;
+    assert.equal(await h.window.requestPasswordReset(' user@example.test '),true);
+    assert.equal(h.calls.reset[0].email,'user@example.test');
+    assert.equal(h.calls.reset[0].options.redirectTo,'https://nexa-gm.vercel.app/index.html');
+    assert.match(h.elements.get('login-message').textContent,/Se este e-mail estiver cadastrado/);
+    assert.equal(h.calls.signIn.length,0);assert.equal(h.calls.update.length,0);
+    assert.equal(await h.window.requestPasswordReset('inválido'),false);assert.equal(h.calls.reset.length,1);
+});
+test('falha no envio de recuperação permite tentar novamente sem confirmar envio', async () => {
+    const h=run({page:'login',resetError:{status:429}});await h.window.portalReady;
+    assert.equal(await h.window.requestPasswordReset('user@example.test'),false);
+    assert.match(h.elements.get('login-message').textContent,/Aguarde/);
+    assert.equal(h.elements.get('btn-send-password-reset').disabled,false);
+});
+test('link de recuperação limpa tokens da URL, valida identidade e não abre o portal', async () => {
+    const h=run({page:'login',hash:'#type=recovery&access_token=test-token&refresh_token=test-refresh'});
+    assert.equal(await h.window.portalReady,false);assert.equal(h.window.location.hash,'');
+    assert.equal(h.calls.setSession.length,1);assert.equal(h.calls.getUser,1);
+    assert.equal(h.elements.get('new-password-form').hidden,false);
+    assert.equal(h.elements.get('login-form').hidden,true);
+    assert.deepEqual(h.redirects,[]);assert.equal(h.window.portalAccessRole,undefined);
+    assert.equal(await h.window.saveRecoveredPassword('123','123'),false);
+    assert.equal(await h.window.saveRecoveredPassword('123456','654321'),false);
+    assert.equal(h.calls.update.length,0);
+    assert.equal(await h.window.saveRecoveredPassword('123456','123456'),true);
+    assert.equal(h.calls.update[0].password,'123456');
+    assert.equal(h.sessionMap.has(h.options().auth.storageKey),false);
+    assert.equal(h.elements.get('new-password').value,'');assert.equal(h.elements.get('confirm-password').value,'');
+    assert.equal(h.elements.get('login-form').hidden,false);assert.deepEqual(h.redirects,[]);
+});
+test('link inválido e sessão comum não permitem alterar senha pelo fluxo de recuperação', async () => {
+    const invalid=run({page:'login',hash:'#type=recovery&access_token=test-token&refresh_token=test-refresh',recoveryError:Error('expired')});
+    await invalid.window.portalReady;assert.match(invalid.elements.get('login-message').textContent,/inválido ou expirou/);
+    assert.equal(await invalid.window.saveRecoveredPassword('123456','123456'),false);assert.equal(invalid.calls.update.length,0);
+    const ordinary=run({page:'login',initialSession:session});await ordinary.window.portalReady;
+    assert.equal(await ordinary.window.saveRecoveredPassword('123456','123456'),false);assert.equal(ordinary.calls.update.length,0);
+});
+test('F5 retoma recuperação validada e falha ao salvar não apresenta sucesso', async () => {
+    const h=run({page:'login',hash:'#type=recovery&access_token=test-token&refresh_token=test-refresh'});await h.window.portalReady;
+    const again=run({page:'login',sessionMap:h.sessionMap,updateError:{code:'same_password'}});await again.window.portalReady;
+    assert.equal(again.elements.get('new-password-form').hidden,false);
+    assert.equal(await again.window.saveRecoveredPassword('123456','123456'),false);
+    assert.match(again.elements.get('login-message').textContent,/diferente da anterior/);
+    assert.equal(again.elements.get('btn-save-password').disabled,false);
 });

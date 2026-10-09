@@ -233,6 +233,10 @@ body[data-page="login"] { margin: 0; min-height: 100vh; background: #f5f7fa; col
 .login-form select { width:100%; padding:12px; border:1px solid #d8e0eb; border-radius:8px; background:white; color:#142334; font:inherit; }
 #login-credentials { display:grid; gap:16px; }
 .login-secondary { margin-top:16px; background:transparent; border:0; color:#2454a6; cursor:pointer; font:inherit; }
+.password-field { position: relative; display: block; min-width: 0; }
+.password-field input { width: 100%; padding-right: 82px; }
+.login-form .password-visibility { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); min-width: 70px; min-height: 44px; margin: 0; padding: 8px; background: transparent; color: var(--color-blue); border: 0; box-shadow: none; font-size: 12px; }
+.login-form .password-visibility:hover { background: #edf3f9; }
 .login-card > .login-message { margin: 0 0 20px; padding: 12px 14px; border: 1px solid #cbd9e8; border-radius: 8px; background: #edf3f9; color: #142f50; font-size: 14px; line-height: 1.5; }
 .login-card > .login-message:empty { display: none; }
 /* Seletor de fazendas acessíveis, agrupadas por gleba. */

@@ -6,6 +6,7 @@
     let storageKey;
     let redirecting = false;
     let loginPending = false;
+    let recoveryReady = false;
     let allowedFarms = [];
     let preferencePrefix;
 
@@ -71,6 +72,7 @@
             window.sessionStorage.removeItem(`${storageKey}-user`);
             window.sessionStorage.removeItem(`${storageKey}.entry`);
             window.sessionStorage.removeItem(`${storageKey}.farm`);
+            window.sessionStorage.removeItem(`${storageKey}.recovery`);
         } catch (_) { /* O acesso continua bloqueado se o armazenamento estiver indisponível. */ }
     }
 
@@ -89,6 +91,16 @@
         // Somente o cadastro do banco define a permissão; e-mail e URL não concedem acesso.
         if (error || !data || data.id !== user.id || !roles.includes(data.role)) return null;
         return data;
+    }
+
+    function showRecovery(active) {
+        for (const id of ['login-form', 'btn-show-register', 'btn-forgot-password']) {
+            const element = document.getElementById(id); if (element) element.hidden = active;
+        }
+        document.getElementById('password-request-form').hidden = true;
+        document.getElementById('new-password-form').hidden = !active;
+        document.getElementById('login-title').textContent = active ? 'Defina sua nova senha' : 'Bem-vindo ao Geoportal';
+        document.getElementById('login-intro').textContent = active ? 'Use ao menos 6 caracteres e confirme a senha abaixo.' : 'Entre com seu acesso corporativo para continuar.';
     }
 
     function showAccount(profile, user) {
@@ -174,8 +186,35 @@
         });
 
         if (isLoginPage) {
+            const recovery = new URLSearchParams(String(window.location.hash || '').replace(/^#/, ''));
+            const recoveryLink = recovery.get('type') === 'recovery';
+            const resumeRecovery = reload && window.sessionStorage.getItem(`${storageKey}.recovery`) === '1';
+            if (recoveryLink || resumeRecovery) {
+                if (window.location.hash) window.history.replaceState(null, '', window.location.pathname);
+                try {
+                    if (recoveryLink) {
+                        clearSession();
+                        if (!recovery.get('access_token') || !recovery.get('refresh_token')) throw Error('invalid');
+                        const { error } = await window.supabaseClient.auth.setSession({ access_token: recovery.get('access_token'), refresh_token: recovery.get('refresh_token') });
+                        if (error) throw error;
+                    }
+                    const { data: { user }, error } = await window.supabaseClient.auth.getUser();
+                    if (error || !user) throw Error('expired');
+                    window.sessionStorage.setItem(`${storageKey}.recovery`, '1');
+                    recoveryReady = true; showRecovery(true); setMessage('');
+                } catch (_) {
+                    try { await endSession(); } catch (_) { clearSession(); }
+                    setMessage('O link de recuperação é inválido ou expirou. Solicite um novo em “Esqueci minha senha”.');
+                }
+                return false;
+            }
             // A entrada sempre pede as credenciais, sem redirecionamento automático.
             await endSession();
+            if (recovery.has('error') || recovery.has('error_code')) {
+                window.history.replaceState(null, '', window.location.pathname);
+                setMessage('O link recebido é inválido ou expirou. Solicite um novo em “Esqueci minha senha”.');
+                return false;
+            }
             const reason = new URLSearchParams(window.location.search).get('erro');
             setMessage({ perfil: 'Sua conta não tem um perfil de acesso válido. Solicite a liberação ao administrador.',
                 sessao: 'Sua sessão foi encerrada. Entre novamente para continuar.',
@@ -225,6 +264,7 @@
         if (loginPending) return false;
         setMessage('Preparando seu acesso…');
         await window.portalReady;
+        if (recoveryReady) return false;
         if (loginPending) return false;
         if (!String(password || '').length) {
             setMessage('Informe sua senha para entrar.');
@@ -270,6 +310,7 @@
             document.getElementById('farm-choice').hidden = false;
             document.getElementById('btn-login').hidden = true;
             document.getElementById('btn-show-register').hidden = true;
+            document.getElementById('btn-forgot-password').hidden = true;
             setMessage('Escolha uma fazenda para este acesso.');
             return true;
         } catch (_) {
@@ -296,6 +337,7 @@
 
     window.registerGeoportal = async function (name, email, password, farm) {
         await window.portalReady;
+        if (recoveryReady) return false;
         if (loginPending) return false;
         if (String(password || '').length < 6) {
             setMessage('Use uma senha com ao menos 6 caracteres. Pode ser somente números.'); return false;
@@ -319,6 +361,63 @@
                 : 'Não foi possível solicitar o cadastro. Confira os dados ou consulte o administrador.');
             return false;
         } finally { loginPending = false; button.disabled = false; }
+    };
+
+    window.requestPasswordReset = async function (email) {
+        await window.portalReady;
+        if (loginPending || recoveryReady) return false;
+        if (!window.supabaseClient) { setMessage('O serviço de acesso está indisponível. Tente novamente mais tarde.'); return false; }
+        const address = String(email || '').trim();
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) { setMessage('Informe um e-mail válido para recuperar sua senha.'); return false; }
+        loginPending = true;
+        const button = document.getElementById('btn-send-password-reset'); button.disabled = true;
+        setMessage('Solicitando o link de recuperação…');
+        try {
+            const { error } = await window.supabaseClient.auth.resetPasswordForEmail(address, { redirectTo: 'https://nexa-gm.vercel.app/index.html' });
+            if (error) throw error;
+            setMessage('Se este e-mail estiver cadastrado, você receberá um link para criar uma nova senha. Confira também a caixa de spam.');
+            return true;
+        } catch (error) {
+            setMessage(error.status === 429 ? 'Muitas solicitações. Aguarde alguns minutos e tente novamente.' : 'Não foi possível solicitar o link. Confira sua conexão e tente novamente.');
+            return false;
+        } finally { loginPending = false; button.disabled = false; }
+    };
+
+    window.saveRecoveredPassword = async function (password, confirmation) {
+        await window.portalReady;
+        if (loginPending) return false;
+        if (!recoveryReady) { setMessage('Abra o link recebido por e-mail para definir sua nova senha.'); return false; }
+        if (String(password || '').length < 6) { setMessage('Use uma senha com ao menos 6 caracteres.'); return false; }
+        if (password !== confirmation) { setMessage('As senhas não coincidem. Confira os dois campos.'); return false; }
+        loginPending = true;
+        const button = document.getElementById('btn-save-password'); button.disabled = true;
+        try {
+            const { data: { user }, error: userError } = await window.supabaseClient.auth.getUser();
+            if (userError || !user) throw Error('expired');
+            const { error } = await window.supabaseClient.auth.updateUser({ password });
+            if (error) throw error;
+            document.getElementById('new-password').value = '';
+            document.getElementById('confirm-password').value = '';
+            recoveryReady = false;
+            try { await endSession(); } catch (_) { clearSession(); }
+            showRecovery(false);
+            setMessage('Senha atualizada. Entre com seu e-mail e a nova senha.');
+            return true;
+        } catch (error) {
+            setMessage(error.code === 'weak_password' ? 'A senha não atende aos requisitos. Use ao menos 6 caracteres.'
+                : error.code === 'same_password' ? 'Escolha uma senha diferente da anterior.'
+                : 'Não foi possível atualizar a senha. O link pode ter expirado; solicite um novo e tente novamente.');
+            return false;
+        } finally { loginPending = false; button.disabled = false; }
+    };
+    window.cancelPasswordRecovery = async function () {
+        await window.portalReady;
+        if (loginPending) return;
+        recoveryReady = false;
+        try { await endSession(); } catch (_) { clearSession(); }
+        document.getElementById('new-password').value = '';
+        document.getElementById('confirm-password').value = '';
+        showRecovery(false); setMessage('');
     };
 
     window.logoutGeoportal = async function () {
