@@ -20,15 +20,14 @@ Não existe cadastro público na interface nova. Ao ativar o convite em produç�
 desativar Allow new users to sign up em Authentication → Sign In / Providers.
 Manter Confirm email ativo. SMTP personalizado já está configurado.
 
-## Publicação pendente
+## Autenticação da função
 
 O projeto usa JWT ES256, confirmado no JWKS público em 09/10/2026.
 Conforme a documentação de signing keys do Supabase, a verificação legada
 da plataforma Edge Functions é incompatível com ES256. A função implementa
 validação obrigatória própria via Auth getUser, além da autorização no banco.
-O ajuste verify_jwt=false precisa de aprovação antes da ativação: a revisão
-automática bloqueou a alteração. A versão implantada permanece verify_jwt=true.
-Não publicar a nova interface em produção até resolver essa compatibilidade.
+O ajuste verify_jwt=false foi autorizado pelo usuário e aplicado em 09/10/2026.
+A checagem de autenticação e do cargo é obrigatória dentro da função.
 
 Testes de convite usam clientes simulados, sem enviar e-mails ou criar contas reais.
 Testes de autenticação cobrem convite, recuperação, sessão e visibilidade de fazendas.
