@@ -2,7 +2,8 @@
  'use strict';
  const manifests=new Map();
  // O bitmap e sua máscara permanecem juntos durante a animação.
- // Transforme a última imagem pronta e só redesenhe ao encerrar o zoom.
+ // Transforme a última imagem pronta durante animações e gestos de pinça.
+ // Só redesenhe ao encerrar o zoom, mantendo o recorte na mesma referência.
  function bindCanvas(layer){
   const map=layer.map;L.DomUtil.addClass(layer.canvas,'leaflet-zoom-animated');
   const start=()=>{layer.zooming=true;};
@@ -12,9 +13,10 @@
    const offset=L.point(corner.x-center.x+size.x/2+pane.x,corner.y-center.y+size.y/2+pane.y);
    L.DomUtil.setTransform(layer.canvas,offset,map.getZoomScale(e.zoom,layer.renderView.zoom));
   };
+  const pinch=()=>{if(layer.zooming)animate({zoom:map.getZoom(),center:map.getCenter()});};
   const end=()=>{layer.zooming=false;layer.draw();};
-  map.on('zoomstart',start).on('zoomanim',animate).on('zoomend',end);
-  return ()=>map.off('zoomstart',start).off('zoomanim',animate).off('zoomend',end);
+  map.on('zoomstart',start).on('zoomanim',animate).on('zoom',pinch).on('zoomend',end);
+  return ()=>map.off('zoomstart',start).off('zoomanim',animate).off('zoom',pinch).off('zoomend',end);
  }
  function captureView(layer){layer.renderView={corner:layer.map.containerPointToLatLng([0,0]),zoom:layer.map.getZoom()};}
  function polygons(features){return features.flatMap(f=>f.geometry.type==='Polygon'?[f.geometry.coordinates]:f.geometry.coordinates);}
