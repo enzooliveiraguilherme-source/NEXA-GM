@@ -1,7 +1,11 @@
 # Acesso por convite
 
 O administrador abre Opções → Membros e acessos → Adicionar membro.
-Define e-mail, nome opcional, cargo e acesso a todas ou a fazendas específicas.
+Define e-mail, nome opcional, cargo e acesso a todas ou a glebas específicas.
+Ao marcar uma gleba, o formulário salva todas as fazendas cadastradas nela.
+O banco continua validando a permissão de cada fazenda individualmente.
+Acessos antigos parciais são indicados sem serem ampliados automaticamente;
+marcar explicitamente a gleba libera o grupo completo.
 Administrador implica acesso global. Projetista e visualizador podem ter escopo limitado.
 Todas as fazendas inclui as que forem adicionadas no futuro.
 
