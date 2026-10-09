@@ -7,6 +7,7 @@
     let redirecting = false;
     let loginPending = false;
     let recoveryReady = false;
+    let passwordPurpose = 'recovery';
     let allowedFarms = [];
     let preferencePrefix;
 
@@ -94,12 +95,13 @@
     }
 
     function showRecovery(active) {
-        for (const id of ['login-form', 'btn-show-register', 'btn-forgot-password']) {
+        for (const id of ['login-form', 'invite-only-help', 'btn-forgot-password']) {
             const element = document.getElementById(id); if (element) element.hidden = active;
         }
         document.getElementById('password-request-form').hidden = true;
         document.getElementById('new-password-form').hidden = !active;
-        document.getElementById('login-title').textContent = active ? 'Defina sua nova senha' : 'Bem-vindo ao Geoportal';
+        document.getElementById('login-title').textContent = active ? (passwordPurpose === 'invite' ? 'Crie sua senha de acesso' : 'Defina sua nova senha') : 'Bem-vindo ao Geoportal';
+        document.getElementById('btn-save-password').textContent = active && passwordPurpose === 'invite' ? 'Criar senha e concluir convite' : 'Salvar nova senha';
         document.getElementById('login-intro').textContent = active ? 'Use ao menos 6 caracteres e confirme a senha abaixo.' : 'Entre com seu acesso corporativo para continuar.';
     }
 
@@ -114,6 +116,11 @@
         if (role) role.textContent = `${window.portalFarm.gleba ? `Gleba ${window.portalFarm.gleba} · ` : ''}${window.portalFarm.name} · ${ { admin: 'Administrador', projetista: 'Projetista', visualizador: 'Visualizador' }[profile.role] }`;
         const switchButton = document.getElementById('btn-switch-farm');
         if (switchButton) switchButton.hidden = allowedFarms.length < 2;
+        const farmFilters = document.getElementById('farm-filter-section');
+        if (farmFilters) {
+            farmFilters.hidden = allowedFarms.length < 2;
+            farmFilters.classList.toggle('hidden', allowedFarms.length < 2);
+        }
         document.getElementById('admin-view-switch')?.classList.toggle('hidden', profile.role !== 'admin');
         document.documentElement.classList.remove('portal-loading');
         document.getElementById('auth-loading-overlay')?.remove();
@@ -187,8 +194,9 @@
 
         if (isLoginPage) {
             const recovery = new URLSearchParams(String(window.location.hash || '').replace(/^#/, ''));
-            const recoveryLink = recovery.get('type') === 'recovery';
-            const resumeRecovery = reload && window.sessionStorage.getItem(`${storageKey}.recovery`) === '1';
+            const recoveryLink = ['recovery', 'invite'].includes(recovery.get('type'));
+            const passwordMarker = window.sessionStorage.getItem(`${storageKey}.recovery`);
+            const resumeRecovery = reload && ['1', 'invite'].includes(passwordMarker);
             if (recoveryLink || resumeRecovery) {
                 if (window.location.hash) window.history.replaceState(null, '', window.location.pathname);
                 try {
@@ -200,7 +208,8 @@
                     }
                     const { data: { user }, error } = await window.supabaseClient.auth.getUser();
                     if (error || !user) throw Error('expired');
-                    window.sessionStorage.setItem(`${storageKey}.recovery`, '1');
+                    passwordPurpose = recoveryLink ? recovery.get('type') : passwordMarker === 'invite' ? 'invite' : 'recovery';
+                    window.sessionStorage.setItem(`${storageKey}.recovery`, passwordPurpose === 'invite' ? 'invite' : '1');
                     recoveryReady = true; showRecovery(true); setMessage('');
                 } catch (_) {
                     try { await endSession(); } catch (_) { clearSession(); }
@@ -283,7 +292,7 @@
                 setMessage(error?.code === 'email_not_confirmed'
                     ? 'Confirme seu e-mail antes de entrar. Consulte o administrador se precisar de ajuda.'
                     : error?.status === 429 ? 'Muitas tentativas. Aguarde alguns minutos e tente novamente.'
-                    : 'Não foi possível entrar. Confira seu e-mail e senha. Se ainda não tem uma conta, solicite seu cadastro abaixo.');
+                    : 'Não foi possível entrar. Confira seu e-mail e senha. Se ainda não tem acesso, solicite um convite ao administrador.');
                 return false;
             }
             if (!data.user.email_confirmed_at) {
@@ -309,7 +318,7 @@
             document.getElementById('login-credentials').hidden = true;
             document.getElementById('farm-choice').hidden = false;
             document.getElementById('btn-login').hidden = true;
-            document.getElementById('btn-show-register').hidden = true;
+            document.getElementById('invite-only-help').hidden = true;
             document.getElementById('btn-forgot-password').hidden = true;
             setMessage('Escolha uma fazenda para este acesso.');
             return true;
@@ -335,32 +344,9 @@
         finally { loginPending = false; }
     };
 
-    window.registerGeoportal = async function (name, email, password, farm) {
-        await window.portalReady;
-        if (recoveryReady) return false;
-        if (loginPending) return false;
-        if (String(password || '').length < 6) {
-            setMessage('Use uma senha com ao menos 6 caracteres. Pode ser somente números.'); return false;
-        }
-        if (!String(name).trim() || !farm) { setMessage('Informe seu nome e uma fazenda.'); return false; }
-        loginPending = true;
-        const button = document.getElementById('btn-register');
-        button.disabled = true;
-        try {
-            const { error } = await window.supabaseClient.auth.signUp({ email: String(email).trim(), password,
-                options: { emailRedirectTo: new URL('./index.html', window.location.href).href,
-                    data: { full_name: String(name).trim(), requested_farm: farm } } });
-            if (error) throw error;
-            await endSession();
-            document.getElementById('register-password').value = '';
-            setMessage('Se o cadastro for elegível, você receberá um link para confirmar o e-mail. Após a confirmação, aguarde a liberação da fazenda pelo administrador.');
-            return true;
-        } catch (error) {
-            setMessage(error.status === 429 ? 'Aguarde alguns minutos antes de tentar novamente.'
-                : error.code === 'weak_password' ? 'Use uma senha com ao menos 6 caracteres.'
-                : 'Não foi possível solicitar o cadastro. Confira os dados ou consulte o administrador.');
-            return false;
-        } finally { loginPending = false; button.disabled = false; }
+    window.registerGeoportal = async function () {
+        setMessage('O acesso é por convite. Solicite ao administrador a liberação do seu e-mail e das fazendas.');
+        return false;
     };
 
     window.requestPasswordReset = async function (email) {
@@ -401,7 +387,7 @@
             recoveryReady = false;
             try { await endSession(); } catch (_) { clearSession(); }
             showRecovery(false);
-            setMessage('Senha atualizada. Entre com seu e-mail e a nova senha.');
+            setMessage(passwordPurpose === 'invite' ? 'Convite concluído. Entre com seu e-mail e a senha que você criou.' : 'Senha atualizada. Entre com seu e-mail e a nova senha.');
             return true;
         } catch (error) {
             setMessage(error.code === 'weak_password' ? 'A senha não atende aos requisitos. Use ao menos 6 caracteres.'

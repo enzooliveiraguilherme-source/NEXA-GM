@@ -141,10 +141,10 @@ test('senha incorreta e e-mail não confirmado não liberam o mapa', async () =>
     }
 });
 
-test('tentativa de conta inexistente oferece cadastro sem revelar se o email existe', async () => {
+test('tentativa de conta inexistente orienta convite sem revelar se o email existe', async () => {
     const h = run({ page: 'login', loginError: { code: 'invalid_credentials' } });
     await h.window.loginGeoportal('missing@example.test', 'Fixture-password!');
-    assert.match(h.document.getElementById('login-message').textContent, /solicite seu cadastro/);
+    assert.match(h.document.getElementById('login-message').textContent, /solicite um convite/);
     assert.equal(h.redirects.length, 0);
 });
 
@@ -223,15 +223,11 @@ test('login aceita senha antiga somente numérica e consulta o banco sem impor c
     assert.match(h.document.getElementById('login-message').textContent, /Informe sua senha/);
 });
 
-test('cadastro aceita seis números, pede confirmação e não concede acesso automaticamente', async () => {
-    const h = run({ page: 'login' }); await h.window.portalReady;
-    assert.equal(await h.window.registerGeoportal('User', user.email, '123456', 'FE'), true);
-    assert.equal(h.calls.signUp[0].password, '123456');
-    assert.equal(h.calls.signUp[0].options.data.requested_farm, 'FE');
-    assert.equal(h.redirects.length, 0);
-    assert.match(h.document.getElementById('login-message').textContent, /confirmar o e-mail.*liberação/);
-    assert.equal(await h.window.registerGeoportal('User', user.email, '12345', 'FE'), false);
-    assert.equal(h.calls.signUp.length, 1);
+test('cadastro público não cria conta e orienta convite do administrador', async () => {
+ const h=run({page:'login'}); await h.window.portalReady;
+ assert.equal(await h.window.registerGeoportal('User',user.email,'123456','FE'),false);
+ assert.equal(h.calls.signUp.length,0);
+ assert.match(h.document.getElementById('login-message').textContent,/convite/);
 });
 
 test('abrir por endereço ou restaurar aba exige login; encaminhamento após login funciona uma vez', async () => {
@@ -344,4 +340,21 @@ test('F5 retoma recuperação validada e falha ao salvar não apresenta sucesso'
     assert.equal(await again.window.saveRecoveredPassword('123456','123456'),false);
     assert.match(again.elements.get('login-message').textContent,/diferente da anterior/);
     assert.equal(again.elements.get('btn-save-password').disabled,false);
+});
+test('convite abre criação de senha sem entrar no portal e mantém fluxo após F5', async () => {
+ const h=run({page:'login',hash:'#type=invite&access_token=invite-token&refresh_token=invite-refresh'}); await h.window.portalReady;
+ assert.equal(h.document.getElementById('login-title').textContent,'Crie sua senha de acesso');
+ assert.equal(h.calls.profile,0);assert.equal(h.redirects.length,0);assert.equal(h.window.location.hash,'');
+ const reload=run({page:'login',sessionMap:h.sessionMap}); await reload.window.portalReady;
+ assert.equal(reload.document.getElementById('login-title').textContent,'Crie sua senha de acesso');
+ assert.equal(await reload.window.saveRecoveredPassword('123456','123456'),true);
+ assert.match(reload.document.getElementById('login-message').textContent,/Convite concluído/);
+ assert.equal(reload.redirects.length,0);
+});
+test('seleção e troca de fazenda só aparecem com mais de uma fazenda liberada', async () => {
+ for (const farms of [[{code:'FE',name:'Esperança'}],[{code:'FE',name:'Esperança'},{code:'FS',name:'Outra'}]]) {
+  const h=run({initialSession:session,farms}); assert.equal(await h.window.portalReady,true);
+  assert.equal(h.document.getElementById('btn-switch-farm').hidden,farms.length<2);
+  assert.equal(h.document.getElementById('farm-filter-section').hidden,farms.length<2);
+ }
 });

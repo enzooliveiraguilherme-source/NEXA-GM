@@ -16,7 +16,7 @@
     
     <!-- Custom CSS -->
     <link rel="stylesheet" href="style.css?v=3.5">
-    <link rel="stylesheet" href="brand.css?v=13">
+    <link rel="stylesheet" href="brand.css?v=14">
 </head>
 <body data-page="portal">
     <div id="auth-loading-overlay" class="loading-overlay"><div class="spinner"></div><p>Validando seu acesso…</p></div>
@@ -113,7 +113,7 @@
                 </div>
 
                 <!-- SEÇÃO 2: FILTRO DE FAZENDAS -->
-                <div class="sidebar-section section-fazendas">
+                <div class="sidebar-section section-fazendas" id="farm-filter-section">
                     <h3 class="section-title"><i class="fa-solid fa-tractor"></i> Glebas e fazendas</h3>
                     <label class="sidebar-filter-label" for="gleba-filter">Gleba</label>
                     <div class="select-wrapper">
@@ -970,7 +970,7 @@
             <button id="btn-cancel-farm" type="button">Cancelar</button>
         </form>
     </dialog>
-    <script src="auth.js?v=7"></script>
+    <script src="auth.js?v=8"></script>
 
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
@@ -985,7 +985,7 @@
     <script src="js/operations/supabase-repository.js?v=1"></script>
     <script src="js/operations/cloud-store.js?v=2"></script>
     <script src="js/operations/legacy-import.js?v=3"></script>
-    <script src="js/access-admin.js?v=1"></script>
+    <script src="js/access-admin.js?v=2"></script>
     <script src="app.js?v=3.9"></script>
     <script src="js/mobile-layout.js?v=2"></script>
 </body>

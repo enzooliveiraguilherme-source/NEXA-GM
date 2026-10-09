@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Entrar | Geoportal Grupo Michels</title>
-    <link rel="stylesheet" href="brand.css?v=13">
+    <link rel="stylesheet" href="brand.css?v=14">
     <link rel="icon" type="image/jpeg" href="apoio/GP Michels.jpg">
 </head>
 <body data-page="login">
@@ -48,17 +48,7 @@
                     <button type="submit">Acessar fazenda</button>
                     <button type="button" id="btn-login-reset">Entrar com outra conta</button>
                 </form>
-                <button type="button" class="login-secondary" id="btn-show-register">Ainda não tenho acesso — solicitar cadastro</button>
-                <form class="login-form" id="register-form" hidden>
-                    <label>Nome completo<input id="register-name" autocomplete="name" maxlength="100" required></label>
-                    <label>E-mail<input id="register-email" type="email" autocomplete="email" required></label>
-                    <label>Senha<input id="register-password" type="password" autocomplete="new-password" minlength="6" required></label>
-                    <small>Use ao menos 6 caracteres. Pode ser somente números.</small>
-                    <label>Qual fazenda você faz parte?<select id="register-farm" required><option value="">Selecione uma fazenda</option></select></label>
-                    <small>Este pedido será analisado pelo administrador. Escolher uma fazenda não libera o acesso.</small>
-                    <button type="submit" id="btn-register">Solicitar cadastro e confirmar e-mail</button>
-                    <button type="button" id="btn-back-login">Voltar para entrar</button>
-                </form>
+                <p class="invite-only-help" id="invite-only-help">Ainda não tem acesso? Solicite um convite ao administrador.</p>
                 <p class="login-session-help">Entre com sua conta cadastrada. Ao fechar esta aba, será necessário fazer login novamente.</p>
                 <div class="config-notice" id="config-notice" hidden>O acesso ainda está sendo configurado. Conecte este projeto ao Supabase antes de publicar.</div>
             </div>
@@ -66,7 +56,7 @@
     </main>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="config.js"></script>
-    <script src="auth.js?v=7"></script>
+    <script src="auth.js?v=8"></script>
     <script src="js/password-visibility.js?v=1"></script>
     <script>
         document.querySelectorAll('.login-form').forEach(form => {
@@ -76,11 +66,7 @@
                 if (event.target !== field) return;
                 const messages = {
                     email: 'Informe seu e-mail corporativo para entrar.',
-                    password: 'Informe sua senha para entrar. Se ainda não tem uma conta, solicite seu cadastro abaixo.',
-                    'register-name': 'Informe seu nome completo.',
-                    'register-email': 'Informe seu e-mail para solicitar o cadastro.',
-                    'register-password': 'Informe uma senha com ao menos 6 caracteres.',
-                    'register-farm': 'Selecione a fazenda para solicitar o cadastro.',
+                    password: 'Informe sua senha para entrar. Se ainda não tem uma conta, solicite um convite ao administrador.',
                     'login-farm': 'Selecione uma fazenda para continuar.',
                     'reset-email': 'Informe seu e-mail cadastrado.',
                     'new-password': 'Informe uma nova senha com ao menos 6 caracteres.',
@@ -103,7 +89,7 @@
         document.getElementById('btn-login-reset').addEventListener('click', () => location.reload());
         document.getElementById('btn-forgot-password').addEventListener('click', () => {
             document.getElementById('login-form').hidden = true;
-            document.getElementById('btn-show-register').hidden = true;
+            document.getElementById('invite-only-help').hidden = true;
             document.getElementById('btn-forgot-password').hidden = true;
             document.getElementById('password-request-form').hidden = false;
             document.getElementById('reset-email').value = document.getElementById('email').value;
@@ -120,36 +106,6 @@
         });
         document.getElementById('btn-back-from-reset').addEventListener('click', () => window.cancelPasswordRecovery());
         document.getElementById('btn-cancel-password-reset').addEventListener('click', () => window.cancelPasswordRecovery());
-        document.getElementById('btn-show-register').addEventListener('click', async () => {
-            document.getElementById('login-message').textContent = 'Preparando o cadastro…';
-            await window.portalReady;
-            if (!window.supabaseClient) {
-                document.getElementById('login-message').textContent = 'O serviço de acesso está indisponível. Tente novamente.';
-                return;
-            }
-            try {
-            const { data, error } = await window.supabaseClient.from('farms').select('code,name,gleba').order('gleba');
-            if (error) { document.getElementById('login-message').textContent = 'O cadastro ainda não está disponível. Consulte o administrador.'; return; }
-            const select = document.getElementById('register-farm');
-            window.populateFarmChoices(select, data);
-            select.insertBefore(new Option('Selecione uma fazenda', ''), select.firstChild);
-            select.value = '';
-            document.getElementById('login-form').hidden = true;
-            document.getElementById('btn-show-register').hidden = true;
-            document.getElementById('btn-forgot-password').hidden = true;
-            document.getElementById('register-form').hidden = false;
-            document.getElementById('login-message').textContent = '';
-            } catch (_) {
-                document.getElementById('login-message').textContent = 'Não foi possível preparar o cadastro. Confira sua conexão e tente novamente.';
-            }
-        });
-        document.getElementById('btn-back-login').addEventListener('click', () => location.reload());
-        document.getElementById('register-form').addEventListener('submit', async event => {
-            event.preventDefault();
-            await window.registerGeoportal(document.getElementById('register-name').value,
-                document.getElementById('register-email').value, document.getElementById('register-password').value,
-                document.getElementById('register-farm').value);
-        });
     </script>
 </body>
 </html>

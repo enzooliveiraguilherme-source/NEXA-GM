@@ -316,3 +316,49 @@ body[data-page="login"] { margin: 0; min-height: 100vh; background: #f5f7fa; col
     .harvest-map-legend select, .harvest-map-legend input[type="text"], .harvest-map-legend input[type="number"] { font-size: 16px; min-height: 44px; }
     .harvest-map-legend button { min-height: 44px; }
 }
+.invite-only-help { color:#607086; font-size:13px; text-align:center; line-height:1.6; margin:18px 0 0; }
+.members-dialog { width:min(1180px,94vw); padding:28px; background:#f6f8fb; }
+.members-header { display:flex; justify-content:space-between; gap:20px; align-items:flex-start; }
+.members-header h2 { margin:6px 0 10px; font-size:30px; color:#132d26; }
+.members-header p,.member-form>p { color:#64748b; line-height:1.5; }
+.members-eyebrow { font-size:11px; font-weight:700; letter-spacing:.12em; color:#64748b; }
+.members-dialog button { border:1px solid #dce5e2; padding:10px 16px; border-radius:8px; cursor:pointer; background:white; color:#164d3e; min-height:44px; }
+.members-dialog button:disabled { opacity:.55; cursor:wait; }
+.members-toolbar { display:flex; gap:16px; align-items:flex-end; justify-content:space-between; margin:20px 0; }
+.members-toolbar label { display:grid; gap:6px; font-size:12px; color:#64748b; }
+.members-toolbar input { width:300px; max-width:100%; padding:12px; border:1px solid #dce5e2; border-radius:8px; }
+.members-dialog #members-add,.member-actions button[type="submit"] { background:#087b5a; color:white; border-color:#087b5a; font-weight:600; }
+.members-status { line-height:1.5; color:#345d4f; }
+.members-table-wrap { overflow:auto; background:white; border:1px solid #e6ebe9; border-radius:12px; }
+.members-table { width:100%; border-collapse:collapse; font-size:13px; text-align:left; }
+.members-table th { background:#eef3f1; color:#496158; padding:14px; white-space:nowrap; }
+.members-table td { padding:18px 14px; border-bottom:1px solid #eff2f1; max-width:260px; overflow-wrap:anywhere; }
+.members-table tr:nth-child(even) { background:#f9fbfa; }
+.member-badge { display:inline-block; padding:6px 9px; border-radius:5px; background:#fff2d5; color:#79551a; font-size:12px; }
+.member-badge.is-active { background:#e0f2e9; color:#116443; }
+.member-editor { background:white; border:1px solid #dce5e2; border-radius:12px; padding:22px; margin-bottom:22px; }
+.member-form { display:grid; gap:14px; }
+.member-form h3,.member-form p { margin:0; }
+.member-form>label { display:grid; gap:7px; font-weight:600; font-size:13px; }
+.member-form input:not([type="checkbox"]),.member-form select { padding:12px; min-width:0; width:100%; box-sizing:border-box; border:1px solid #d2ded9; border-radius:8px; font:inherit; }
+.member-form .member-all-farms,.member-farm-option { display:flex; flex-direction:row-reverse; justify-content:flex-end; align-items:center; gap:10px; }
+.member-form input[type="checkbox"] { width:18px; height:18px; accent-color:#087b5a; flex-shrink:0; }
+.member-form fieldset { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:12px; padding:16px; border:1px solid #dce5e2; border-radius:8px; }
+.member-form fieldset:disabled { opacity:.5; }
+.member-form legend { color:#496158; padding:0 6px; font-size:13px; }
+.member-farm-option { font-size:13px; }
+.member-actions { display:flex; gap:10px; }
+@media(max-width:680px) {
+ .members-dialog { padding:16px; width:calc(100vw - 24px); box-sizing:border-box; max-height:92dvh; }
+ .members-header h2 { font-size:25px; }
+ .members-toolbar { align-items:stretch; flex-direction:column; }
+ .members-toolbar input { width:100%; box-sizing:border-box; font-size:16px; }
+ .members-table thead { display:none; }
+ .members-table,.members-table tbody,.members-table tr,.members-table td { display:block; }
+ .members-table tr { padding:12px; border-bottom:1px solid #dce5e2; }
+ .members-table td { padding:7px 0; max-width:none; border:none; }
+ .members-table td::before { content:attr(data-label) ": "; font-weight:600; color:#496158; }
+ .member-editor { padding:14px; }
+ .member-form fieldset { grid-template-columns:1fr; }
+ .member-form input:not([type="checkbox"]),.member-form select { font-size:16px; }
+}
