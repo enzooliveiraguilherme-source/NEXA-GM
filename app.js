@@ -505,13 +505,18 @@ function getActiveMapData() {
 }
 
 async function loadHarvestTest() {
-    if (!window.portalFarms.some(farm => farm.code === 'FE')) return;
     const status = document.getElementById('harvest-import-status');
     try {
         state.harvestDataset = await HarvestStore.load();
         state.harvestSummary = state.harvestDataset.index;
-        state.harvestData = { type: 'FeatureCollection', features: state.geojsonData.features.filter(feature => feature.properties.Fazenda === 'FE').map(feature => {
-            const record = state.harvestSummary.records.find(r => r.campo === feature.properties.Campo);
+        const farms=new Set(state.harvestDataset.datasets.map(dataset=>dataset.farm));
+        const features=new Map(state.geojsonData.features.filter(feature=>farms.has(feature.properties.Fazenda))
+            .map(feature=>[HarvestStore.fieldKey(feature.properties.Fazenda,feature.properties.Campo),feature]));
+        for(const dataset of state.harvestDataset.datasets)for(const feature of dataset.index.features||[]) {
+            features.set(HarvestStore.fieldKey(feature.properties.Fazenda,feature.properties.Campo),feature);
+        }
+        state.harvestData = { type: 'FeatureCollection', features: [...features.values()].map(feature => {
+            const record = state.harvestSummary.records.find(r => r.fazenda===feature.properties.Fazenda && r.campo === feature.properties.Campo);
             return { ...feature, properties: { ...feature.properties, produtividade: record?.mean ?? null, unidade_produtividade: 'sc/ha' } };
         }) };
         HarvestView.init(state);
@@ -751,7 +756,7 @@ function updateOperationUI() {
 
 function getFeatureStyle(feature) {
     if (state.currentTab === 'colheita') {
-        const selected = state.harvestSelected === feature.properties.Campo;
+        const selected = state.harvestSelected === HarvestView.fieldKey(feature);
         return { color:'#000000', fillColor:'transparent', fillOpacity:0, weight:selected ? 1.3 : 0.8 };
     }
     if (!isCalcarioMode()) {
