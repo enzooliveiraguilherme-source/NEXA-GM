@@ -6,8 +6,7 @@
     const recordKey = record => JSON.stringify([record.fazenda,record.campo]);
     const format = value => value == null ? 'Dados não importados' : Number(value).toLocaleString('pt-BR', {maximumFractionDigits:1});
     const text = (id,value) => { const el=document.getElementById(id); if(el) el.textContent=value; };
-    const farmLabel = farm => !farm || farm === 'ALL' ? 'Todas as fazendas'
-        : root.portalFarms?.find(item=>item.code===farm)?.name || (farm==='FE2'?'Esperança 2 (FE2)':`Fazenda ${farm}`);
+    const farmLabel = farm => !farm || farm === 'ALL' ? 'Todas as fazendas' : farm;
     const scopeLabel = state => farmLabel(state.currentGleba);
     function refreshFilters(state) {
         const data=state.harvestData?.features || [];
@@ -29,12 +28,11 @@
         }
         const fields=[...new Map(data.filter(root.featureMatchesFilters).map(f=>[fieldKey(f),f])).values()]
             .sort((a,b)=>a.properties.Campo.localeCompare(b.properties.Campo,'pt-BR',{numeric:true}));
-        const farms=new Set(fields.map(f=>f.properties.Fazenda).filter(Boolean));
         const selectEl=document.getElementById('harvest-field-select');
         if(selectEl) {
             selectEl.innerHTML='<option value="">Todos os talhões</option>';
             fields.forEach(feature=>{const opt=document.createElement('option');opt.value=fieldKey(feature);
-                opt.textContent=farms.size>1?`${feature.properties.Campo} · ${farmLabel(feature.properties.Fazenda)}`:feature.properties.Campo;
+                opt.textContent=feature.properties.Campo;
                 selectEl.appendChild(opt);});
             selectEl.value=fields.some(f=>fieldKey(f)===state.harvestSelected)?state.harvestSelected:'';
             selectEl.onchange=()=>{const feature=fields.find(f=>fieldKey(f)===selectEl.value);if(feature)select(state,feature);else showAll(state);};

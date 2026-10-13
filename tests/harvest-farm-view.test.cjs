@@ -43,11 +43,13 @@ test('campo Fazenda consulta a gleba e filtra talhões, contagem e produtividade
     const farms=s.elements.get('harvest-gleba-select'),fields=s.elements.get('harvest-field-select');
     assert.equal(s.elements.get('harvest-gleba-filter').classList.hidden,false);
     assert.deepEqual(farms.children.map(o=>o.value),['FE','RM']);
-    assert.deepEqual(fields.children.map(o=>o.textContent),['T1 · Esperança 2 (FE2)','T1 · Fazenda RM']);
+    assert.deepEqual(fields.children.map(o=>o.textContent),['T1','T1']);
+    assert.notEqual(fields.children[0].value,fields.children[1].value);
+    assert.deepEqual(farms.children.map(o=>o.textContent),['FE','RM']);
     farms.value='RM';farms.onchange();await new Promise(setImmediate);
     assert.deepEqual(fields.children.map(o=>o.value),[s.api.fieldKey(s.features[1])]);
     assert.equal(s.elements.get('harvest-import-status').textContent,'1 talhão · Milho 2026');
-    assert.equal(s.elements.get('harvest-farm-title').textContent,'Fazenda RM');
+    assert.equal(s.elements.get('harvest-farm-title').textContent,'RM');
     assert.deepEqual(s.pyramids.map(p=>p.farm),['RM']);
     await fields.onchange();assert.equal(s.state.harvestSelected,null);
     farms.value='ALL';farms.onchange();await new Promise(setImmediate);
@@ -82,7 +84,7 @@ test('selecionar FE inclui FE e FE2 juntas e voltar de um talhão mantém a gleb
     assert.equal(s.state.currentGleba,'FE');assert.equal(s.state.currentFazenda,'ALL');
     assert.deepEqual(s.pyramids.map(p=>p.farm),['FE2','FE']);
     assert.equal(s.elements.get('harvest-field-select').children.length,2);
-    assert.equal(s.elements.get('harvest-farm-title').textContent,'Fazenda FE');
+    assert.equal(s.elements.get('harvest-farm-title').textContent,'FE');
     await s.api.select(s.state,feature);await s.elements.get('harvest-all').onclick();
     assert.equal(s.state.currentGleba,'FE');
     assert.equal(s.pyramids.some(p=>p.farm==='RM'),false);
