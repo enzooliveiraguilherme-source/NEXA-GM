@@ -1,6 +1,6 @@
 (function(root) {
     'use strict';
-    const colors={concluido:'#06b200',em_andamento:'#ff9900',nao_iniciado:'#e32323'};
+    const colors={concluido:'#22a447',em_andamento:'#e8a126',nao_iniciado:'#de5252'};
     let planning;
     const number=value=>Number(value).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
     const area=value=>`${number(value)} ha`;
@@ -96,35 +96,33 @@
         return missing;
     }
     async function render(data) {
-        const canvas=document.createElement('canvas');canvas.width=1200;canvas.height=1500;
+        const canvas=document.createElement('canvas');canvas.width=1200;canvas.height=1360;
         const ctx=canvas.getContext('2d');
-        ctx.fillStyle='#f3f7fa';ctx.fillRect(0,0,1200,1500);
-        box(ctx,0,0,1200,190,'#102c4d',0);box(ctx,0,185,1200,6,'#eb7825',0);
-        label(ctx,'GRUPO MICHELS  /  GESTÃO AGRÍCOLA',48,46,19,'#bdd0e3',600);
-        label(ctx,`RESUMO DE ${data.operationName.toUpperCase()}`,48,94,30,'#bdd0e3',600);
-        label(ctx,data.scopeName,48,153,44,'white',700,910);
-        try{const logo=await image('apoio/GP Michels.jpg');box(ctx,988,28,164,104,'white',12);
-            const ratio=Math.min(140/logo.naturalWidth,80/logo.naturalHeight),w=logo.naturalWidth*ratio,h=logo.naturalHeight*ratio;ctx.drawImage(logo,1000+(140-w)/2,40+(80-h)/2,w,h);
+        ctx.fillStyle='#f3f7fa';ctx.fillRect(0,0,1200,1360);
+        box(ctx,0,0,1200,170,'#102c4d',0);box(ctx,0,166,1200,4,'#eb7825',0);
+        ctx.textAlign='center';
+        label(ctx,`RESUMO DE ${data.operationName.toUpperCase()}`,600,65,30,'#bdd0e3',600,650);
+        label(ctx,data.scopeName,600,122,42,'white',700,650);
+        ctx.textAlign='left';
+        try{const logo=await image('apoio/GP Michels.jpg');box(ctx,38,28,230,132,'white',12);
+            // Recorta apenas a margem branca da marca existente para ampliar o símbolo.
+            ctx.drawImage(logo,logo.naturalWidth*.07,logo.naturalHeight*.27,logo.naturalWidth*.89,logo.naturalHeight*.46,52,42,202,104);
         }catch{/* O resumo continua disponível se a marca não carregar. */}
-        label(ctx,`${data.culture}  ·  Ano / Safra ${data.year}`,48,234,27,'#102c4d',700,1100);
-        const context=data.operation==='plantio'?'Andamento do plantio':`Produto: ${data.product}`;
-        label(ctx,context,48,271,21,'#5b6e7e',500,790);
-        ctx.textAlign='right';label(ctx,`Atualizado em ${data.date}`,1152,271,20,'#5b6e7e');ctx.textAlign='left';
-        const cards=[['ÁREA PLANEJADA',area(data.areaPlanejada),'Área total programada','#1675ae'],
-            [data.operation==='plantio'?'ÁREA PLANTADA':'ÁREA APLICADA',area(data.areaRealizada),'Realizado até o momento','#087f60'],
-            ['PROGRESSO',`${data.progress.toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})}%`,`${area(data.areaPlanejada-data.areaRealizada)} restantes`,'#102c4d']];
-        cards.forEach((card,i)=>{const x=48+i*374,accent=i===2;box(ctx,x,305,356,166,accent?'#102c4d':'white');if(!accent)box(ctx,x,305,356,6,card[3],0);
-            label(ctx,card[0],x+22,345,20,accent?'#bdd0e3':card[3],700);label(ctx,card[1],x+22,401,accent?46:40,accent?'white':'#102c4d',700,312);label(ctx,card[2],x+22,439,18,accent?'#bdd0e3':'#64748b');});
-        box(ctx,48,488,1104,12,'#dce5eb',6);if(data.progress>0)box(ctx,48,488,1104*data.progress/100,12,'#087f60',6);
-        label(ctx,'MAPA DO ANDAMENTO',48,542,21,'#102c4d',700);
-        label(ctx,`${data.fields.length} talhões planejados  ·  ${data.farms.join(' / ')}`,48,576,19,'#64748b',500,1100);
-        const missing=await drawMap(ctx,data,{x:48,y:600,w:1104,h:690});
+        label(ctx,`${data.culture}  ·  Ano / Safra ${data.year}`,48,214,27,'#102c4d',700,740);
+        if(data.operation==='adubacao')label(ctx,`Produto: ${data.product}`,48,242,19,'#5b6e7e',500,1100);
+        ctx.textAlign='right';label(ctx,`Atualizado em ${data.date}`,1152,214,20,'#5b6e7e');ctx.textAlign='left';
+        const cards=[['ÁREA PLANEJADA',area(data.areaPlanejada),'Área total programada','#347c99'],
+            [data.operation==='plantio'?'ÁREA PLANTADA':'ÁREA APLICADA',area(data.areaRealizada),'Realizado até o momento','#2d8a68'],
+            ['PROGRESSO',`${data.progress.toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})}%`,`${area(data.areaPlanejada-data.areaRealizada)} restantes`,'#b68135']];
+        cards.forEach((card,i)=>{const x=48+i*374;box(ctx,x,260,356,164,'white');box(ctx,x,260,356,6,card[3],0);
+            label(ctx,card[0],x+22,300,20,card[3],700);label(ctx,card[1],x+22,356,40,'#102c4d',700,312);label(ctx,card[2],x+22,394,18,'#64748b');});
+        box(ctx,48,445,1104,12,'#dce5eb',6);if(data.progress>0)box(ctx,48,445,1104*data.progress/100,12,'#2d8a68',6);
+        const missing=await drawMap(ctx,data,{x:48,y:483,w:1104,h:690});
         const legend=[['concluido','Finalizado',data.areaConcluido,data.countConcluido],['em_andamento','Em andamento',data.areaAndamentoTotal,data.countAndamento],['nao_iniciado','Não iniciado',data.areaNaoIniciado,data.countNaoIniciado]];
-        legend.forEach(([status,title,ha,count],i)=>{const x=48+i*374;box(ctx,x,1315,356,100,'white',14);box(ctx,x+20,1337,20,20,colors[status],4);
-            label(ctx,title,x+52,1355,21,'#102c4d',600);label(ctx,`${area(ha)}  ·  ${count} talhões`,x+20,1385,18,'#64748b');
-            if(status==='em_andamento')label(ctx,`${area(data.areaAndamentoRealizada)} realizados`,x+20,1407,15,'#64748b');});
-        label(ctx,'Realizado = áreas finalizadas + hectares executados nos talhões em andamento.',48,1450,17,'#64748b',500,1100);
-        label(ctx,data.satellite?(missing?'Fundo de satélite parcialmente indisponível · talhões e totais preservados.':'Imagem de fundo: Esri World Imagery · fontes e créditos: mapa do Geoportal.'):'Fundo branco · talhões e totais conforme os filtros selecionados.',48,1479,15,'#64748b',500,1100);
+        legend.forEach(([status,title,ha,count],i)=>{const x=48+i*374;box(ctx,x,1197,356,100,'white',14);box(ctx,x+20,1219,20,20,colors[status],4);
+            label(ctx,title,x+52,1237,21,'#102c4d',600);label(ctx,`${area(ha)}  ·  ${count} talhões`,x+20,1267,18,'#64748b');
+            if(status==='em_andamento')label(ctx,`${area(data.areaAndamentoRealizada)} realizados`,x+20,1289,15,'#64748b');});
+        label(ctx,'Realizado = áreas finalizadas + hectares executados nos talhões em andamento.',48,1331,17,'#64748b',500,1100);
         const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
         if(!blob)throw Error('Não foi possível gerar a imagem.');
         return {blob,canvas,missing};
