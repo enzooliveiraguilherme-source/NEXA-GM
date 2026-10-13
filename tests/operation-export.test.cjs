@@ -20,7 +20,7 @@ test('arquivo recebe operação, fazenda, cultura, ano e data da exportação',(
 });
 test('snapshot de Adubação respeita os filtros e usa nome, cultura, ano e produto selecionados',()=>{
     const a=field('FE','T1',100),b=field('FE2','T1',200),other=field('RM','T1',900),calls=[];
-    const api=setup({portalFarms:[{code:'FE',name:'Fazenda Esperança'}],featureMatchesFilters:f=>f!==other,
+    const api=setup({portalAccessRole:'projetista',portalFarms:[{code:'FE',name:'Fazenda Esperança'}],featureMatchesFilters:f=>f!==other,
         getTalhaoRecord(...args){calls.push(args);return {status:'concluido'};}});
     api.init({}, {isTalhaoPlanned:()=>true});
     const data=api.snapshot({currentTab:'adubacao',currentFazenda:'ALL',currentGleba:'FE',currentAno:'2026',currentCultura:'Soja',currentProduto:'Calcário',geojsonData:{features:[a,b,other]}});
@@ -28,4 +28,10 @@ test('snapshot de Adubação respeita os filtros e usa nome, cultura, ano e prod
     assert.equal(data.product,'Calcário');assert.equal(data.year,'2026');assert.equal(data.culture,'Soja');
     assert.deepEqual(Array.from(data.farms),['FE','FE2']);assert.equal(calls[0][4],'Calcário');
     assert.throws(()=>api.snapshot({currentTab:'colheita'}),/Plantio e na Adubação/);
+});
+test('visualizadores, administradores e acessos sem perfil não podem gerar o resumo',()=>{
+    for(const portalAccessRole of ['visualizador','admin',undefined]){
+        const api=setup({portalAccessRole});
+        assert.throws(()=>api.snapshot({currentTab:'plantio'}),/Somente Projetistas/);
+    }
 });

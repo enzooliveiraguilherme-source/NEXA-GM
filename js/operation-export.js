@@ -1,7 +1,8 @@
 (function(root) {
     'use strict';
-    const colors={concluido:'#00b83f',em_andamento:'#ffa000',nao_iniciado:'#ed3036'};
+    const colors={concluido:'#06b200',em_andamento:'#ffa000',nao_iniciado:'#ed3036'};
     let planning;
+    const canExport=()=>root.portalAccessRole==='projetista';
     const number=value=>Number(value).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
     const area=value=>`${number(value)} ha`;
     function summarize(features,isPlanned,getRecord) {
@@ -24,6 +25,7 @@
         return totals;
     }
     function snapshot(state) {
+        if(!canExport())throw Error('Somente Projetistas podem exportar o andamento.');
         if(!['plantio','adubacao'].includes(state.currentTab))throw Error('A exportação está disponível no Plantio e na Adubação.');
         if(!state.geojsonData)throw Error('Aguarde o carregamento dos talhões.');
         const features=state.geojsonData.features.filter(root.featureMatchesFilters);
@@ -48,7 +50,7 @@
     }
     function box(ctx,x,y,w,h,color,radius=20){ctx.fillStyle=color;ctx.beginPath();ctx.roundRect(x,y,w,h,radius);ctx.fill();}
     function label(ctx,value,x,y,size=24,color='#102c4d',weight=500,maxWidth){
-        ctx.fillStyle=color;ctx.font=`${weight} ${size}px Arial, sans-serif`;
+        ctx.fillStyle=color;ctx.font=`${weight} ${size}px "Century Gothic", CenturyGothic, "Apple Gothic", Arial, sans-serif`;
         let text=String(value);if(maxWidth&&ctx.measureText(text).width>maxWidth){while(text.length&&ctx.measureText(text+'…').width>maxWidth)text=text.slice(0,-1);text+='…';}
         ctx.fillText(text,x,y);
     }
@@ -96,24 +98,24 @@
         return missing;
     }
     async function render(data) {
+        if(document.fonts)await document.fonts.ready;
         const canvas=document.createElement('canvas');canvas.width=1200;canvas.height=1360;
         const ctx=canvas.getContext('2d');
         ctx.fillStyle='#f3f7fa';ctx.fillRect(0,0,1200,1360);
         box(ctx,0,0,1200,170,'white',0);box(ctx,0,166,1200,4,'#eb7825',0);
         ctx.textAlign='center';
-        label(ctx,`RESUMO DE ${data.operationName.toUpperCase()}`,600,65,30,'#4c6781',600,650);
+        label(ctx,`Resumo de ${data.operationName.toLowerCase()} - ${data.culture}`,600,65,30,'#4c6781',600,650);
         label(ctx,data.scopeName,600,122,42,'#102c4d',700,650);
         ctx.textAlign='left';
         try{const logo=await image('apoio/GP Michels.jpg');box(ctx,38,28,230,132,'white',12);
             // Recorta apenas a margem branca da marca existente para ampliar o símbolo.
             ctx.drawImage(logo,logo.naturalWidth*.07,logo.naturalHeight*.27,logo.naturalWidth*.89,logo.naturalHeight*.46,52,42,202,104);
         }catch{/* O resumo continua disponível se a marca não carregar. */}
-        label(ctx,data.culture,48,214,27,'#102c4d',700,300);
         ctx.textAlign='center';label(ctx,`Ano / Safra: ${data.year}`,600,214,24,'#102c4d',600,350);ctx.textAlign='left';
         if(data.operation==='adubacao')label(ctx,`Produto: ${data.product}`,48,242,19,'#5b6e7e',500,1100);
         ctx.textAlign='right';label(ctx,`Atualizado em ${data.date}`,1152,214,20,'#5b6e7e');ctx.textAlign='left';
         const cards=[['ÁREA PLANEJADA',area(data.areaPlanejada),'Área total programada','#347c99'],
-            [data.operation==='plantio'?'ÁREA PLANTADA':'ÁREA APLICADA',area(data.areaRealizada),'Realizado até o momento','#079b3e'],
+            [data.operation==='plantio'?'ÁREA PLANTADA':'ÁREA APLICADA',area(data.areaRealizada),'Realizado até o momento','#079b00'],
             ['PROGRESSO',`${data.progress.toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})}%`,`${area(data.areaPlanejada-data.areaRealizada)} restantes`,'#b68135']];
         cards.forEach((card,i)=>{const x=48+i*374;box(ctx,x,260,356,164,'white');box(ctx,x,260,356,6,card[3],0);
             label(ctx,card[0],x+22,300,20,card[3],700);label(ctx,card[1],x+22,356,40,'#102c4d',700,312);label(ctx,card[2],x+22,394,18,'#64748b');});
@@ -132,11 +134,14 @@
         planning=planner;
         const button=document.getElementById('operation-export-button'),dialog=document.getElementById('operation-export-dialog');
         if(!button||!dialog)return;
+        button.hidden=!canExport();
+        if(!canExport())return;
         const preview=document.getElementById('operation-export-preview'),status=document.getElementById('operation-export-status'),save=document.getElementById('operation-export-save'),share=document.getElementById('operation-export-share');
         let url=null,name='',file=null,busy=false,token=0;
         const revoke=()=>{if(url)URL.revokeObjectURL(url);url=null;};
         dialog.addEventListener('close',()=>{token++;revoke();file=null;preview.removeAttribute('src');save.disabled=true;if(share)share.hidden=true;busy=false;button.disabled=false;});
         button.onclick=async()=>{
+            if(!canExport())return;
             if(busy)return;
             let data;try{data=snapshot(state);}catch(error){status.textContent=error.message;dialog.showModal();save.disabled=true;preview.hidden=true;return;}
             busy=true;button.disabled=true;const request=++token;revoke();preview.hidden=true;save.disabled=true;status.textContent='Preparando o resumo e carregando o mapa…';dialog.showModal();
@@ -146,8 +151,8 @@
             }catch(error){if(request===token)status.textContent=error.message;}
             finally{if(request===token){busy=false;button.disabled=false;}}
         };
-        save.onclick=()=>{if(!url)return;const link=document.createElement('a');link.href=url;link.download=name;document.body.appendChild(link);link.click();link.remove();};
-        if(share)share.onclick=async()=>{if(!file)return;try{await navigator.share({files:[file]});}catch(error){if(error.name!=='AbortError')status.textContent='Use Salvar imagem PNG para compartilhar a foto.';}};
+        save.onclick=()=>{if(!url||!canExport())return;const link=document.createElement('a');link.href=url;link.download=name;document.body.appendChild(link);link.click();link.remove();};
+        if(share)share.onclick=async()=>{if(!file||!canExport())return;try{await navigator.share({files:[file]});}catch(error){if(error.name!=='AbortError')status.textContent='Use Salvar imagem PNG para compartilhar a foto.';}};
         document.getElementById('operation-export-close').onclick=()=>dialog.close();
     }
     root.OperationExport=Object.freeze({summarize,snapshot,filename,render,init});
