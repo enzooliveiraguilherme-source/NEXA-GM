@@ -1,6 +1,6 @@
 (function(root) {
     'use strict';
-    const colors={concluido:'#22a447',em_andamento:'#e8a126',nao_iniciado:'#de5252'};
+    const colors={concluido:'#00b83f',em_andamento:'#ffa000',nao_iniciado:'#ed3036'};
     let planning;
     const number=value=>Number(value).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
     const area=value=>`${number(value)} ha`;
@@ -85,12 +85,12 @@
             for(let at=0;at<tiles.length;at+=8)await Promise.all(tiles.slice(at,at+8).map(async tile=>{
                 try{const img=await image(tile.url),pos=screen([tile.x/count,tile.y/count]);ctx.drawImage(img,pos[0],pos[1],tileSize+1,tileSize+1);}catch{missing++;}
             }));
-            ctx.fillStyle='rgba(255,255,255,.28)';ctx.fillRect(rect.x,rect.y,rect.w,rect.h);
+            ctx.fillStyle='rgba(255,255,255,.62)';ctx.fillRect(rect.x,rect.y,rect.w,rect.h);
         }
         for(const row of shapes) {
             ctx.beginPath();
             for(const poly of row.polygons)for(const ring of poly){ring.forEach((p,i)=>{const pos=screen(p);if(i===0)ctx.moveTo(...pos);else ctx.lineTo(...pos);});ctx.closePath();}
-            ctx.fillStyle=colors[row.status];ctx.globalAlpha=.84;ctx.fill('evenodd');ctx.globalAlpha=1;ctx.strokeStyle='#18342c';ctx.lineWidth=2;ctx.stroke();
+            ctx.fillStyle=colors[row.status];ctx.globalAlpha=.98;ctx.fill('evenodd');ctx.globalAlpha=1;ctx.strokeStyle='#18342c';ctx.lineWidth=2;ctx.stroke();
         }
         ctx.restore();
         return missing;
@@ -99,24 +99,25 @@
         const canvas=document.createElement('canvas');canvas.width=1200;canvas.height=1360;
         const ctx=canvas.getContext('2d');
         ctx.fillStyle='#f3f7fa';ctx.fillRect(0,0,1200,1360);
-        box(ctx,0,0,1200,170,'#102c4d',0);box(ctx,0,166,1200,4,'#eb7825',0);
+        box(ctx,0,0,1200,170,'white',0);box(ctx,0,166,1200,4,'#eb7825',0);
         ctx.textAlign='center';
-        label(ctx,`RESUMO DE ${data.operationName.toUpperCase()}`,600,65,30,'#bdd0e3',600,650);
-        label(ctx,data.scopeName,600,122,42,'white',700,650);
+        label(ctx,`RESUMO DE ${data.operationName.toUpperCase()}`,600,65,30,'#4c6781',600,650);
+        label(ctx,data.scopeName,600,122,42,'#102c4d',700,650);
         ctx.textAlign='left';
         try{const logo=await image('apoio/GP Michels.jpg');box(ctx,38,28,230,132,'white',12);
             // Recorta apenas a margem branca da marca existente para ampliar o símbolo.
             ctx.drawImage(logo,logo.naturalWidth*.07,logo.naturalHeight*.27,logo.naturalWidth*.89,logo.naturalHeight*.46,52,42,202,104);
         }catch{/* O resumo continua disponível se a marca não carregar. */}
-        label(ctx,`${data.culture}  ·  Ano / Safra ${data.year}`,48,214,27,'#102c4d',700,740);
+        label(ctx,data.culture,48,214,27,'#102c4d',700,300);
+        ctx.textAlign='center';label(ctx,`Ano / Safra: ${data.year}`,600,214,24,'#102c4d',600,350);ctx.textAlign='left';
         if(data.operation==='adubacao')label(ctx,`Produto: ${data.product}`,48,242,19,'#5b6e7e',500,1100);
         ctx.textAlign='right';label(ctx,`Atualizado em ${data.date}`,1152,214,20,'#5b6e7e');ctx.textAlign='left';
         const cards=[['ÁREA PLANEJADA',area(data.areaPlanejada),'Área total programada','#347c99'],
-            [data.operation==='plantio'?'ÁREA PLANTADA':'ÁREA APLICADA',area(data.areaRealizada),'Realizado até o momento','#2d8a68'],
+            [data.operation==='plantio'?'ÁREA PLANTADA':'ÁREA APLICADA',area(data.areaRealizada),'Realizado até o momento','#079b3e'],
             ['PROGRESSO',`${data.progress.toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})}%`,`${area(data.areaPlanejada-data.areaRealizada)} restantes`,'#b68135']];
         cards.forEach((card,i)=>{const x=48+i*374;box(ctx,x,260,356,164,'white');box(ctx,x,260,356,6,card[3],0);
             label(ctx,card[0],x+22,300,20,card[3],700);label(ctx,card[1],x+22,356,40,'#102c4d',700,312);label(ctx,card[2],x+22,394,18,'#64748b');});
-        box(ctx,48,445,1104,12,'#dce5eb',6);if(data.progress>0)box(ctx,48,445,1104*data.progress/100,12,'#2d8a68',6);
+        box(ctx,48,445,1104,12,colors.nao_iniciado,6);if(data.progress>0)box(ctx,48,445,1104*data.progress/100,12,colors.concluido,6);
         const missing=await drawMap(ctx,data,{x:48,y:483,w:1104,h:690});
         const legend=[['concluido','Finalizado',data.areaConcluido,data.countConcluido],['em_andamento','Em andamento',data.areaAndamentoTotal,data.countAndamento],['nao_iniciado','Não iniciado',data.areaNaoIniciado,data.countNaoIniciado]];
         legend.forEach(([status,title,ha,count],i)=>{const x=48+i*374;box(ctx,x,1197,356,100,'white',14);box(ctx,x+20,1219,20,20,colors[status],4);
