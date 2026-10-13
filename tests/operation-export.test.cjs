@@ -29,9 +29,17 @@ test('snapshot de Adubação respeita os filtros e usa nome, cultura, ano e prod
     assert.deepEqual(Array.from(data.farms),['FE','FE2']);assert.equal(calls[0][4],'Calcário');
     assert.throws(()=>api.snapshot({currentTab:'colheita'}),/Plantio e na Adubação/);
 });
-test('visualizadores, administradores e acessos sem perfil não podem gerar o resumo',()=>{
-    for(const portalAccessRole of ['visualizador','admin',undefined]){
+test('visualizadores e acessos sem perfil não podem gerar o resumo',()=>{
+    for(const portalAccessRole of ['visualizador',undefined]){
         const api=setup({portalAccessRole});
         assert.throws(()=>api.snapshot({currentTab:'plantio'}),/Somente Projetistas/);
+    }
+});
+test('administrador e projetista podem gerar o resumo',()=>{
+    for(const portalAccessRole of ['admin','projetista']){
+        const api=setup({portalAccessRole,featureMatchesFilters:()=>true,getTalhaoRecord:()=>({status:'concluido'})});
+        api.init({}, {isTalhaoPlanned:()=>true});
+        const data=api.snapshot({currentTab:'plantio',currentFazenda:'FE',currentGleba:'FE',currentAno:'2026',currentCultura:'Soja',currentProduto:'Plantio',geojsonData:{features:[field('FE','T1',100)]}});
+        assert.equal(data.areaRealizada,100);
     }
 });

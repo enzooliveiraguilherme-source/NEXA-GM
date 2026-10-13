@@ -2,7 +2,7 @@
     'use strict';
     const colors={concluido:'#06b200',em_andamento:'#ffa000',nao_iniciado:'#ed3036'};
     let planning;
-    const canExport=()=>root.portalAccessRole==='projetista';
+    const canExport=()=>['projetista','admin'].includes(root.portalAccessRole);
     const number=value=>Number(value).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
     const area=value=>`${number(value)} ha`;
     function summarize(features,isPlanned,getRecord) {
@@ -25,7 +25,7 @@
         return totals;
     }
     function snapshot(state) {
-        if(!canExport())throw Error('Somente Projetistas podem exportar o andamento.');
+        if(!canExport())throw Error('Somente Projetistas e Administradores podem exportar o andamento.');
         if(!['plantio','adubacao'].includes(state.currentTab))throw Error('A exportação está disponível no Plantio e na Adubação.');
         if(!state.geojsonData)throw Error('Aguarde o carregamento dos talhões.');
         const features=state.geojsonData.features.filter(root.featureMatchesFilters);
