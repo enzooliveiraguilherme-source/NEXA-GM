@@ -104,7 +104,10 @@
         ctx.fillStyle='#f3f7fa';ctx.fillRect(0,0,1200,1360);
         box(ctx,0,0,1200,170,'white',0);box(ctx,0,166,1200,4,'#eb7825',0);
         ctx.textAlign='center';
-        label(ctx,`Resumo de ${data.operationName.toLowerCase()} - ${data.culture}`,600,65,30,'#4c6781',600,650);
+        const title=data.operation==='adubacao'?`Resumo de aplicação - ${data.product}`:`Resumo de plantio - ${data.culture}`;
+        let titleSize=30;
+        while(titleSize>18){ctx.font=`600 ${titleSize}px "Century Gothic", CenturyGothic, "Apple Gothic", Arial, sans-serif`;if(ctx.measureText(title).width<=650)break;titleSize--;}
+        label(ctx,title,600,65,titleSize,'#4c6781',600,650);
         label(ctx,data.scopeName,600,122,42,'#102c4d',700,650);
         ctx.textAlign='left';
         try{const logo=await image('apoio/GP Michels.jpg');box(ctx,38,28,230,132,'white',12);
