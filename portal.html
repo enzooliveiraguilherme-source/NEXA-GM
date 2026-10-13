@@ -16,7 +16,7 @@
     
     <!-- Custom CSS -->
     <link rel="stylesheet" href="style.css?v=3.5">
-    <link rel="stylesheet" href="brand.css?v=14">
+    <link rel="stylesheet" href="brand.css?v=15">
 </head>
 <body data-page="portal">
     <div id="auth-loading-overlay" class="loading-overlay"><div class="spinner"></div><p>Validando seu acesso…</p></div>
@@ -93,8 +93,12 @@
 
                 <div class="sidebar-section hidden" id="harvest-import-section">
                     <div class="harvest-eyebrow">COLHEITA · MILHO 2026</div>
-                    <h3 class="harvest-farm-title">Fazenda Esperança</h3>
+                    <h3 id="harvest-farm-title" class="harvest-farm-title">Colheita</h3>
                     <p id="harvest-import-status" class="harvest-muted" role="status">Carregando os talhões…</p>
+                    <div id="harvest-farm-filter" class="hidden">
+                        <label class="sidebar-filter-label" for="harvest-farm-select">Fazenda</label>
+                        <select id="harvest-farm-select" class="harvest-select"><option value="ALL">Todas as fazendas</option></select>
+                    </div>
                     <label class="sidebar-filter-label" for="harvest-field-select">Talhão</label>
                     <select id="harvest-field-select" class="harvest-select"><option value="">Selecionar talhão</option></select>
                     <button type="button" id="harvest-all" class="harvest-back">Ver produtividade de todos os talhões</button>
@@ -161,6 +165,7 @@
                 <button type="button" class="mobile-control" id="mobile-menu-toggle" aria-label="Abrir menu" aria-expanded="false" aria-controls="portal-sidebar"><i class="fa-solid fa-bars" aria-hidden="true"></i></button>
                 <div><span class="portal-eyebrow">GESTÃO AGRÍCOLA</span><h1>Visão do campo</h1></div>
                 <button type="button" class="mobile-control" id="mobile-filter-toggle" aria-expanded="false" aria-controls="calcario-filter-bar"><i class="fa-solid fa-sliders" aria-hidden="true"></i> Filtros</button>
+                <button type="button" class="mobile-control" id="mobile-field-toggle" hidden aria-controls="portal-sidebar"><i class="fa-solid fa-draw-polygon" aria-hidden="true"></i> Talhões</button>
                 <button type="button" id="btn-account-menu" class="account-menu-trigger"><i class="fa-solid fa-gear" aria-hidden="true"></i> Opções</button>
             </header>
             <!-- Barra Superior Informativa para Outras Operações -->
@@ -981,13 +986,13 @@
     <script src="js/harvest-legend.js?v=3"></script>
     <script src="js/harvest-pyramid.js?v=10"></script>
     <script src="js/harvest-points.js?v=7"></script>
-    <script src="js/harvest-view.js?v=11"></script>
+    <script src="js/harvest-view.js?v=12"></script>
     <script src="js/operations/supabase-repository.js?v=1"></script>
     <script src="js/operations/cloud-store.js?v=2"></script>
     <script src="js/operations/legacy-import.js?v=3"></script>
     <script src="js/member-glebas.js?v=1"></script>
     <script src="js/access-admin.js?v=3"></script>
-    <script src="app.js?v=3.12"></script>
-    <script src="js/mobile-layout.js?v=2"></script>
+    <script src="app.js?v=3.13"></script>
+    <script src="js/mobile-layout.js?v=3"></script>
 </body>
 </html>

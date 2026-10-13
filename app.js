@@ -534,6 +534,7 @@ function refreshMapFilters() {
     populateFazendaFilter(data);
     const select = document.getElementById('fazenda-filter');
     if (select) select.value = state.currentFazenda;
+    if (state.currentTab === 'colheita') HarvestView.refreshFilters(state);
 }
 
 // ==========================================================================
@@ -719,6 +720,7 @@ function updateOperationUI() {
         if (name) name.textContent = operation.name;
     }
     document.getElementById('harvest-import-section')?.classList.toggle('hidden', !harvest);
+    document.getElementById('farm-filter-section')?.classList.toggle('hidden', harvest || (window.portalFarms || []).length < 2);
     document.querySelectorAll('.harvest-detail').forEach(element => element.classList.toggle('hidden', !harvest));
     const setText = (id, value) => {
         const element = document.getElementById(id);
@@ -1048,6 +1050,7 @@ function renderMap(shouldFitBounds = true) {
     const activeData = getActiveMapData();
     if (!activeData) return;
     
+    if (state.currentTab === 'colheita') HarvestView.refreshFilters(state);
     const filteredFeatures = activeData.features.filter(featureMatchesFilters);
     
     const filteredData = {
@@ -1090,7 +1093,7 @@ function renderMap(shouldFitBounds = true) {
                 opIcon.className = opCfg.icon;
                 opIcon.style.color = opCfg.color;
             }
-            if (opName) opName.textContent = state.currentTab === 'colheita' ? 'Fazenda Esperança' : `Operação: ${opCfg.name}`;
+            if (opName) opName.textContent = state.currentTab === 'colheita' ? HarvestView.farmLabel(state.currentFazenda) : `Operação: ${opCfg.name}`;
             if (opFaz) {
                 const fazenda = state.currentFazenda === 'ALL' ? 'Todas as Fazendas' : `Fazenda ${state.currentFazenda}`;
                 const gleba = state.currentGleba === 'ALL' ? 'Todas as Glebas' : `Gleba ${state.currentGleba}`;
@@ -1098,7 +1101,7 @@ function renderMap(shouldFitBounds = true) {
             }
             if (opCount) {
                 const points = state.currentTab === 'colheita' && filteredFeatures.some(feature => feature.geometry.type === 'Point');
-                const count = state.currentTab === 'colheita' ? new Set(filteredFeatures.map(f => f.properties.Campo)).size : filteredFeatures.length;
+                const count = state.currentTab === 'colheita' ? new Set(filteredFeatures.map(HarvestView.fieldKey)).size : filteredFeatures.length;
                 opCount.textContent = points ? `${filteredFeatures.length.toLocaleString('pt-BR')} pontos de amostra` : `${count} talhõe${count === 1 ? '' : 's'}`;
             }
         }

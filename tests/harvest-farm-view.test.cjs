@@ -15,13 +15,15 @@ function setup(){
     const group=()=>{const listeners=new Map();return {addTo(){return this;},once(name,fn){listeners.set(name,fn);},
         removeLayer(layer){removed.push(layer.farm);},remove(){listeners.get('remove')?.();}};};
     const L={layerGroup:group,geoJSON(data){return {getBounds(){return {intersects(farm){return data.features.some(f=>f.properties.Fazenda===farm);}};}};}};
-    const document={getElementById(id){if(!elements.has(id))elements.set(id,{classList:{add(){},remove(){}},appendChild(){},value:''});return elements.get(id);},createElement(){return {};}};
-    const root={featureMatchesFilters:()=>true,getFeatureStyle(){},HarvestLegend:{init(){},show(){}},
+    const document={getElementById(id){if(!elements.has(id))elements.set(id,{classList:{add(){},remove(){},toggle(name,hidden){this[name]=hidden;}},children:[],appendChild(child){this.children.push(child);},set innerHTML(value){this.children=[];},value:''});return elements.get(id);},createElement(){return {};}};
+    let state;
+    const root={featureMatchesFilters:f=>(state.currentFazenda==='ALL'||f.properties.Fazenda===state.currentFazenda)&&(state.currentGleba==='ALL'||f.properties.Gleba===state.currentGleba),getFeatureStyle(){},HarvestLegend:{init(){},show(){}},
+        refreshMapFilters(){root.HarvestView.refreshFilters(state);},updateFilterTag(){},renderMap(){return root.HarvestView.showAll(state);},
         HarvestPyramid:{async create(rows,fields,dataset){pyramids.push({farm:dataset.farm,rows:rows.map(r=>r.fazenda),fields:fields.map(f=>f.properties.Fazenda)});return {addTo(){}};}},
         HarvestPoints:{create(origin,fields){return {farm:fields[0].properties.Fazenda,addTo(){return this;},addPoints(){}};}},
         HarvestStore:{async loadChunk(dataset){chunks.push(dataset.farm);return {values:new Float64Array(8),stride:8,count:1};}}};
     vm.runInNewContext(fs.readFileSync(require.resolve('../js/harvest-view.js'),'utf8'),{window:root,document,L,AbortController,console});
-    const state={map,currentTab:'colheita',harvestDataset:{datasets,version:'combined'},harvestSummary:{bounds:[0,0,1,1],records},harvestData:{features}};
+    state={map,currentTab:'colheita',currentFazenda:'ALL',currentGleba:'ALL',harvestDataset:{datasets,version:'combined'},harvestSummary:{bounds:[0,0,1,1],records},harvestData:{features}};
     root.HarvestView.init(state);
     return {api:root.HarvestView,state,features,events,pyramids,chunks,removed,elements,setViewport(farm){viewportFarm=farm;},setZoom(value){zoom=value;}};
 }
@@ -34,6 +36,38 @@ test('visão geral separa as fazendas e carrega pontos apenas da área visível'
     s.setViewport('RM');s.events.get('moveend')();await new Promise(setImmediate);
     assert.deepEqual(s.chunks,['FE2','RM']);assert.deepEqual(s.removed,['FE2']);
     s.setZoom(12);s.events.get('zoomend')();assert.deepEqual(s.removed,['FE2','RM']);
+});
+
+test('trocar fazenda filtra talhões, contagem e produtividade; todas mantém nomes distintos',async()=>{
+    const s=setup();s.setZoom(12);
+    const farms=s.elements.get('harvest-farm-select'),fields=s.elements.get('harvest-field-select');
+    assert.equal(s.elements.get('harvest-farm-filter').classList.hidden,false);
+    assert.deepEqual(farms.children.map(o=>o.value),['FE2','RM']);
+    assert.deepEqual(fields.children.map(o=>o.textContent),['T1 · Esperança 2 (FE2)','T1 · Fazenda RM']);
+    farms.value='RM';farms.onchange();await new Promise(setImmediate);
+    assert.deepEqual(fields.children.map(o=>o.value),[s.api.fieldKey(s.features[1])]);
+    assert.equal(s.elements.get('harvest-import-status').textContent,'1 talhão · Milho 2026');
+    assert.equal(s.elements.get('harvest-farm-title').textContent,'Fazenda RM');
+    assert.deepEqual(s.pyramids.map(p=>p.farm),['RM']);
+    await fields.onchange();assert.equal(s.state.harvestSelected,null);
+    farms.value='ALL';farms.onchange();await new Promise(setImmediate);
+    assert.equal(fields.children.length,2);
+    assert.equal(s.elements.get('harvest-import-status').textContent,'2 talhões · Milho 2026');
+});
+
+test('uma fazenda é automática; sem fazenda cadastrada permanece apenas a escolha de talhão',()=>{
+    const s=setup();s.state.harvestData.features=[s.features[1]];
+    s.api.refreshFilters(s.state);
+    assert.equal(s.state.currentFazenda,'RM');
+    assert.equal(s.elements.get('harvest-farm-filter').classList.hidden,true);
+    assert.equal(s.elements.get('harvest-field-select').children[0].textContent,'T1');
+    s.state.harvestData.features=[{properties:{Campo:'Avulso'}}];
+    s.api.refreshFilters(s.state);
+    assert.equal(s.state.currentFazenda,'ALL');
+    assert.equal(s.elements.get('harvest-farm-filter').classList.hidden,true);
+    assert.equal(s.elements.get('harvest-field-select').children[0].textContent,'Avulso');
+    s.state.harvestData.features=[];s.api.refreshFilters(s.state);
+    assert.equal(s.elements.get('harvest-field-select').children.length,0);
 });
 
 test('seleção do T1 de RM não usa o T1 de FE2 nem altera o retorno pelo botão',async()=>{
