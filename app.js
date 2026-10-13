@@ -86,6 +86,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     loadListsFromStorage();
     initMap();
     setupEventListeners();
+    OperationExport.init(state,PlanningManager);
     AdubacaoModal.init();
     updateRoleUI();
     SharedSeedCatalog.load();
@@ -1142,49 +1143,9 @@ function renderMap(shouldFitBounds = true) {
 // CÁLCULOS DO DASHBOARD OPERACIONAL DE CALCÁRIO (BASEADO NO PLANEJAMENTO REAL)
 // ==========================================================================
 function updateDashboardKPIs(features) {
-
-    let areaPlanejada = 0;
-    let areaRealizada = 0;
-    
-    let areaConcluido = 0;
-    let countConcluido = 0;
-    
-    let areaAndamentoTotal = 0;
-    let areaAndamentoRealizada = 0;
-    let countAndamento = 0;
-    
-    let areaNaoIniciado = 0;
-    let countNaoIniciado = 0;
-
-    features.forEach(f => {
-        const p = f.properties || {};
-        const areaTalhao = parseFloat(p.Area) || 0;
-        const campo = p.Campo;
-
-        // Apenas talhões planejados para o produto atual compõem os KPIs operacionais
-        if (!PlanningManager.isTalhaoPlanned(p.Fazenda, campo, state.currentAno, state.currentCultura, state.currentProduto)) {
-            return;
-        }
-
-        areaPlanejada += areaTalhao;
-
-        const record = getTalhaoRecord(p.Fazenda, campo, state.currentAno, state.currentCultura, state.currentProduto, areaTalhao);
-        
-        if (record.status === 'concluido') {
-            areaConcluido += areaTalhao;
-            areaRealizada += areaTalhao;
-            countConcluido++;
-        } else if (record.status === 'em_andamento') {
-            const realizado = parseFloat(record.areaRealizada) || 0;
-            areaAndamentoTotal += areaTalhao;
-            areaAndamentoRealizada += realizado;
-            areaRealizada += realizado;
-            countAndamento++;
-        } else {
-            areaNaoIniciado += areaTalhao;
-            countNaoIniciado++;
-        }
-    });
+    const {areaPlanejada,areaRealizada,areaConcluido,countConcluido,areaAndamentoTotal,areaAndamentoRealizada,countAndamento,areaNaoIniciado,countNaoIniciado} = OperationExport.summarize(features,
+        f=>PlanningManager.isTalhaoPlanned(f.properties.Fazenda,f.properties.Campo,state.currentAno,state.currentCultura,state.currentProduto),
+        f=>getTalhaoRecord(f.properties.Fazenda,f.properties.Campo,state.currentAno,state.currentCultura,state.currentProduto,f.properties.Area));
 
     const progressoPct = areaPlanejada > 0 ? (areaRealizada / areaPlanejada) * 100 : 0;
     const concluidoPct = areaPlanejada > 0 ? (areaConcluido / areaPlanejada) * 100 : 0;
