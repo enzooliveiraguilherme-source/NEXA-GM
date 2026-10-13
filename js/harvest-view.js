@@ -8,35 +8,38 @@
     const text = (id,value) => { const el=document.getElementById(id); if(el) el.textContent=value; };
     const farmLabel = farm => !farm || farm === 'ALL' ? 'Todas as fazendas'
         : root.portalFarms?.find(item=>item.code===farm)?.name || (farm==='FE2'?'Esperança 2 (FE2)':`Fazenda ${farm}`);
+    const scopeLabel = state => farmLabel(state.currentGleba);
     function refreshFilters(state) {
         const data=state.harvestData?.features || [];
-        const farms=[...new Set(data.map(f=>f.properties.Fazenda).filter(Boolean))].sort();
-        if(farms.length===1) state.currentFazenda=farms[0];
-        else if(!farms.includes(state.currentFazenda)) state.currentFazenda='ALL';
-        const farmSelect=document.getElementById('harvest-farm-select');
-        document.getElementById('harvest-farm-filter')?.classList.toggle('hidden',farms.length<2);
-        if(farmSelect) {
-            farmSelect.innerHTML='<option value="ALL">Todas as fazendas</option>';
-            farms.forEach(farm=>{const option=document.createElement('option');option.value=farm;option.textContent=farmLabel(farm);farmSelect.appendChild(option);});
-            farmSelect.value=state.currentFazenda;
-            farmSelect.onchange=()=>{
-                state.currentFazenda=farmSelect.value;
-                state.currentGleba='ALL';
+        const glebas=[...new Set(data.map(f=>f.properties.Gleba).filter(Boolean))].sort();
+        if(glebas.length===1) state.currentGleba=glebas[0];
+        else if(!glebas.includes(state.currentGleba)) state.currentGleba='ALL';
+        state.currentFazenda='ALL';
+        const glebaSelect=document.getElementById('harvest-gleba-select');
+        document.getElementById('harvest-gleba-filter')?.classList.toggle('hidden',glebas.length===0);
+        if(glebaSelect) {
+            glebaSelect.innerHTML=glebas.length===1?'':'<option value="ALL">Todas as fazendas</option>';
+            glebas.forEach(gleba=>{const option=document.createElement('option');option.value=gleba;option.textContent=farmLabel(gleba);glebaSelect.appendChild(option);});
+            glebaSelect.value=state.currentGleba;
+            glebaSelect.onchange=()=>{
+                state.currentGleba=glebaSelect.value;
+                state.currentFazenda='ALL';
                 root.refreshMapFilters();root.updateFilterTag();root.renderMap(true);
             };
         }
         const fields=[...new Map(data.filter(root.featureMatchesFilters).map(f=>[fieldKey(f),f])).values()]
             .sort((a,b)=>a.properties.Campo.localeCompare(b.properties.Campo,'pt-BR',{numeric:true}));
+        const farms=new Set(fields.map(f=>f.properties.Fazenda).filter(Boolean));
         const selectEl=document.getElementById('harvest-field-select');
         if(selectEl) {
             selectEl.innerHTML='<option value="">Todos os talhões</option>';
             fields.forEach(feature=>{const opt=document.createElement('option');opt.value=fieldKey(feature);
-                opt.textContent=farms.length>1&&state.currentFazenda==='ALL'?`${feature.properties.Campo} · ${farmLabel(feature.properties.Fazenda)}`:feature.properties.Campo;
+                opt.textContent=farms.size>1?`${feature.properties.Campo} · ${farmLabel(feature.properties.Fazenda)}`:feature.properties.Campo;
                 selectEl.appendChild(opt);});
             selectEl.value=fields.some(f=>fieldKey(f)===state.harvestSelected)?state.harvestSelected:'';
             selectEl.onchange=()=>{const feature=fields.find(f=>fieldKey(f)===selectEl.value);if(feature)select(state,feature);else showAll(state);};
         }
-        text('harvest-farm-title',farms.length?farmLabel(state.currentFazenda):'Colheita');
+        text('harvest-farm-title',glebas.length?scopeLabel(state):'Colheita');
         text('harvest-import-status',`${fields.length} ${fields.length===1?'talhão':'talhões'} · Milho 2026`);
     }
     function color(v) { return root.HarvestStyle?root.HarvestStyle.color(v):v==null?'#94a3b8':v<120?'#d73027':v<130?'#fc8d59':v<140?'#fee08b':v<160?'#d9ef8b':v<=180?'#91cf60':'#1a9850'; }
@@ -183,5 +186,5 @@
         }
         clear(state);
     }
-    root.HarvestView=Object.freeze({init,select,showAll,clear,color,fieldKey,refreshFilters,farmLabel});
+    root.HarvestView=Object.freeze({init,select,showAll,clear,color,fieldKey,refreshFilters,farmLabel,scopeLabel});
 })(window);

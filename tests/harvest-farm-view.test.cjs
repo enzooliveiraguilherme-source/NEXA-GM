@@ -6,7 +6,7 @@ const vm=require('node:vm');
 function setup(){
     const elements=new Map(),events=new Map(),pyramids=[],chunks=[],removed=[];
     let viewportFarm='FE2',zoom=16;
-    const features=['FE2','RM'].map(Fazenda=>({properties:{Fazenda,Campo:'T1'}}));
+    const features=['FE2','RM'].map(Fazenda=>({properties:{Fazenda,Gleba:Fazenda==='FE2'?'FE':'RM',Campo:'T1'}}));
     const datasets=['FE2','RM'].map(farm=>({farm,version:farm,source:'storage'}));
     const records=datasets.map(dataset=>({fazenda:dataset.farm,campo:'T1',chunks:['original/field.001.bin.gz'],dataset}));
     const map={getZoom:()=>zoom,getBounds:()=>viewportFarm,stop(){},fitBounds(){},removeLayer(layer){layer.remove?.();},
@@ -38,11 +38,11 @@ test('visão geral separa as fazendas e carrega pontos apenas da área visível'
     s.setZoom(12);s.events.get('zoomend')();assert.deepEqual(s.removed,['FE2','RM']);
 });
 
-test('trocar fazenda filtra talhões, contagem e produtividade; todas mantém nomes distintos',async()=>{
+test('campo Fazenda consulta a gleba e filtra talhões, contagem e produtividade',async()=>{
     const s=setup();s.setZoom(12);
-    const farms=s.elements.get('harvest-farm-select'),fields=s.elements.get('harvest-field-select');
-    assert.equal(s.elements.get('harvest-farm-filter').classList.hidden,false);
-    assert.deepEqual(farms.children.map(o=>o.value),['FE2','RM']);
+    const farms=s.elements.get('harvest-gleba-select'),fields=s.elements.get('harvest-field-select');
+    assert.equal(s.elements.get('harvest-gleba-filter').classList.hidden,false);
+    assert.deepEqual(farms.children.map(o=>o.value),['FE','RM']);
     assert.deepEqual(fields.children.map(o=>o.textContent),['T1 · Esperança 2 (FE2)','T1 · Fazenda RM']);
     farms.value='RM';farms.onchange();await new Promise(setImmediate);
     assert.deepEqual(fields.children.map(o=>o.value),[s.api.fieldKey(s.features[1])]);
@@ -55,19 +55,37 @@ test('trocar fazenda filtra talhões, contagem e produtividade; todas mantém no
     assert.equal(s.elements.get('harvest-import-status').textContent,'2 talhões · Milho 2026');
 });
 
-test('uma fazenda é automática; sem fazenda cadastrada permanece apenas a escolha de talhão',()=>{
+test('uma gleba é automática; sem gleba cadastrada permanece apenas a escolha de talhão',()=>{
     const s=setup();s.state.harvestData.features=[s.features[1]];
     s.api.refreshFilters(s.state);
-    assert.equal(s.state.currentFazenda,'RM');
-    assert.equal(s.elements.get('harvest-farm-filter').classList.hidden,true);
+    assert.equal(s.state.currentGleba,'RM');
+    assert.equal(s.state.currentFazenda,'ALL');
+    assert.equal(s.elements.get('harvest-gleba-select').value,'RM');
     assert.equal(s.elements.get('harvest-field-select').children[0].textContent,'T1');
     s.state.harvestData.features=[{properties:{Campo:'Avulso'}}];
     s.api.refreshFilters(s.state);
     assert.equal(s.state.currentFazenda,'ALL');
-    assert.equal(s.elements.get('harvest-farm-filter').classList.hidden,true);
+    assert.equal(s.elements.get('harvest-gleba-filter').classList.hidden,true);
     assert.equal(s.elements.get('harvest-field-select').children[0].textContent,'Avulso');
     s.state.harvestData.features=[];s.api.refreshFilters(s.state);
     assert.equal(s.elements.get('harvest-field-select').children.length,0);
+});
+
+test('selecionar FE inclui FE e FE2 juntas e voltar de um talhão mantém a gleba',async()=>{
+    const s=setup();s.setZoom(12);
+    const feature={properties:{Fazenda:'FE',Gleba:'FE',Campo:'T1'}};
+    s.state.harvestData.features.push(feature);
+    const dataset={farm:'FE',version:'FE',source:'storage'};
+    s.state.harvestSummary.records.push({fazenda:'FE',campo:'T1',chunks:[],dataset});
+    s.api.refreshFilters(s.state);
+    const selector=s.elements.get('harvest-gleba-select');selector.value='FE';selector.onchange();await new Promise(setImmediate);
+    assert.equal(s.state.currentGleba,'FE');assert.equal(s.state.currentFazenda,'ALL');
+    assert.deepEqual(s.pyramids.map(p=>p.farm),['FE2','FE']);
+    assert.equal(s.elements.get('harvest-field-select').children.length,2);
+    assert.equal(s.elements.get('harvest-farm-title').textContent,'Fazenda FE');
+    await s.api.select(s.state,feature);await s.elements.get('harvest-all').onclick();
+    assert.equal(s.state.currentGleba,'FE');
+    assert.equal(s.pyramids.some(p=>p.farm==='RM'),false);
 });
 
 test('seleção do T1 de RM não usa o T1 de FE2 nem altera o retorno pelo botão',async()=>{

@@ -513,7 +513,9 @@ async function loadHarvestTest() {
         const features=new Map(state.geojsonData.features.filter(feature=>farms.has(feature.properties.Fazenda))
             .map(feature=>[HarvestStore.fieldKey(feature.properties.Fazenda,feature.properties.Campo),feature]));
         for(const dataset of state.harvestDataset.datasets)for(const feature of dataset.index.features||[]) {
-            features.set(HarvestStore.fieldKey(feature.properties.Fazenda,feature.properties.Campo),feature);
+            const key=HarvestStore.fieldKey(feature.properties.Fazenda,feature.properties.Campo);
+            const gleba=features.get(key)?.properties.Gleba || window.portalFarms?.find(farm=>farm.code===feature.properties.Fazenda)?.gleba;
+            features.set(key,{...feature,properties:{...feature.properties,Gleba:gleba || feature.properties.Gleba}});
         }
         state.harvestData = { type: 'FeatureCollection', features: [...features.values()].map(feature => {
             const record = state.harvestSummary.records.find(r => r.fazenda===feature.properties.Fazenda && r.campo === feature.properties.Campo);
@@ -1093,7 +1095,7 @@ function renderMap(shouldFitBounds = true) {
                 opIcon.className = opCfg.icon;
                 opIcon.style.color = opCfg.color;
             }
-            if (opName) opName.textContent = state.currentTab === 'colheita' ? HarvestView.farmLabel(state.currentFazenda) : `Operação: ${opCfg.name}`;
+            if (opName) opName.textContent = state.currentTab === 'colheita' ? HarvestView.scopeLabel(state) : `Operação: ${opCfg.name}`;
             if (opFaz) {
                 const fazenda = state.currentFazenda === 'ALL' ? 'Todas as Fazendas' : `Fazenda ${state.currentFazenda}`;
                 const gleba = state.currentGleba === 'ALL' ? 'Todas as Glebas' : `Gleba ${state.currentGleba}`;
