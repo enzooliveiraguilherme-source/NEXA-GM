@@ -510,8 +510,8 @@ async function loadHarvestTest() {
     try {
         state.harvestDataset = await HarvestStore.load();
         state.harvestSummary = state.harvestDataset.index;
-        const farms=new Set(state.harvestDataset.datasets.map(dataset=>dataset.farm));
-        const features=new Map(state.geojsonData.features.filter(feature=>farms.has(feature.properties.Fazenda))
+        const fields=new Set(state.harvestSummary.records.map(record=>HarvestStore.fieldKey(record.fazenda,record.campo)));
+        const features=new Map(state.geojsonData.features.filter(feature=>fields.has(HarvestStore.fieldKey(feature.properties.Fazenda,feature.properties.Campo)))
             .map(feature=>[HarvestStore.fieldKey(feature.properties.Fazenda,feature.properties.Campo),feature]));
         for(const dataset of state.harvestDataset.datasets)for(const feature of dataset.index.features||[]) {
             const key=HarvestStore.fieldKey(feature.properties.Fazenda,feature.properties.Campo);

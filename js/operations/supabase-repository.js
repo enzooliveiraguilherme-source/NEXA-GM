@@ -178,7 +178,8 @@
             async listFields(farm) {
                 return (await listPages(() => client.from('farm_fields')
                     .select('campo,feature', { count: 'exact' }).eq('farm_code', requiredText(farm, 'a fazenda'))
-                    .order('campo', { ascending: true }))).map(row => row.feature);
+                    .order('campo', { ascending: true }))).map(row => row.feature)
+                    .filter(feature => feature.properties?.OperationalArchived !== true);
             },
             async saveRecords(records, type) {
                 if (!Array.isArray(records) || !records.length || records.length > 500) {
