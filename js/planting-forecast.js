@@ -2,7 +2,14 @@
     'use strict';
     const DAY = 86400000;
     const normalize = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().replace(/\s+/g, ' ').toUpperCase();
+    let configuredCycles = null;
+    const cycleKey = (variety, culture) => JSON.stringify([variety, culture].map(value => normalize(value).replace(/\s/g, '')));
+    function configureCycles(rows) {
+        configuredCycles = new Map(rows.map(row => [cycleKey(row.variety_name, row.culture),
+            Number.isInteger(row.cycle_days) && row.cycle_days > 0 ? row.cycle_days : null]));
+    }
     function cycleDays(variety, culture = 'Soja') {
+        if (configuredCycles !== null) return configuredCycles.get(cycleKey(variety, culture)) ?? null;
         if (normalize(culture) !== 'SOJA') return null;
         const name = normalize(variety).replace(/\s/g, '');
         return ['OLIMPO', 'NEO790'].includes(name) ? 114 : null;
@@ -80,7 +87,7 @@
             get size() { return simulations.size; }
         });
     }
-    const api = Object.freeze({ normalize, cycleDays, dateValue, harvestDate, key, project, weekStart, summarize, createSession });
+    const api = Object.freeze({ normalize, configureCycles, cycleDays, dateValue, harvestDate, key, project, weekStart, summarize, createSession });
     root.PlantingForecast = api;
     if (typeof module !== 'undefined') module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

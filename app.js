@@ -89,6 +89,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     OperationExport.init(state,PlanningManager);
     AdubacaoModal.init();
     updateRoleUI();
+    await window.SeedCycleCatalog?.load();
     SharedSeedCatalog.load();
     loadData();
 });
@@ -165,6 +166,7 @@ const SharedSeedCatalog = {
 
             if (error) throw error;
             this.mergeNames((data || []).map(item => item.name));
+            this.mergeNames(window.SeedCycleCatalog?.names || []);
 
             if (state.userRole === 'editor') {
                 await this.syncLocalNames();
@@ -229,6 +231,11 @@ const SharedSeedCatalog = {
 function isPlantioMode() {
     return state.currentTab === 'plantio';
 }
+
+window.addEventListener?.('geoportal:seed-cycles-changed', () => {
+    SharedSeedCatalog.mergeNames(window.SeedCycleCatalog?.names || []);
+    if (isPlantingAnalysisMode() && state.geojsonData) renderMap(false);
+});
 
 function isOperationalMapMode() {
     return state.currentTab === 'adubacao' || (state.currentTab === 'plantio' && !isPlantingAnalysisMode());

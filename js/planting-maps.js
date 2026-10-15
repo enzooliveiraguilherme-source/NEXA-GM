@@ -43,7 +43,7 @@
             groups.map(value => `<div class="planting-map-legend-row"><i style="background:${value.color}"></i><span>${escape(value.label)}</span><b>${hectares(value.area)}</b></div>`).join('') +
             `<div class="planting-map-legend-row"><i style="background:#94a3b8"></i><span>${harvesting(state) ? 'Sem previsão / sem plantio' : 'Sem variedade / sem plantio'}</span></div>` +
             '<p>Contorno tracejado: plantio parcial.<br>O cálculo considera apenas os hectares realizados.</p>' +
-            (harvesting(state) ? '<p>Olimpo e NEO 790: 114 dias após o plantio (soja). Previsão de referência; confirme a maturação no campo.</p>' : '');
+            (harvesting(state) ? '<p>' + (root.SeedCycleCatalog && !root.SeedCycleCatalog.available ? 'Catálogo de ciclos indisponível. Recarregue para consultar as previsões.' : 'Ciclos definidos pelo administrador em Variedades e ciclos. Previsão de referência; confirme a maturação no campo.') + '</p>' : '');
     }
     function style(state, feature) {
         const value = row(state, feature), group = groups.find(item => item.key === groupKey(state, value));
