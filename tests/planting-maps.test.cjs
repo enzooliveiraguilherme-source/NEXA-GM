@@ -85,7 +85,8 @@ test('legenda de variedades, escape e ocultação ao sair das abas de análise',
     h.maps.refresh(h.state, [feature]);
     assert.match(h.elements.get('planting-map-legend').innerHTML, /&lt;img/);
     assert.doesNotMatch(h.elements.get('planting-map-legend').innerHTML, /<img/);
-    assert.match(h.maps.tooltip(h.state, feature), /Ciclo da variedade não definido/);
+    assert.match(h.maps.tooltip(h.state, feature), /&lt;img/);
+    assert.doesNotMatch(h.maps.tooltip(h.state, feature), /Ciclo|Colheita estimada/);
     h.state.currentTab = 'adubacao'; h.maps.refresh(h.state, [feature]);
     assert.equal(h.elements.get('planting-map-summary').classList.hidden, true);
     assert.equal(h.elements.get('planting-map-legend').classList.hidden, true);
@@ -170,4 +171,13 @@ test('destaque respeita variedades, áreas sem previsão e reinicia ao mudar fil
     h.state.currentSubTab='data-estimada-colheita';h.maps.refresh(h.state,[feature,second]);assert.equal(h.maps.style(h.state,feature).fillOpacity,.88);
     h.maps.selectGroup(h.state,'');assert.equal(h.maps.style(h.state,feature).fillOpacity,.07);
     h.state.currentAno='2027';h.maps.refresh(h.state,[feature,second]);assert.equal(h.maps.style(h.state,feature).fillOpacity,.16);
+});
+test('textos das variedades e da colheita têm conteúdos próprios para cada mapa',()=>{
+    const h=harness();h.maps.refresh(h.state,[feature]);
+    const harvest=h.maps.tooltip(h.state,feature);
+    assert.match(harvest,/Colheita estimada/);assert.match(harvest,/Área prevista/);assert.match(harvest,/Ciclo: 114 dias/);
+    h.state.currentSubTab='variedades-plantadas';h.maps.refresh(h.state,[feature]);
+    const varieties=h.maps.tooltip(h.state,feature);
+    assert.match(varieties,/Variedade plantada/);assert.match(varieties,/Área plantada/);
+    assert.doesNotMatch(varieties,/Colheita estimada|Ciclo:/);assert.notEqual(varieties,harvest);
 });

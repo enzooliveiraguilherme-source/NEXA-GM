@@ -90,10 +90,15 @@
     }
     function tooltip(state, feature) {
         const value = row(state, feature);
-        return `<div class="talhao-tooltip-inner"><div class="talhao-tooltip-title">${escape(value.field)} (${escape(value.farm)})</div>` +
-            `<div>Variedade plantada: <strong>${escape(value.variety || 'Não informada')}</strong></div><div>Plantio: <strong>${date(value.plantingDate)}</strong></div>` +
+        const title = `<div class="talhao-tooltip-inner"><div class="talhao-tooltip-title">${escape(value.field)} (${escape(value.farm)})</div>`;
+        if (!harvesting(state)) return title +
+            `<div>Variedade plantada: <strong>${escape(value.variety || 'Não informada')}</strong></div>` +
             `<div>Área plantada: <strong>${hectares(value.plantedArea)} / ${hectares(value.totalArea)}</strong></div>` +
-            `<div>Colheita estimada: <strong>${date(value.estimatedDate)}</strong></div>` +
+            `<div>Data do plantio: <strong>${date(value.plantingDate)}</strong></div>` +
+            `<div>${value.planted ? value.partial ? 'Plantio parcial: somente a área realizada.' : 'Plantio concluído.' : 'Sem plantio executado.'}</div></div>`;
+        return title + `<div>Colheita estimada: <strong>${date(value.estimatedDate)}</strong></div>` +
+            `<div>${value.estimatedDate ? 'Área prevista' : 'Área plantada sem previsão'}: <strong>${hectares(value.plantedArea)} / ${hectares(value.totalArea)}</strong></div>` +
+            `<div>Plantio: <strong>${date(value.plantingDate)}</strong></div><div>Variedade: <strong>${escape(value.variety || 'Não informada')}</strong></div>` +
             (value.reason ? `<div>${escape(value.reason)}</div>` : `<div>Ciclo: ${value.days} dias</div>`) +
             (value.partial ? '<div>Plantio parcial: previsão somente da área realizada.</div>' : '') + '</div>';
     }

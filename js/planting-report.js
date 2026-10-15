@@ -152,28 +152,41 @@
             text(ctx,title,left,283,36,ink,true,width);
             pages.push({canvas,ctx,scope,section});return ctx;
         }
-        function notes(ctx,totals,scopeRows,top=1472) {
+        function notes(ctx,totals,scopeRows,top=1472,section='Talhões') {
             let y=top+28;rect(ctx,left,top,width,204,'#e7eef4');
             const peak=totals.days.reduce((best,day)=>!best||day.area>best.area?day:best,null);
             const dominant=totals.varieties.reduce((best,v)=>!best||v.area>best.area?v:best,null);
+            const partial=scopeRows.filter(r=>r.partial).length;
+            if(section==='Variedades') {
+                const known=totals.varieties.filter(v=>v.key!=='NAOINFORMADA'),missing=totals.varieties.find(v=>v.key==='NAOINFORMADA');
+                y=wrapped(ctx,`Distribuição: ${known.length} variedade(s) em ${totals.plantedFields} talhão(ões) com plantio.`,left+18,y,width-36,19,25);
+                y=wrapped(ctx,dominant?`Maior área plantada: ${dominant.label}, ${ha(dominant.area)} (${(100*dominant.area/totals.plantedArea).toFixed(1).replace('.',',')}% do plantio).`:'Nenhuma variedade plantada registrada neste recorte.',left+18,y+3,width-36,19,25);
+                wrapped(ctx,`${partial} talhão(ões) parciais; ${totals.unplantedFields} sem execução. Área sem variedade informada: ${ha(missing?.area)}. As áreas representam apenas o plantio realizado.`,left+18,y+3,width-36,19,25);
+                return;
+            }
+            if(section==='Colheita') {
+                y=wrapped(ctx,peak?`Maior volume estimado: ${date(peak.key)}, ${ha(peak.area)}. Programação distribuída em ${totals.days.length} dia(s).`:'Sem datas estimadas disponíveis neste recorte.',left+18,y,width-36,19,25);
+                y=wrapped(ctx,totals.first?`Janela estimada: ${date(totals.first)} a ${date(totals.last)}. Cálculo: data de plantio + ciclo cadastrado pelo ADM.`:'Informe variedade, data de plantio e ciclo para calcular a previsão.',left+18,y+3,width-36,19,25);
+                wrapped(ctx,`Área sem previsão: ${ha(totals.withoutForecast)}. ${partial} talhão(ões) parciais: considerar somente a área realizada. Confirme a maturação no campo antes de colher.`,left+18,y+3,width-36,19,25);
+                return;
+            }
             const insight=[peak?`Maior volume estimado: ${date(peak.key)} (${ha(peak.area)}).`:'Nenhuma data estimada disponível.',
                 dominant?`Variedade predominante: ${dominant.label} (${(100*dominant.area/totals.plantedArea).toFixed(1).replace('.',',')}%).`:''].join(' ');
             y=wrapped(ctx,insight,left+18,y,width-36,19,25);
             y=wrapped(ctx,'Estimativa = data de plantio + ciclo cadastrado pelo ADM. Confirme a maturação no campo.',left+18,y+3,width-36,19,25);
-            const partial=scopeRows.filter(r=>r.partial).length;
             wrapped(ctx,`${partial} talhão(ões) com plantio parcial; somente os hectares realizados são somados. ${totals.unplantedFields} sem plantio executado. Área sem previsão: ${ha(totals.withoutForecast)}.`,left+18,y+3,width-36,19,25);
         }
         function table(title,scope,section,headers,widths,rows,totals,scopeRows,start=350,ctx=null) {
             let y=start;
             const head=()=>{rect(ctx,left,y,width,45,ink,0);let x=left;headers.forEach((h,i)=>{text(ctx,h,x+12,y+29,19,'white',true,widths[i]-24);x+=widths[i];});y+=45;};
-            const next=()=>{notes(ctx,totals,scopeRows);ctx=page(title+' - continuação',scope,section);y=350;head();};
+            const next=()=>{notes(ctx,totals,scopeRows,1472,section);ctx=page(title+' - continuação',scope,section);y=350;head();};
             if(!ctx)ctx=page(title,scope,section);head();
             if(!rows.length){text(ctx,'Nenhum dado para esta seção nos filtros selecionados.',left+15,y+40,23,muted);}
             rows.forEach((row,index)=>{if(y+43>bottom)next();rect(ctx,left,y,width,43,index%2?'#e8eef4':'white',0);let x=left;
                 row.forEach((cell,i)=>{const value=typeof cell==='object'?cell.label:cell;
                     if(cell?.color){rect(ctx,x+12,y+14,15,15,cell.color,3);text(ctx,value,x+38,y+29,21,ink,false,widths[i]-50);}
                     else text(ctx,value,x+12,y+29,21,ink,false,widths[i]-24);x+=widths[i];});y+=43;});
-            notes(ctx,totals,scopeRows,Math.min(y+28,1472));return {ctx,y};
+            notes(ctx,totals,scopeRows,Math.min(y+28,1472),section);return {ctx,y};
         }
         const scheduleRows=totals=>totals.days.map(d=>[{label:d.label,color:dayColors.get(d.key)},String(d.fields),ha(d.area),ha(d.accumulated)]);
         let ctx;
@@ -200,10 +213,10 @@
         const totalRows=data.totals.varieties.map(v=>[{label:v.label,color:varietyColors.get(v.key)},String(v.fields),ha(v.area),(100*v.area/data.totals.plantedArea).toFixed(1).replace('.',',')+'%']);
         ctx=page('Variedades plantadas - resumo geral',data.scope,'Resumo geral');cards(ctx,data.totals,320);
         text(ctx,`${data.farms.length} fazenda(s) | ${data.totals.plantedFields} talhões com execução`,left,493,24,muted);
-        table('Variedades plantadas - resumo geral',data.scope,'Resumo geral',['Variedade','Talhões','Área plantada','Participação'],[430,160,280,242],totalRows,data.totals,data.rows,540,ctx);
+        table('Variedades plantadas - resumo geral',data.scope,'Variedades',['Variedade','Talhões','Área plantada','Participação'],[430,160,280,242],totalRows,data.totals,data.rows,540,ctx);
         ctx=page('Dia estimado de colheita - resumo geral',data.scope,'Resumo geral');cards(ctx,data.totals,320);
         text(ctx,'Talhões com a mesma data são somados na mesma linha.',left,493,23,muted);
-        table('Dia estimado de colheita - resumo geral',data.scope,'Resumo geral',['Data estimada','Talhões','Área no dia','Área acumulada'],[340,180,296,296],scheduleRows(data.totals),data.totals,data.rows,540,ctx);
+        table('Dia estimado de colheita - resumo geral',data.scope,'Colheita',['Data estimada','Talhões','Área no dia','Área acumulada'],[340,180,296,296],scheduleRows(data.totals),data.totals,data.rows,540,ctx);
         await encodePages();
         if(images.length!==pageCount)throw Error('Falha na paginação do relatório.');
         return {blob:pdfFromImages(images),pageCount:images.length};
