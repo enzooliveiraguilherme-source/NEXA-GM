@@ -127,3 +127,36 @@ test('cores fortes são compartilhadas com o relatório e botão só aparece par
         }
     }
 });
+
+test('clique na legenda destaca a data, suaviza os outros talhões e pode ser desfeito', () => {
+    const h=harness();
+    const second={properties:{Fazenda:'FE',Campo:'FE 02',Area:100}};
+    const base={produto:'Plantio',fazenda:'FE',ano:'2026',cultura:'Soja',status:'concluido',areaRealizada:100,variedadeSemente:'Olimpo'};
+    const records={a:{...base,campo:'FE 01',dataPlantio:'2026-10-15'},b:{...base,campo:'FE 02',dataPlantio:'2026-10-16'}};
+    const before=JSON.stringify(records);
+    h.setRecords(records);h.maps.refresh(h.state,[feature,second]);
+    const layers=[feature,second].map(feature=>({feature,setStyle(value){this.style=value;},bringToFront(){this.raised=true;}}));
+    h.state.geojsonLayer={eachLayer(action){layers.forEach(action);}};
+    h.state.map={closePopup(){},closeTooltip(){throw Error('O mapa exige uma referência de tooltip; feche pelo talhão.');}};
+    const summary=h.elements.get('planting-map-summary').innerHTML;
+    const legend=h.elements.get('planting-map-legend');
+    assert.match(legend.innerHTML,/data-planting-group="2027-02-06"/);
+    legend.onclick({target:{closest:()=>({dataset:{plantingGroup:'2027-02-06'}})}});
+    assert.equal(layers[0].style.fillOpacity,1);assert.equal(layers[0].style.weight,3);assert.equal(layers[0].raised,true);
+    assert.equal(layers[1].style.fillOpacity,.07);assert.equal(h.elements.get('planting-legend-reset').hidden,false);
+    assert.equal(h.elements.get('planting-map-summary').innerHTML,summary);assert.equal(JSON.stringify(records),before);
+    h.maps.selectGroup(h.state,'2027-02-06');assert.equal(layers[0].style.fillOpacity,.88);assert.equal(layers[1].style.fillOpacity,.88);
+    h.maps.selectGroup(h.state,'2027-02-07');h.elements.get('planting-legend-reset').onclick();
+    assert.equal(h.elements.get('planting-legend-reset').hidden,true);assert.equal(layers[1].style.fillOpacity,.88);
+});
+
+test('destaque respeita variedades, áreas sem previsão e reinicia ao mudar filtros ou aba', () => {
+    const h=harness(),second={properties:{Fazenda:'FE',Campo:'FE 02',Area:100}};
+    const base={produto:'Plantio',fazenda:'FE',ano:'2026',cultura:'Soja',status:'concluido',areaRealizada:100,dataPlantio:'2026-10-15'};
+    h.setRecords({a:{...base,campo:'FE 01',variedadeSemente:'Olimpo'},b:{...base,campo:'FE 02',variedadeSemente:'NEO790'}});
+    h.state.currentSubTab='variedades-plantadas';h.maps.refresh(h.state,[feature,second]);
+    h.maps.selectGroup(h.state,'OLIMPO');assert.equal(h.maps.style(h.state,feature).fillOpacity,1);assert.equal(h.maps.style(h.state,second).fillOpacity,.07);
+    h.state.currentSubTab='data-estimada-colheita';h.maps.refresh(h.state,[feature,second]);assert.equal(h.maps.style(h.state,feature).fillOpacity,.88);
+    h.maps.selectGroup(h.state,'');assert.equal(h.maps.style(h.state,feature).fillOpacity,.07);
+    h.state.currentAno='2027';h.maps.refresh(h.state,[feature,second]);assert.equal(h.maps.style(h.state,feature).fillOpacity,.16);
+});
