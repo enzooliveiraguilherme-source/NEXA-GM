@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="portal-loading">
+<head>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEXA · Laboratório de safra</title>
+    <link rel="icon" type="image/jpeg" href="apoio/GP Michels.jpg">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+    <link rel="stylesheet" href="forecast.css?v=1">
+</head>
+<body data-page="portal">
+    <div id="auth-loading-overlay" class="forecast-loading"><p>Validando seu acesso…</p></div>
+    <header class="forecast-header">
+        <a class="forecast-brand" href="./portal.html"><img src="apoio/GP Michels.jpg" alt="Grupo Michels"><span>NEXA <small>LABORATÓRIO DE SAFRA</small></span></a>
+        <div class="forecast-account"><span id="portal-account-name"></span><button id="btn-logout" type="button">Sair</button></div>
+    </header>
+    <div class="forecast-notice"><strong>Versão de teste</strong><span>As simulações ficam só nesta página. Ao recarregar, você volta ao ponto de partida.</span><a href="https://nexa-gm.vercel.app" target="_blank" rel="noopener">Abrir NEXA oficial ↗</a></div>
+    <main class="forecast-layout">
+        <aside class="forecast-sidebar" aria-label="Filtros e simulação">
+            <div class="forecast-intro"><span class="forecast-eyebrow">DO PLANTIO À COLHEITA</span><h1>A próxima safra,<br>no mapa.</h1><p>Veja o que foi plantado e quando cada talhão poderá estar pronto para colher.</p></div>
+            <div class="forecast-filters">
+                <label>Fazenda<select id="forecast-farm"><option value="ALL">Todas as fazendas</option></select></label>
+                <div class="forecast-filter-pair"><label>Safra<select id="forecast-year"><option>2026</option><option>2027</option></select></label><label>Cultura<select id="forecast-culture"><option>Soja</option><option>Milho</option></select></label></div>
+            </div>
+            <section class="forecast-cycle"><span>CICLOS CONFIRMADOS</span><div><strong>Olimpo</strong><b>114 dias</b></div><div><strong>NEO 790</strong><b>114 dias</b></div><p>Contados a partir do plantio. Previsão de referência; confirme a maturação no campo.</p></section>
+            <section class="forecast-editor" aria-labelledby="forecast-editor-title">
+                <h2 id="forecast-editor-title">Experimentar um plantio</h2><p>Clique no mapa ou escolha um talhão.</p>
+                <form id="forecast-form">
+                    <label>Talhão<select id="forecast-field" required><option value="">Selecione um talhão</option></select></label>
+                    <p id="forecast-field-detail" class="forecast-detail">Nenhum talhão selecionado.</p>
+                    <label>Variedade plantada<input id="forecast-variety" list="forecast-varieties" maxlength="80" required placeholder="Ex.: Olimpo ou NEO 790"></label>
+                    <datalist id="forecast-varieties"><option value="Olimpo"></option><option value="NEO 790"></option></datalist>
+                    <div class="forecast-filter-pair"><label>Data do plantio<input id="forecast-date" type="date" required></label><label>Área plantada (ha)<input id="forecast-area" type="number" step="any" min="0.0001" required></label></div>
+                    <p id="forecast-calculation" class="forecast-calculation">Preencha a variedade e a data para calcular.</p>
+                    <button type="submit" class="forecast-primary">Simular neste talhão</button>
+                    <button type="button" id="forecast-remove" class="forecast-text-button" disabled>Retirar simulação deste talhão</button>
+                </form>
+                <p id="forecast-message" role="status" aria-live="polite"></p>
+            </section>
+            <button type="button" id="forecast-reset" class="forecast-reset" disabled>Limpar todos os testes</button>
+        </aside>
+        <section class="forecast-workspace" aria-label="Mapas da safra">
+            <div class="forecast-workspace-head"><div><span id="forecast-source" class="forecast-eyebrow">PLANTIO EXECUTADO</span><h2 id="forecast-map-title">Variedades plantadas</h2></div><div class="forecast-map-switch" role="group" aria-label="Tipo de mapa"><button type="button" data-map="varieties" aria-pressed="true">Variedades</button><button type="button" data-map="harvest" aria-pressed="false">Colheita estimada</button></div></div>
+            <div class="forecast-kpis"><div><span>Área plantada</span><strong id="forecast-planted">—</strong></div><div><span>Com previsão</span><strong id="forecast-estimated">—</strong></div><div><span>Janela estimada</span><strong id="forecast-window">—</strong></div></div>
+            <div class="forecast-map-wrap"><div id="forecast-map" aria-label="Mapa interativo dos talhões"></div><div id="forecast-empty" class="forecast-empty" hidden></div><aside id="forecast-legend" class="forecast-legend" aria-label="Legenda do mapa"></aside></div>
+            <div class="forecast-footnote"><span id="forecast-summary" role="status" aria-live="polite">Carregando os talhões…</span><span>Áreas parciais: a cor representa a variedade no talhão; o cálculo considera só os hectares plantados.</span></div>
+            <details class="forecast-table-section"><summary>Conferir datas e áreas por talhão</summary><div class="forecast-table-scroll"><table><thead><tr><th>Talhão</th><th>Variedade</th><th>Plantio</th><th>Área plantada</th><th>Colheita estimada</th><th>Fonte</th></tr></thead><tbody id="forecast-table"></tbody></table></div></details>
+        </section>
+    </main>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
+    <script src="auth.js?v=10"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script src="js/operations/supabase-repository.js?v=1"></script>
+    <script src="js/planting-forecast.js?v=1"></script>
+    <script src="js/forecast-preview.js?v=1"></script>
+</body>
+</html>
