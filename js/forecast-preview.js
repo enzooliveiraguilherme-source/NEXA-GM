@@ -16,6 +16,8 @@
             features = demo.features; officialRecords = demo.records;
             $('portal-account-name').textContent = 'Demonstração · dados fictícios';
             $('btn-logout').hidden = true;
+            $('forecast-demo-link').textContent = 'Consultar meus talhões';
+            $('forecast-demo-link').href = './index.html';
             document.documentElement.classList.remove('portal-loading');
             $('auth-loading-overlay').remove();
         } else {
@@ -130,7 +132,7 @@
         $('forecast-planted').textContent = hectares(summary.plantedArea);
         $('forecast-estimated').textContent = hectares(summary.estimatedArea);
         $('forecast-window').textContent = summary.first ? `${shortDate(summary.first)}/${summary.first.slice(0, 4)} – ${shortDate(summary.last)}/${summary.last.slice(0, 4)}` : 'Sem previsão';
-        $('forecast-summary').textContent = `${summary.plantedFields} de ${rows.length} talhões com plantio · ${summary.simulatedFields} simulações neste filtro`;
+        $('forecast-summary').textContent = `${summary.plantedFields} de ${rows.length} talhões com plantio · ${summary.simulatedFields} ${summary.simulatedFields === 1 ? 'simulação' : 'simulações'} neste filtro`;
         $('forecast-reset').disabled = session.size === 0;
         $('forecast-empty').hidden = mode === 'varieties' ? summary.plantedFields > 0 : summary.estimatedArea > 0;
         $('forecast-empty').textContent = !rows.length ? 'Nenhum talhão nesta fazenda.' : mode === 'varieties' ? 'Ainda não há plantio executado neste filtro. Escolha um talhão para testar.' : 'Sem previsão neste filtro. Simule Olimpo ou NEO 790 com uma data de plantio.';
@@ -138,6 +140,7 @@
         const fieldOptions = [new Option('Selecione um talhão', ''), ...visible.map(feature => new Option(`${feature.properties.Fazenda} · ${feature.properties.Campo}`, identity(feature)))];
         $('forecast-field').replaceChildren(...fieldOptions);
         $('forecast-field').value = selected ? identity(selected) : '';
+        map.closePopup();
         if (layer) layer.remove();
         layer = L.geoJSON({ type: 'FeatureCollection', features: visible }, {
             style: feature => {
