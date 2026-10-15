@@ -41,7 +41,7 @@
         let reason = 'Sem plantio executado';
         if (planted) reason = !variety ? 'Variedade não informada' : !plantingDate ? 'Data de plantio não informada' : !days ? 'Ciclo da variedade não definido' : '';
         return { farm: p.Fazenda, field: p.Campo, totalArea, plantedArea, planted, variety, plantingDate,
-            days, estimatedDate, reason, partial: planted && plantedArea < totalArea, simulated: !!record?.simulated };
+            days, estimatedDate, reason, partial: planted && record.status === 'em_andamento' && plantedArea < totalArea, simulated: !!record?.simulated };
     }
     function weekStart(value) {
         const time = dateValue(value);

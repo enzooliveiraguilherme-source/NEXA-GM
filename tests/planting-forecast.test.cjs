@@ -29,6 +29,17 @@ test('plantio parcial conta apenas a área executada e informa ausência de cicl
     assert.equal(F.project(field, { ...record, dataPlantio: '' }, 'Soja').estimatedDate, null);
     assert.equal(F.project(field, { ...record, areaRealizada: 150 }, 'Soja').plantedArea, 100);
 });
+test('plantio concluído não fica parcial quando a área do desenho difere da registrada', () => {
+    const feature = { properties: { Fazenda: 'FE', Campo: 'FE 05.1', Area: 64.8 } };
+    const completed = { ...record, areaRealizada: 62.51, areaTotal: 62.51, percentualRealizado: 100, dataPlantio: '2026-10-09' };
+    const before = JSON.stringify(completed);
+    const row = F.project(feature, completed, 'Soja');
+    assert.equal(row.partial, false);
+    assert.equal(row.plantedArea, 62.51);
+    assert.equal(row.estimatedDate, '2027-01-31');
+    assert.equal(F.project(feature, { ...completed, status: 'em_andamento' }, 'Soja').partial, true);
+    assert.equal(JSON.stringify(completed), before);
+});
 test('semanas começam na segunda e o total não inclui talhões sem previsão', () => {
     const rows = [F.project(field, record, 'Soja'), F.project(field, { ...record, variedadeSemente: 'Outra' }, 'Soja')];
     const total = F.summarize(rows);

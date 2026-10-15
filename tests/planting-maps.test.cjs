@@ -31,6 +31,16 @@ test('mapas usam execução real e área parcial, sem exigir inclusão no planej
     assert.match(h.elements.get('planting-map-summary').innerHTML, /Não há plantio executado/);
     assert.equal(h.maps.style(h.state, feature).fillOpacity, .16);
 });
+test('FE 05.1 concluído mantém hectares e previsão sem borda nem aviso de parcial', () => {
+    const h = harness();
+    const completedField = { properties: { Fazenda: 'FE', Campo: 'FE 05.1', Area: 64.8 } };
+    h.setRecords({ a: { produto: 'Plantio', fazenda: 'FE', campo: 'FE 05.1', ano: '2026', cultura: 'Soja', status: 'concluido', areaRealizada: 62.51, variedadeSemente: 'Olimpo', dataPlantio: '2026-10-09' } });
+    h.maps.refresh(h.state, [completedField]);
+    assert.equal(h.maps.style(h.state, completedField).dashArray, null);
+    assert.doesNotMatch(h.maps.tooltip(h.state, completedField), /Plantio parcial/);
+    assert.match(h.maps.tooltip(h.state, completedField), /62,51 ha/);
+    assert.match(h.maps.tooltip(h.state, completedField), /31\/01\/2027/);
+});
 test('filtros de safra e cultura não reaproveitam execução de outro contexto', () => {
     const h = harness(); h.state.currentAno = '2027'; h.maps.refresh(h.state, [feature]);
     assert.match(h.maps.tooltip(h.state, feature), /Sem plantio executado/);
