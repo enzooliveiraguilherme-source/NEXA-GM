@@ -234,6 +234,7 @@ function isPlantioMode() {
 
 window.addEventListener?.('geoportal:seed-cycles-changed', () => {
     SharedSeedCatalog.mergeNames(window.SeedCycleCatalog?.names || []);
+    if (AdubacaoModal.currentFeature) AdubacaoModal.populateVariedadeSuggestions();
     if (isPlantingAnalysisMode() && state.geojsonData) renderMap(false);
 });
 
@@ -1442,6 +1443,10 @@ const AdubacaoModal = {
         if (!this.elements.listaVariedadesSemente) return;
         const variedades = new Set();
 
+        (window.SeedCycleCatalog?.rows || []).forEach(row => {
+            if (!row.archived && SharedSeedCatalog.normalize(row.culture) === SharedSeedCatalog.normalize(state.currentCultura)) variedades.add(row.variety_name);
+        });
+
         state.sharedSeedVarieties.forEach(variedade => {
             if (variedade && String(variedade).trim()) variedades.add(String(variedade).trim());
         });
@@ -1459,10 +1464,16 @@ const AdubacaoModal = {
             }
         });
 
-        const normalizedFilter = SharedSeedCatalog.normalize(filterText);
-        const filtered = Array.from(variedades)
+        const normalizedFilter = SharedSeedCatalog.normalize(filterText).normalize('NFD').replace(/[\u0300-\u036f\s]/g, '');
+        const unique = new Map();
+        variedades.forEach(variedade => {
+            if (window.SeedCycleCatalog?.isExcluded(variedade, state.currentCultura)) return;
+            const key = SharedSeedCatalog.normalize(variedade).normalize('NFD').replace(/[\u0300-\u036f\s]/g, '');
+            if (key && !unique.has(key)) unique.set(key, variedade);
+        });
+        const filtered = Array.from(unique.values())
             .sort((a, b) => a.localeCompare(b, 'pt-BR'))
-            .filter(variedade => !normalizedFilter || SharedSeedCatalog.normalize(variedade).includes(normalizedFilter));
+            .filter(variedade => !normalizedFilter || SharedSeedCatalog.normalize(variedade).normalize('NFD').replace(/[\u0300-\u036f\s]/g, '').includes(normalizedFilter));
 
         this.elements.listaVariedadesSemente.innerHTML = '';
         if (!filtered.length) {
