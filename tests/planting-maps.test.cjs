@@ -4,13 +4,13 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const F = require('../js/planting-forecast.js');
 const feature = { properties: { Fazenda: 'FE', Campo: 'FE 01', Area: 100, Variedade: 'Olimpo' } };
-function harness() {
+function harness(options = {}) {
     const elements = new Map();
     const document = { addEventListener() {}, querySelectorAll: () => [], getElementById(id) {
         if (!elements.has(id)) elements.set(id, { innerHTML: '', classList: { toggle(name, value) { this[name] = value; } } });
         return elements.get(id);
     } };
-    const window = { PlantingForecast: F };
+    const window = { PlantingForecast: F, ...options };
     const context = vm.createContext({ window, document, console, Date, L: { DomEvent: { stopPropagation() {}, preventDefault() {} } } });
     vm.runInContext(fs.readFileSync(require.resolve('../js/planting-maps.js'), 'utf8'), context);
     vm.runInContext(fs.readFileSync(require.resolve('../app.js'), 'utf8'), context);
@@ -111,4 +111,19 @@ test('legenda de colheita separa dias consecutivos da mesma semana e soma as ár
     assert.match(h.elements.get('planting-map-summary').innerHTML, /Com previsão<\/span><b>100 ha<\/b>/);
     assert.match(h.maps.tooltip(h.state, secondFeature), /07\/02\/2027/);
     assert.notEqual(h.maps.style(h.state, feature).fillColor, h.maps.style(h.state, secondFeature).fillColor);
+});
+
+test('cores fortes são compartilhadas com o relatório e botão só aparece para perfis autorizados', () => {
+    for (const role of ['admin', 'projetista', 'visualizador']) {
+        let exported = 0;
+        const h = harness({portalAccessRole:role, PlantingReport:{download(state) { assert.equal(state,h.state); exported++; }}});
+        for (const tab of ['data-estimada-colheita','variedades-plantadas']) {
+            h.state.currentSubTab=tab; h.maps.refresh(h.state,[feature]);
+            const html=h.elements.get('planting-map-summary').innerHTML;
+            assert.equal(html.includes('Exportar relatório PDF'),role!=='visualizador');
+            if(role!=='visualizador') {h.elements.get('planting-report-button').onclick();assert.ok(exported);}
+            assert.equal(h.maps.style(h.state,feature).fillColor,h.maps.palette[0]);
+            assert.equal(h.maps.style(h.state,feature).fillOpacity,.88);
+        }
+    }
 });

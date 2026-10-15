@@ -328,6 +328,8 @@ body[data-page="login"] { margin: 0; min-height: 100vh; background: #f5f7fa; col
 .invite-only-help { color:#607086; font-size:13px; text-align:center; line-height:1.6; margin:18px 0 0; }
 .operation-export-trigger { border:1px solid #d5e0e9; border-radius:8px; background:white; color:#102c4d; padding:10px 12px; min-height:44px; font:inherit; font-size:12px; font-weight:700; cursor:pointer; flex-shrink:0; }
 .operation-export-trigger:disabled { opacity:.6; cursor:wait; }
+#planting-report-button { margin-top:12px; background:#102c4d; color:white; border-color:#102c4d; }
+#planting-report-status { display:block; margin-top:6px; font-size:11px; line-height:1.4; color:#50677f; }
 .operation-export-dialog { margin:auto; width:min(650px,calc(100vw - 24px)); max-height:calc(100svh - 24px); padding:22px; border:1px solid #dce5ef; border-radius:18px; color:#102c4d; overflow-y:auto; overscroll-behavior:contain; background:#f3f7fa; }
 .operation-export-dialog::backdrop { background:#102c4d99; }
 .operation-export-dialog header { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; position:sticky; top:-22px; padding-top:8px; background:#f3f7fa; z-index:2; }
