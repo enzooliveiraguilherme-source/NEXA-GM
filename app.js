@@ -231,7 +231,11 @@ function isPlantioMode() {
 }
 
 function isOperationalMapMode() {
-    return state.currentTab === 'adubacao' || state.currentTab === 'plantio';
+    return state.currentTab === 'adubacao' || (state.currentTab === 'plantio' && !isPlantingAnalysisMode());
+}
+
+function isPlantingAnalysisMode() {
+    return state.currentTab === 'plantio' && ['data-estimada-colheita', 'variedades-plantadas'].includes(state.currentSubTab);
 }
 
 const TalhaoSelection = {
@@ -710,14 +714,16 @@ function isCalcarioMode() {
 
 function updateOperationUI() {
     const plantio = isPlantioMode();
+    const analysis = isPlantingAnalysisMode();
     const harvest = state.currentTab === 'colheita';
     const operational = isOperationalMapMode();
     const operation = OPERACOES_CONFIG[state.currentTab];
     const heading = document.querySelector('.portal-heading h1');
     if (heading && operation) heading.textContent = operation.name;
     document.getElementById('calcario-dashboard')?.classList.toggle('hidden', !operational);
-    document.getElementById('calcario-filter-bar')?.classList.toggle('hidden', !operational);
-    document.getElementById('generic-op-bar')?.classList.toggle('hidden', operational);
+    document.getElementById('calcario-filter-bar')?.classList.toggle('hidden', !operational && !analysis);
+    document.getElementById('generic-op-bar')?.classList.toggle('hidden', operational || analysis);
+    document.body.classList.toggle('planting-analysis', analysis);
     if (operation) {
         const name = document.getElementById('generic-op-name');
         if (name) name.textContent = operation.name;
@@ -760,6 +766,7 @@ function updateOperationUI() {
 }
 
 function getFeatureStyle(feature) {
+    if (isPlantingAnalysisMode()) return window.PlantingMaps.style(state, feature);
     if (state.currentTab === 'colheita') {
         const selected = state.harvestSelected === HarvestView.fieldKey(feature);
         return { color:'#000000', fillColor:'transparent', fillOpacity:0, weight:selected ? 1.3 : 0.8 };
@@ -826,6 +833,7 @@ function getFeatureStyle(feature) {
 }
 
 function getTalhaoTooltipHtml(feature) {
+    if (isPlantingAnalysisMode()) return window.PlantingMaps.tooltip(state, feature);
     const p = feature.properties || {};
     const area = p.Area ? parseFloat(p.Area).toFixed(2) : '0.00';
     const campo = p.Campo || 'Sem nome';
@@ -883,7 +891,7 @@ function getTalhaoTooltipHtml(feature) {
 }
 
 function bindTalhaoTooltip(layer, feature) {
-    if (isCalcarioMode()) {
+    if (isCalcarioMode() || isPlantingAnalysisMode()) {
         const content = getTalhaoTooltipHtml(feature);
         const existingTooltip = layer.getTooltip();
         if (existingTooltip) {
@@ -943,7 +951,7 @@ function onEachFeature(feature, layer) {
     });
 
     layer.on('mouseover', function() {
-        if (!isCalcarioMode()) {
+        if (!isCalcarioMode() && !isPlantingAnalysisMode()) {
             layer.setStyle({
                 weight: 1.8,
                 color: '#000000',
@@ -967,6 +975,10 @@ function onEachFeature(feature, layer) {
             try { state.map.closeTooltip(); } catch(err){}
         }
 
+        if (isPlantingAnalysisMode()) {
+            layer.bindPopup(window.PlantingMaps.tooltip(state, feature)).openPopup();
+            return;
+        }
         if (state.currentTab === 'colheita') {
             HarvestView.select(state, feature);
             return;
@@ -1021,6 +1033,7 @@ function onEachFeature(feature, layer) {
 
 // Atualização de estilos e KPIs sem destruir o GeoJSON Layer
 function updateMapStylesAndKPIs() {
+    if (isPlantingAnalysisMode()) { renderMap(false); return; }
     TalhaoSelection.updateUI();
     try {
         if (state.geojsonLayer) {
@@ -1055,6 +1068,7 @@ function renderMap(shouldFitBounds = true) {
     
     if (state.currentTab === 'colheita') HarvestView.refreshFilters(state);
     const filteredFeatures = activeData.features.filter(featureMatchesFilters);
+    window.PlantingMaps?.refresh(state, filteredFeatures);
     
     const filteredData = {
         type: "FeatureCollection",
@@ -1110,6 +1124,11 @@ function renderMap(shouldFitBounds = true) {
         }
     }
 
+    if (isPlantingAnalysisMode()) {
+        calcarioFilterBar?.classList.remove('hidden');
+        genericOpBar?.classList.add('hidden');
+        infoPanel?.classList.add('hidden');
+    }
     if (filteredFeatures.length === 0) return;
     
     state.geojsonLayer = L.geoJSON(filteredData, {
@@ -2250,6 +2269,9 @@ function setupEventListeners() {
         }
 
         // Atualiza imediatamente o estado visual dos botões da sidebar
+        document.querySelectorAll('#sub-nav-plantio [data-subtab]').forEach(button => {
+            button.classList.toggle('active', tabKey === 'plantio' && button.dataset.subtab === state.currentSubTab);
+        });
         document.querySelectorAll('.sidebar-nav .tab-btn').forEach(btn => {
             const isCurrent = (btn.dataset.tab === tabKey);
             btn.classList.toggle('active', isCurrent);
@@ -2298,12 +2320,12 @@ function setupEventListeners() {
         });
     }
 
-    if (subtabPlantio) {
-        subtabPlantio.addEventListener('click', (e) => {
+    document.querySelectorAll('#sub-nav-plantio [data-subtab]').forEach(button => {
+        button.addEventListener('click', (e) => {
             e.stopPropagation();
-            switchMainTab('plantio', 'mapa-plantio');
+            switchMainTab('plantio', button.dataset.subtab);
         });
-    }
+    });
 
     // Alternância de Modos (Aplicação vs Planejamento)
     const btnModeAplicacao = document.getElementById('btn-mode-aplicacao');
