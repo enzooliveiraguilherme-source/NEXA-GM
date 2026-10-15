@@ -1,8 +1,15 @@
 (function (root) {
     'use strict';
-    const columns = 'id,variety_name,culture,cycle_days,version,updated_at';
-    let rows = [], names = [], available = false, pending = null;
+    const columns = 'id,variety_name,culture,cycle_days,version,updated_at,archived';
+    let rows = [], baseNames = [], available = false, pending = null;
     const normalized = value => root.PlantingForecast.normalize(value).replace(/\s/g, '');
+    function isExcluded(name, culture) {
+        const matching = rows.filter(row => normalized(row.variety_name) === normalized(name) && (!culture || normalized(row.culture) === normalized(culture)));
+        return matching.length > 0 && matching.every(row => row.archived);
+    }
+    function names() {
+        return [...new Set([...baseNames, ...rows.map(row => row.variety_name)])].filter(name => !isExcluded(name));
+    }
     function validate(input) {
         const name = String(input.variety_name || '').trim().replace(/\s+/g, ' ');
         const culture = String(input.culture || '').trim().replace(/\s+/g, ' ');
@@ -30,7 +37,7 @@
         pending = (async () => {
             try {
                 const [cycles, varieties] = await Promise.all([readAll('seed_variety_cycles', columns), readAll('seed_varieties', 'id,name')]);
-                rows = cycles; names = [...new Set([...varieties.map(row => row.name), ...cycles.map(row => row.variety_name)])];
+                rows = cycles; baseNames = varieties.map(row => row.name);
                 root.PlantingForecast.configureCycles(rows); available = true;
                 root.dispatchEvent(new CustomEvent('geoportal:seed-cycles-changed'));
                 return true;
@@ -45,8 +52,16 @@
         return pending;
     }
     async function save(input, existing) {
-        if (root.portalAccessRole !== 'admin') throw Error('Somente administradores podem alterar os ciclos.');
         const payload = validate(input);
+        const previous = existing || rows.find(row => row.archived && normalized(row.variety_name) === normalized(payload.variety_name) && normalized(row.culture) === normalized(payload.culture));
+        return persist(payload, previous, false);
+    }
+    async function archive(item) {
+        return persist(validate(item), item, true);
+    }
+    async function persist(input, existing, archived) {
+        if (root.portalAccessRole !== 'admin') throw Error('Somente administradores podem alterar os ciclos.');
+        const payload = { ...input, archived };
         let query;
         if (existing?.id) {
             if (!Number.isInteger(existing.version)) throw Error('Recarregue o catálogo antes de editar.');
@@ -57,13 +72,12 @@
         if (error) throw Error(error.code === '42501' ? 'Seu perfil não permite alterar os ciclos.' : 'Não foi possível salvar o ciclo. A alteração não foi confirmada.');
         if (!data) throw Error('Este cadastro mudou ou sua permissão foi alterada. Recarregue o catálogo antes de salvar.');
         rows = rows.filter(row => row.id !== data.id).concat(data);
-        names = [...new Set([...names, data.variety_name])];
         root.PlantingForecast.configureCycles(rows); available = true;
         root.dispatchEvent(new CustomEvent('geoportal:seed-cycles-changed'));
         return data;
     }
-    root.SeedCycleCatalog = Object.freeze({ load, save, validate, get rows() { return rows.map(row => ({ ...row })); },
-        get names() { return [...names]; }, get available() { return available; } });
+    root.SeedCycleCatalog = Object.freeze({ load, save, archive, isExcluded, validate, get rows() { return rows.map(row => ({ ...row })); },
+        get names() { return names(); }, get available() { return available; } });
     document.addEventListener('DOMContentLoaded', async () => {
         if (!await root.portalReady || root.portalAccessRole !== 'admin') return;
         const account = document.querySelector('.portal-account'); if (!account) return;
@@ -71,6 +85,19 @@
         const dialog = document.createElement('dialog'); dialog.className = 'access-dialog members-dialog seed-cycles-dialog'; dialog.setAttribute('aria-labelledby', 'seed-cycles-title');
         dialog.innerHTML = '<header class="members-header"><div><span class="members-eyebrow">ADMINISTRAÇÃO</span><h2 id="seed-cycles-title">Variedades e ciclos</h2><p>Defina os dias após o plantio usados na previsão de colheita.</p></div><button type="button" id="seed-cycles-close" class="members-close">Fechar</button></header><div class="members-toolbar"><label>Pesquisar variedade<input type="search" id="seed-cycles-search" placeholder="Nome ou cultura"></label><button type="button" id="seed-cycles-add">Adicionar variedade</button></div><p id="seed-cycles-status" class="members-status" role="status" aria-live="polite"></p><form id="seed-cycles-form" class="member-form seed-cycles-form" hidden><h3 id="seed-cycles-form-title">Adicionar variedade</h3><label>Nome da variedade<input id="seed-cycles-name" required maxlength="80"></label><label>Cultura<input id="seed-cycles-culture" required maxlength="40" value="Soja" list="seed-cycles-cultures"></label><datalist id="seed-cycles-cultures"><option value="Soja"></option><option value="Milho"></option></datalist><label>Ciclo após o plantio (dias)<input id="seed-cycles-days" type="number" min="1" max="730" step="1" placeholder="Sem ciclo definido"></label><p>Deixe em branco para ficar sem previsão. Ao salvar, o novo ciclo será aplicado aos plantios registrados desta variedade e cultura.</p><div class="member-actions"><button type="submit" id="seed-cycles-save">Salvar ciclo</button><button type="button" id="seed-cycles-cancel">Cancelar</button></div></form><div class="members-table-wrap"><table class="members-table"><thead><tr><th>Variedade</th><th>Cultura</th><th>Ciclo após o plantio</th><th>Ações</th></tr></thead><tbody id="seed-cycles-rows"></tbody></table></div>';
         document.body.append(dialog);
+        const archivedLabel = document.createElement('label'); archivedLabel.className = 'seed-cycles-show-archived';
+        const archivedToggle = document.createElement('input'); archivedToggle.type = 'checkbox'; archivedToggle.id = 'seed-cycles-show-archived';
+        archivedLabel.append(archivedToggle, document.createTextNode('Mostrar excluídas'));
+        dialog.querySelector('.members-table-wrap').before(archivedLabel);
+        const confirmDialog = document.createElement('dialog'); confirmDialog.className = 'seed-delete-confirm'; confirmDialog.setAttribute('aria-labelledby','seed-delete-title');
+        confirmDialog.innerHTML = '<h2 id="seed-delete-title">Excluir variedade do catálogo?</h2><p id="seed-delete-name"></p><p>Os plantios já registrados serão mantidos. A previsão desta variedade ficará sem ciclo até você restaurá-la em “Mostrar excluídas”.</p><div class="member-actions"><button type="button" id="seed-delete-confirm">Confirmar exclusão</button><button type="button" id="seed-delete-cancel">Cancelar</button></div>';
+        document.body.append(confirmDialog);
+        let pendingRemoval = null;
+        confirmDialog.querySelector('#seed-delete-cancel').addEventListener('click', () => { pendingRemoval = null; confirmDialog.close(); });
+        confirmDialog.addEventListener('cancel', () => { pendingRemoval = null; });
+        confirmDialog.querySelector('#seed-delete-confirm').addEventListener('click', () => {
+            const item = pendingRemoval; pendingRemoval = null; confirmDialog.close(); if (item) changeArchived(item, true, true);
+        });
         const $ = id => dialog.querySelector('#' + id);
         let editing = null, busy = false;
         const status = text => { $('seed-cycles-status').textContent = text; };
@@ -81,20 +108,44 @@
         }
         function render() {
             const body = $('seed-cycles-rows'); body.replaceChildren();
-            const listed = [...rows];
-            for (const name of names) if (!rows.some(row => normalized(row.variety_name) === normalized(name) && normalized(row.culture) === 'SOJA')) listed.push({ variety_name: name, culture: 'Soja', cycle_days: null });
+            const listed = rows.filter(row => !row.archived || archivedToggle.checked);
+            for (const name of names()) if (!rows.some(row => normalized(row.variety_name) === normalized(name) && normalized(row.culture) === 'SOJA')) listed.push({ variety_name: name, culture: 'Soja', cycle_days: null });
             const seen = new Set(), filter = $('seed-cycles-search').value.trim().toLocaleLowerCase('pt-BR');
             for (const item of listed.sort((a, b) => a.variety_name.localeCompare(b.variety_name, 'pt-BR') || a.culture.localeCompare(b.culture, 'pt-BR'))) {
                 const key = JSON.stringify([normalized(item.variety_name), normalized(item.culture)]);
                 if (seen.has(key) || !(item.variety_name + ' ' + item.culture).toLocaleLowerCase('pt-BR').includes(filter)) continue;
                 seen.add(key); const row = document.createElement('tr');
-                [item.variety_name, item.culture, item.cycle_days == null ? 'Não definido' : item.cycle_days + ' dias'].forEach((value, index) => {
+                [item.variety_name + (item.archived ? ' (excluída)' : ''), item.culture, item.cycle_days == null ? 'Não definido' : item.cycle_days + ' dias'].forEach((value, index) => {
                     const cell = document.createElement('td'); cell.dataset.label = ['Variedade', 'Cultura', 'Ciclo'][index]; cell.textContent = value; row.append(cell);
                 });
                 const actions = document.createElement('td'); actions.dataset.label = 'Ações'; const edit = document.createElement('button'); edit.type = 'button'; edit.textContent = item.id ? 'Editar ciclo' : 'Definir ciclo'; edit.disabled = busy; edit.setAttribute('aria-label', edit.textContent + ' de ' + item.variety_name + ' (' + item.culture + ')');
-                edit.addEventListener('click', () => showForm(item)); actions.append(edit); row.append(actions); body.append(row);
+                if (item.archived) {
+                    edit.textContent = 'Restaurar'; edit.setAttribute('aria-label', 'Restaurar ' + item.variety_name + ' (' + item.culture + ')');
+                    edit.addEventListener('click', () => changeArchived(item, false));
+                } else edit.addEventListener('click', () => showForm(item));
+                actions.append(edit);
+                if (!item.archived) {
+                    const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'seed-cycle-delete'; remove.textContent = 'Excluir'; remove.disabled = busy;
+                    remove.setAttribute('aria-label', 'Excluir ' + item.variety_name + ' (' + item.culture + ')');
+                    remove.addEventListener('click', () => changeArchived(item, true)); actions.append(remove);
+                }
+                row.append(actions); body.append(row);
             }
             if (!body.children.length) { const row = document.createElement('tr'), cell = document.createElement('td'); cell.colSpan = 4; cell.textContent = 'Nenhuma variedade encontrada.'; row.append(cell); body.append(row); }
+        }
+        async function changeArchived(item, excluded, confirmed = false) {
+            if (busy) return;
+            if (excluded && !confirmed) {
+                pendingRemoval = item; confirmDialog.querySelector('#seed-delete-name').textContent = item.variety_name + ' (' + item.culture + ')';
+                confirmDialog.showModal(); confirmDialog.querySelector('#seed-delete-cancel').focus(); return;
+            }
+            setBusy(true); status(excluded ? 'Excluindo variedade do catálogo…' : 'Restaurando variedade…');
+            try {
+                if (excluded) await archive(item); else await save(item, item);
+                $('seed-cycles-form').hidden = true; editing = null;
+                status(excluded ? 'Variedade excluída do catálogo. Os plantios foram preservados. Você pode restaurá-la em “Mostrar excluídas”.' : 'Variedade restaurada. A previsão dos mapas foi atualizada.');
+            } catch (error) { status(error.message); }
+            finally { setBusy(false); render(); }
         }
         function showForm(item = null) {
             editing = item; $('seed-cycles-form').hidden = false; $('seed-cycles-form-title').textContent = item ? 'Definir ciclo da variedade' : 'Adicionar variedade';
@@ -111,6 +162,7 @@
         dialog.addEventListener('cancel', event => { if (busy) event.preventDefault(); });
         $('seed-cycles-add').addEventListener('click', () => showForm());
         $('seed-cycles-search').addEventListener('input', render);
+        archivedToggle.addEventListener('change', render);
         $('seed-cycles-cancel').addEventListener('click', () => { $('seed-cycles-form').hidden = true; editing = null; });
         $('seed-cycles-form').addEventListener('submit', async event => {
             event.preventDefault(); if (busy) return;

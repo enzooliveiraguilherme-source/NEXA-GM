@@ -149,7 +149,7 @@ const SharedSeedCatalog = {
         [...state.sharedSeedVarieties, ...names].forEach(name => {
             const cleanName = String(name || '').trim().replace(/\s+/g, ' ');
             const normalized = this.normalize(cleanName);
-            if (normalized && !merged.has(normalized)) merged.set(normalized, cleanName);
+            if (normalized && !window.SeedCycleCatalog?.isExcluded(cleanName, state.currentCultura) && !merged.has(normalized)) merged.set(normalized, cleanName);
         });
         state.sharedSeedVarieties = Array.from(merged.values()).sort((a, b) => a.localeCompare(b, 'pt-BR'));
     },
@@ -182,7 +182,7 @@ const SharedSeedCatalog = {
     },
 
     async syncLocalNames() {
-        const names = this.collectLocalNames();
+        const names = this.collectLocalNames().filter(name => !window.SeedCycleCatalog?.isExcluded(name, state.currentCultura));
         if (!names.length) return;
 
         const userId = window.portalUser?.id;
@@ -205,7 +205,7 @@ const SharedSeedCatalog = {
 
     async add(name) {
         const cleanName = String(name || '').trim().replace(/\s+/g, ' ');
-        if (!cleanName) return;
+        if (!cleanName || window.SeedCycleCatalog?.isExcluded(cleanName, state.currentCultura)) return;
         this.mergeNames([cleanName]);
 
         const client = window.supabaseClient;
@@ -2172,6 +2172,7 @@ function setupEventListeners() {
     if (filterCultura) {
         filterCultura.addEventListener('change', (e) => {
             state.currentCultura = e.target.value;
+            SharedSeedCatalog.mergeNames([...(window.SeedCycleCatalog?.names || []), ...SharedSeedCatalog.collectLocalNames()]);
             updateFilterTag();
             updateMapStylesAndKPIs();
         });

@@ -5,7 +5,7 @@
     let configuredCycles = null;
     const cycleKey = (variety, culture) => JSON.stringify([variety, culture].map(value => normalize(value).replace(/\s/g, '')));
     function configureCycles(rows) {
-        configuredCycles = new Map(rows.map(row => [cycleKey(row.variety_name, row.culture),
+        configuredCycles = new Map(rows.filter(row => !row.archived).map(row => [cycleKey(row.variety_name, row.culture),
             Number.isInteger(row.cycle_days) && row.cycle_days > 0 ? row.cycle_days : null]));
     }
     function cycleDays(variety, culture = 'Soja') {
