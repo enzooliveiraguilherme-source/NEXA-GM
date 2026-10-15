@@ -943,6 +943,13 @@ function bindTalhaoTooltip(layer, feature) {
 function onEachFeature(feature, layer) {
     bindTalhaoTooltip(layer, feature);
 
+    layer.on('popupopen', function() {
+        if (isPlantingAnalysisMode()) layer.unbindTooltip();
+    });
+    layer.on('popupclose', function() {
+        if (isPlantingAnalysisMode()) bindTalhaoTooltip(layer, feature);
+    });
+
     layer.on('contextmenu', function(event) {
         if (!isOperationalMapMode() || state.operationalMode !== 'aplicacao' || state.userRole === 'viewer') return;
         if (event?.originalEvent) {
@@ -984,6 +991,7 @@ function onEachFeature(feature, layer) {
         }
 
         if (isPlantingAnalysisMode()) {
+            layer.closeTooltip();
             layer.bindPopup(window.PlantingMaps.tooltip(state, feature)).openPopup();
             return;
         }

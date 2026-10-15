@@ -51,12 +51,33 @@ test('abas derivadas não permitem seleção, edição nem alteração de planej
     const h = harness(); h.maps.refresh(h.state, [feature]);
     const events = {}; let popup = '', opened = 0;
     const layer = { on: (event, action) => { events[event] = action; }, getTooltip: () => null, bindTooltip() {},
-        bindPopup(html) { popup = html; return this; }, openPopup() { opened++; } };
+        closeTooltip() {}, unbindTooltip() {},
+        bindPopup(html) { popup = html; return this; }, openPopup() { opened++; events.popupopen(); } };
     h.onEachFeature(feature, layer);
     assert.equal(h.isOperationalMapMode(), false); assert.equal(h.isPlantingAnalysisMode(), true);
     events.click({}); events.contextmenu({}); h.TalhaoSelection.toggle(feature);
     assert.equal(opened, 1); assert.match(popup, /06\/02\/2027/); assert.equal(h.state.selectedFeatures.size, 0);
     h.state.currentSubTab = 'mapa-plantio'; assert.equal(h.isOperationalMapMode(), true);
+});
+test('clique nas duas abas mantém somente o popup e restaura o hover ao fechar', () => {
+    for (const tab of ['data-estimada-colheita', 'variedades-plantadas']) {
+        const h = harness(); h.state.currentSubTab = tab; h.maps.refresh(h.state, [feature]);
+        const events = {}; let tooltip = null, hoverVisible = false, popupVisible = false;
+        const layer = {
+            on(event, action) { events[event] = action; }, getTooltip: () => tooltip,
+            bindTooltip(html) { tooltip = html; }, setTooltipContent(html) { tooltip = html; },
+            closeTooltip() { hoverVisible = false; }, unbindTooltip() { tooltip = null; hoverVisible = false; },
+            bindPopup() { return this; }, openPopup() { popupVisible = true; events.popupopen(); }
+        };
+        h.onEachFeature(feature, layer);
+        assert.ok(tooltip); hoverVisible = true;
+        events.click({});
+        assert.equal(popupVisible, true); assert.equal(hoverVisible, false); assert.equal(tooltip, null);
+        events.mouseover();
+        assert.equal(tooltip, null);
+        events.popupclose(); assert.ok(tooltip);
+        events.click({}); assert.equal(tooltip, null);
+    }
 });
 test('legenda de variedades, escape e ocultação ao sair das abas de análise', () => {
     const h = harness(); h.state.currentSubTab = 'variedades-plantadas';
