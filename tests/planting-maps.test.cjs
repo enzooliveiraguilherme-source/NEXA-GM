@@ -149,6 +149,17 @@ test('clique na legenda destaca a data, suaviza os outros talhões e pode ser de
     h.maps.selectGroup(h.state,'2027-02-07');h.elements.get('planting-legend-reset').onclick();
     assert.equal(h.elements.get('planting-legend-reset').hidden,true);assert.equal(layers[1].style.fillOpacity,.88);
 });
+test('o botão PDF desaparece no modo Visualizador mesmo para ADM e volta em Editor',()=>{
+    const h=harness({portalAccessRole:'admin'});
+    for(const tab of ['data-estimada-colheita','variedades-plantadas']){
+        h.state.currentSubTab=tab;h.state.userRole='editor';h.maps.refresh(h.state,[feature]);
+        assert.match(h.elements.get('planting-map-summary').innerHTML,/Exportar relatório PDF/);
+        h.state.userRole='viewer';h.maps.refresh(h.state,[feature]);
+        assert.doesNotMatch(h.elements.get('planting-map-summary').innerHTML,/Exportar relatório PDF/);
+        h.state.userRole='editor';h.maps.refresh(h.state,[feature]);
+        assert.match(h.elements.get('planting-map-summary').innerHTML,/Exportar relatório PDF/);
+    }
+});
 
 test('destaque respeita variedades, áreas sem previsão e reinicia ao mudar filtros ou aba', () => {
     const h=harness(),second={properties:{Fazenda:'FE',Campo:'FE 02',Area:100}};

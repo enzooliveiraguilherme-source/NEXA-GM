@@ -11,7 +11,7 @@ function setup(role='admin'){
     const records={a:{...base,fazenda:'RM',campo:'RM 01',areaRealizada:100},b:{...base,fazenda:'RM',campo:'RM 02',status:'em_andamento',areaRealizada:30},
         c:{...base,fazenda:'PA',campo:'PA 01',areaRealizada:40,variedadeSemente:'Sem ciclo'},
         wrongYear:{...base,ano:'2027',fazenda:'RM',campo:'RM 01',areaRealizada:1},wrongCulture:{...base,cultura:'Milho',fazenda:'RM',campo:'RM 02',areaRealizada:1}};
-    const state={currentTab:'plantio',currentSubTab:'data-estimada-colheita',currentAno:'2026',currentCultura:'Soja',currentFazenda:'ALL',currentGleba:'FE',geojsonData:{features:[...features,features[0]]},cloudStore:{getRecords:()=>records}};
+    const state={userRole:'editor',currentTab:'plantio',currentSubTab:'data-estimada-colheita',currentAno:'2026',currentCultura:'Soja',currentFazenda:'ALL',currentGleba:'FE',geojsonData:{features:[...features,features[0]]},cloudStore:{getRecords:()=>records}};
     return {api:root.PlantingReport,state,records,root};
 }
 test('relatório soma talhões por dia, variedade e fazenda usando somente execução filtrada',()=>{
@@ -40,6 +40,13 @@ test('sem execução ou sem talhões gera aviso, nunca PDF vazio ou dados de pla
 });
 test('nome do PDF identifica escopo, cultura, safra e emissão',()=>{
     const {api}=setup();assert.equal(api.filename({scope:'Gleba FE',culture:'Soja',year:'2026',isoDate:'2026-10-15'}),'plantio-variedades-colheita-gleba-fe-soja-2026-2026-10-15.pdf');
+});
+test('ADM em modo Visualizador não gera PDF; voltar para Editor restabelece o acesso',()=>{
+    const {api,state}=setup('admin');
+    assert.equal(api.snapshot(state).totals.plantedArea,170);
+    state.userRole='viewer';assert.throws(()=>api.snapshot(state),/modo Editor/);
+    state.userRole='editor';assert.equal(api.snapshot(state).totals.plantedArea,170);
+    state.userRole=undefined;assert.throws(()=>api.snapshot(state),/modo Editor/);
 });
 test('PDF multipágina contém catálogo, páginas e offsets válidos para cada objeto',async()=>{
     const {api}=setup(),blob=api.pdfFromImages([new Uint8Array([255,216,255,217]),new Uint8Array([255,216,255,217])]);

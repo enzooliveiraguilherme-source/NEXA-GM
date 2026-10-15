@@ -23,23 +23,36 @@ test('snapshot de Adubação respeita os filtros e usa nome, cultura, ano e prod
     const api=setup({portalAccessRole:'projetista',portalFarms:[{code:'FE',name:'Fazenda Esperança'}],featureMatchesFilters:f=>f!==other,
         getTalhaoRecord(...args){calls.push(args);return {status:'concluido'};}});
     api.init({}, {isTalhaoPlanned:()=>true});
-    const data=api.snapshot({currentTab:'adubacao',currentFazenda:'ALL',currentGleba:'FE',currentAno:'2026',currentCultura:'Soja',currentProduto:'Calcário',geojsonData:{features:[a,b,other]}});
+    const data=api.snapshot({userRole:'editor',currentTab:'adubacao',currentFazenda:'ALL',currentGleba:'FE',currentAno:'2026',currentCultura:'Soja',currentProduto:'Calcário',geojsonData:{features:[a,b,other]}});
     assert.equal(data.scopeName,'Fazenda Esperança');assert.equal(data.areaPlanejada,300);assert.equal(data.areaRealizada,300);
     assert.equal(data.product,'Calcário');assert.equal(data.year,'2026');assert.equal(data.culture,'Soja');
     assert.deepEqual(Array.from(data.farms),['FE','FE2']);assert.equal(calls[0][4],'Calcário');
-    assert.throws(()=>api.snapshot({currentTab:'colheita'}),/Plantio e na Adubação/);
+    assert.throws(()=>api.snapshot({userRole:'editor',currentTab:'colheita'}),/Plantio e na Adubação/);
 });
 test('visualizadores e acessos sem perfil não podem gerar o resumo',()=>{
     for(const portalAccessRole of ['visualizador',undefined]){
         const api=setup({portalAccessRole});
-        assert.throws(()=>api.snapshot({currentTab:'plantio'}),/Somente Projetistas/);
+        assert.throws(()=>api.snapshot({userRole:'editor',currentTab:'plantio'}),/Somente Projetistas/);
     }
 });
 test('administrador e projetista podem gerar o resumo',()=>{
     for(const portalAccessRole of ['admin','projetista']){
         const api=setup({portalAccessRole,featureMatchesFilters:()=>true,getTalhaoRecord:()=>({status:'concluido'})});
         api.init({}, {isTalhaoPlanned:()=>true});
-        const data=api.snapshot({currentTab:'plantio',currentFazenda:'FE',currentGleba:'FE',currentAno:'2026',currentCultura:'Soja',currentProduto:'Plantio',geojsonData:{features:[field('FE','T1',100)]}});
+        const data=api.snapshot({userRole:'editor',currentTab:'plantio',currentFazenda:'FE',currentGleba:'FE',currentAno:'2026',currentCultura:'Soja',currentProduto:'Plantio',geojsonData:{features:[field('FE','T1',100)]}});
         assert.equal(data.areaRealizada,100);
     }
+});
+test('modo Visualizador bloqueia PNG mesmo em uma conta ADM e sem modo definido',()=>{
+    const api=setup({portalAccessRole:'admin'});
+    for(const userRole of ['viewer',undefined])assert.throws(()=>api.snapshot({userRole,currentTab:'plantio'}),/modo Editor/);
+});
+test('trocar para Visualizador oculta PNG e fecha a prévia já aberta; Editor restaura o botão',()=>{
+    const button={hidden:false},dialog={open:true,closed:0,close(){this.open=false;this.closed++;}};
+    const root={portalAccessRole:'admin'};
+    vm.runInNewContext(fs.readFileSync(require.resolve('../js/operation-export.js'),'utf8'),{window:root,document:{getElementById:id=>id==='operation-export-button'?button:id==='operation-export-dialog'?dialog:null}});
+    const state={userRole:'viewer'};root.OperationExport.updateAccess(state);
+    assert.equal(button.hidden,true);assert.equal(dialog.open,false);assert.equal(dialog.closed,1);
+    state.userRole='editor';root.OperationExport.updateAccess(state);assert.equal(button.hidden,false);
+    root.portalAccessRole='visualizador';root.OperationExport.updateAccess(state);assert.equal(button.hidden,true);
 });

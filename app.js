@@ -456,6 +456,8 @@ function getTalhaoRecord(fazenda, campo, ano, cultura, produto, areaTotal = 0) {
 // ==========================================================================
 function updateRoleUI() {
     const isViewer = (state.userRole === 'viewer');
+    window.OperationExport?.updateAccess?.(state);
+    if (isPlantingAnalysisMode() && state.geojsonData) window.PlantingMaps?.refresh(state, state.geojsonData.features.filter(featureMatchesFilters));
     
     const btnEditor = document.getElementById('role-editor-btn');
     const btnViewer = document.getElementById('role-viewer-btn');

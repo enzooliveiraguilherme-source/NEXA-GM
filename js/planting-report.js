@@ -5,7 +5,7 @@
     const ha = value => num(value) + ' ha';
     const date = value => value ? value.split('-').reverse().join('/') : 'Sem previsão';
     const varietyKey = row => F.normalize(row.variety || 'Não informada').replace(/\s/g, '');
-    const canExport = () => ['admin','projetista'].includes(root.portalAccessRole);
+    const canExport = state => ['admin','projetista'].includes(root.portalAccessRole) && state?.userRole === 'editor';
     const slug = value => F.normalize(value).replace(/[^A-Z0-9]+/g,'-').replace(/^-|-$/g,'').toLowerCase();
     const W=1240, H=1754, left=64, width=W-128, bottom=1450;
     const ink='#102c4d', muted='#607086', green='#008b50';
@@ -35,7 +35,7 @@
     }
 
     function snapshot(state) {
-        if(!canExport())throw Error('Somente Projetistas e Administradores podem exportar este relatório.');
+        if(!canExport(state))throw Error('Somente Projetistas e Administradores no modo Editor podem exportar este relatório.');
         if(!root.PlantingMaps.active(state))throw Error('Abra Data estimada de colheita ou Variedades plantadas.');
         if(!state.geojsonData || !state.cloudStore)throw Error('Aguarde o carregamento dos talhões e do plantio.');
         const records=new Map(Object.values(state.cloudStore.getRecords()).filter(r=>r.operationType==='plantio'||r.produto==='Plantio')
@@ -152,8 +152,8 @@
             text(ctx,title,left,283,36,ink,true,width);
             pages.push({canvas,ctx,scope,section});return ctx;
         }
-        function notes(ctx,totals,scopeRows) {
-            let y=1500;rect(ctx,left,1472,width,204,'#e7eef4');
+        function notes(ctx,totals,scopeRows,top=1472) {
+            let y=top+28;rect(ctx,left,top,width,204,'#e7eef4');
             const peak=totals.days.reduce((best,day)=>!best||day.area>best.area?day:best,null);
             const dominant=totals.varieties.reduce((best,v)=>!best||v.area>best.area?v:best,null);
             const insight=[peak?`Maior volume estimado: ${date(peak.key)} (${ha(peak.area)}).`:'Nenhuma data estimada disponível.',
@@ -173,11 +173,11 @@
                 row.forEach((cell,i)=>{const value=typeof cell==='object'?cell.label:cell;
                     if(cell?.color){rect(ctx,x+12,y+14,15,15,cell.color,3);text(ctx,value,x+38,y+29,21,ink,false,widths[i]-50);}
                     else text(ctx,value,x+12,y+29,21,ink,false,widths[i]-24);x+=widths[i];});y+=43;});
-            notes(ctx,totals,scopeRows);return {ctx,y};
+            notes(ctx,totals,scopeRows,Math.min(y+28,1472));return {ctx,y};
         }
         const scheduleRows=totals=>totals.days.map(d=>[{label:d.label,color:dayColors.get(d.key)},String(d.fields),ha(d.area),ha(d.accumulated)]);
         let ctx;
-        // Open the report with both maps for every farm, before the analytical pages.
+        // Keep each farm's maps, corresponding tables and field details together.
         for(const farm of data.farms) {
             onProgress(`Preparando mapas de ${farm.name}…`);
             ctx=page('Mapa de variedades plantadas',farm.name,'Variedades');
@@ -189,6 +189,11 @@
             drawMap(ctx,farm.rows,dayColors,320,true);
             text(ctx,`Com previsão: ${ha(farm.totals.estimatedArea)} | Cinza: sem previsão / sem plantio`,left,965,21,muted,false,width);
             table('Dia estimado de colheita',farm.name,'Colheita',['Data estimada','Talhões','Área no dia','Área acumulada'],[340,180,296,296],scheduleRows(farm.totals),farm.totals,farm.rows,1020,ctx);
+            const fields=farm.rows.filter(r=>r.planted).sort((a,b)=>(a.estimatedDate||'9999').localeCompare(b.estimatedDate||'9999')||a.field.localeCompare(b.field,'pt-BR',{numeric:true}));
+            const details=fields.map(r=>[r.field,r.variety||'Não informada',date(r.plantingDate),r.days?String(r.days)+' d':'Sem ciclo',date(r.estimatedDate),ha(r.plantedArea)]);
+            if(details.length)table('Detalhamento dos talhões',farm.name,'Talhões',['Talhão','Variedade','Plantio','Ciclo','Colheita estimada','Área plantada'],[175,210,180,135,220,192],details,farm.totals,farm.rows);
+            const pending=fields.filter(r=>!r.estimatedDate);
+            if(pending.length)table('Pendências para previsão',farm.name,'Pendências',['Talhão','Variedade','Área plantada','Pendência'],[200,260,200,452],pending.map(r=>[r.field,r.variety||'Não informada',ha(r.plantedArea),r.reason]),farm.totals,farm.rows);
             await encodePages();
             await new Promise(resolve=>setTimeout(resolve,0));
         }
@@ -200,16 +205,6 @@
         text(ctx,'Talhões com a mesma data são somados na mesma linha.',left,493,23,muted);
         table('Dia estimado de colheita - resumo geral',data.scope,'Resumo geral',['Data estimada','Talhões','Área no dia','Área acumulada'],[340,180,296,296],scheduleRows(data.totals),data.totals,data.rows,540,ctx);
         await encodePages();
-        for(const farm of data.farms) {
-            onProgress(`Preparando ${farm.name}…`);
-            const fields=farm.rows.filter(r=>r.planted).sort((a,b)=>(a.estimatedDate||'9999').localeCompare(b.estimatedDate||'9999')||a.field.localeCompare(b.field,'pt-BR',{numeric:true}));
-            const details=fields.map(r=>[r.field,r.variety||'Não informada',date(r.plantingDate),r.days?String(r.days)+' d':'Sem ciclo',date(r.estimatedDate),ha(r.plantedArea)]);
-            if(details.length)table('Detalhamento dos talhões',farm.name,'Talhões',['Talhão','Variedade','Plantio','Ciclo','Colheita estimada','Área plantada'],[175,210,180,135,220,192],details,farm.totals,farm.rows);
-            const pending=fields.filter(r=>!r.estimatedDate);
-            if(pending.length)table('Pendências para previsão',farm.name,'Pendências',['Talhão','Variedade','Área plantada','Pendência'],[200,260,200,452],pending.map(r=>[r.field,r.variety||'Não informada',ha(r.plantedArea),r.reason]),farm.totals,farm.rows);
-            await encodePages();
-            await new Promise(resolve=>setTimeout(resolve,0));
-        }
         if(images.length!==pageCount)throw Error('Falha na paginação do relatório.');
         return {blob:pdfFromImages(images),pageCount:images.length};
     }
@@ -221,7 +216,7 @@
             const data=snapshot(state);busy=true;if(button)button.disabled=true;
             if(status)status.textContent='Preparando relatório PDF…';
             const {blob,pageCount}=await render(data,message=>{if(status)status.textContent=message;});
-            if(!canExport())throw Error('Seu perfil não permite exportar este relatório.');
+            if(!canExport(state))throw Error('Seu perfil ou modo de visualização não permite exportar este relatório.');
             const url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download=filename(data);
             document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
             if(status)status.textContent=`PDF gerado com ${pageCount} páginas.`;

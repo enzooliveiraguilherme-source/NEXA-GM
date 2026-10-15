@@ -2,7 +2,7 @@
     'use strict';
     const colors={concluido:'#06b200',em_andamento:'#ffa000',nao_iniciado:'#ed3036'};
     let planning;
-    const canExport=()=>['projetista','admin'].includes(root.portalAccessRole);
+    const canExport=state=>['projetista','admin'].includes(root.portalAccessRole)&&state?.userRole==='editor';
     const number=value=>Number(value).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
     const area=value=>`${number(value)} ha`;
     function summarize(features,isPlanned,getRecord) {
@@ -25,7 +25,7 @@
         return totals;
     }
     function snapshot(state) {
-        if(!canExport())throw Error('Somente Projetistas e Administradores podem exportar o andamento.');
+        if(!canExport(state))throw Error('Somente Projetistas e Administradores no modo Editor podem exportar o andamento.');
         if(!['plantio','adubacao'].includes(state.currentTab))throw Error('A exportação está disponível no Plantio e na Adubação.');
         if(!state.geojsonData)throw Error('Aguarde o carregamento dos talhões.');
         const features=state.geojsonData.features.filter(root.featureMatchesFilters);
@@ -137,26 +137,32 @@
         planning=planner;
         const button=document.getElementById('operation-export-button'),dialog=document.getElementById('operation-export-dialog');
         if(!button||!dialog)return;
-        button.hidden=!canExport();
-        if(!canExport())return;
+        button.hidden=!canExport(state);
+        if(!canExport(state))return;
         const preview=document.getElementById('operation-export-preview'),status=document.getElementById('operation-export-status'),save=document.getElementById('operation-export-save'),share=document.getElementById('operation-export-share');
         let url=null,name='',file=null,busy=false,token=0;
         const revoke=()=>{if(url)URL.revokeObjectURL(url);url=null;};
         dialog.addEventListener('close',()=>{token++;revoke();file=null;preview.removeAttribute('src');save.disabled=true;if(share)share.hidden=true;busy=false;button.disabled=false;});
         button.onclick=async()=>{
-            if(!canExport())return;
+            if(!canExport(state))return;
             if(busy)return;
             let data;try{data=snapshot(state);}catch(error){status.textContent=error.message;dialog.showModal();save.disabled=true;preview.hidden=true;return;}
             busy=true;button.disabled=true;const request=++token;revoke();preview.hidden=true;save.disabled=true;status.textContent='Preparando o resumo e carregando o mapa…';dialog.showModal();
-            try{const result=await render(data);if(request!==token)return;url=URL.createObjectURL(result.blob);name=filename(data);file=new File([result.blob],name,{type:'image/png'});preview.src=url;preview.hidden=false;save.disabled=false;
+            try{const result=await render(data);if(request!==token||!canExport(state))return;url=URL.createObjectURL(result.blob);name=filename(data);file=new File([result.blob],name,{type:'image/png'});preview.src=url;preview.hidden=false;save.disabled=false;
                 if(share)share.hidden=!navigator.canShare?.({files:[file]});
                 status.textContent=result.missing?'Imagem pronta. Parte do satélite não carregou; os talhões e os totais estão completos.':'Imagem pronta para salvar e enviar no WhatsApp.';
             }catch(error){if(request===token)status.textContent=error.message;}
             finally{if(request===token){busy=false;button.disabled=false;}}
         };
-        save.onclick=()=>{if(!url||!canExport())return;const link=document.createElement('a');link.href=url;link.download=name;document.body.appendChild(link);link.click();link.remove();};
-        if(share)share.onclick=async()=>{if(!file||!canExport())return;try{await navigator.share({files:[file]});}catch(error){if(error.name!=='AbortError')status.textContent='Use Salvar imagem PNG para compartilhar a foto.';}};
+        save.onclick=()=>{if(!url||!canExport(state))return;const link=document.createElement('a');link.href=url;link.download=name;document.body.appendChild(link);link.click();link.remove();};
+        if(share)share.onclick=async()=>{if(!file||!canExport(state))return;try{await navigator.share({files:[file]});}catch(error){if(error.name!=='AbortError')status.textContent='Use Salvar imagem PNG para compartilhar a foto.';}};
         document.getElementById('operation-export-close').onclick=()=>dialog.close();
     }
-    root.OperationExport=Object.freeze({summarize,snapshot,filename,render,init});
+    function updateAccess(state) {
+        const allowed=canExport(state),button=document.getElementById('operation-export-button');
+        if(button)button.hidden=!allowed;
+        const dialog=document.getElementById('operation-export-dialog');
+        if(!allowed&&dialog?.open)dialog.close();
+    }
+    root.OperationExport=Object.freeze({summarize,snapshot,filename,render,init,updateAccess});
 })(window);

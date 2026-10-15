@@ -40,7 +40,7 @@
         if (summary) summary.innerHTML = `<header><strong>${title}</strong><span>Plantio executado · ${escape(state.currentCultura)} · safra ${escape(state.currentAno)}</span></header>` +
             `<div class="planting-map-kpis"><div><span>Área plantada</span><b>${hectares(totals.plantedArea)}</b></div><div><span>${harvesting(state) ? 'Com previsão' : 'Talhões com plantio'}</span><b>${harvesting(state) ? hectares(totals.estimatedArea) : `${totals.plantedFields} de ${rows.length}`}</b></div>` +
             (harvesting(state) ? `<div><span>Janela estimada</span><b>${totals.first ? `${date(totals.first)} – ${date(totals.last)}` : 'Sem previsão'}</b></div>` : '') + '</div>' +
-            (['admin', 'projetista'].includes(root.portalAccessRole) ? '<button type="button" class="operation-export-trigger" id="planting-report-button">Exportar relatório PDF</button><span id="planting-report-status" role="status"></span>' : '') +
+            (['admin', 'projetista'].includes(root.portalAccessRole) && state.userRole === 'editor' ? '<button type="button" class="operation-export-trigger" id="planting-report-button">Exportar relatório PDF</button><span id="planting-report-status" role="status"></span>' : '') +
             (!totals.plantedFields ? '<p>Não há plantio executado neste filtro. Registre a execução em “Atualizar Mapa de Plantio”.</p>' : harvesting(state) && !totals.estimatedArea ? '<p>Sem previsão: confira a variedade e a data de plantio nos registros de execução.</p>' : '') +
             (harvesting(state) && without > 0 ? `<p>${hectares(without)} plantados sem previsão: data, variedade ou ciclo ainda não definido.</p>` : '');
         const reportButton = document.getElementById('planting-report-button');
