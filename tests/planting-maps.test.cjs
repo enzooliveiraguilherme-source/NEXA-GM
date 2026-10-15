@@ -59,3 +59,25 @@ test('legenda de variedades, escape e ocultação ao sair das abas de análise',
     assert.equal(h.elements.get('planting-map-summary').classList.hidden, true);
     assert.equal(h.elements.get('planting-map-legend').classList.hidden, true);
 });
+
+test('legenda de colheita separa dias consecutivos da mesma semana e soma as áreas reais', () => {
+    const h = harness();
+    const secondFeature = { properties: { Fazenda: 'FE', Campo: 'FE 02', Area: 100, Variedade: 'Olimpo' } };
+    const record = { operationType: 'plantio', produto: 'Plantio', fazenda: 'FE', ano: '2026', cultura: 'Soja', status: 'em_andamento', variedadeSemente: 'Olimpo' };
+    h.setRecords({
+        a: { ...record, campo: 'FE 01', areaRealizada: 40, dataPlantio: '2026-10-15' },
+        b: { ...record, campo: 'FE 02', areaRealizada: 60, dataPlantio: '2026-10-16' }
+    });
+    h.maps.refresh(h.state, [feature, secondFeature]);
+    const legend = h.elements.get('planting-map-legend').innerHTML;
+    const datedRows = [...legend.matchAll(/<span>(\d{2}\/\d{2}\/\d{4})<\/span><b>([^<]+)<\/b>/g)];
+    assert.match(legend, /<h3>Dia estimado de colheita<\/h3>/);
+    assert.doesNotMatch(legend, /Semana|06\/02\/2027\s*[–-]\s*07\/02\/2027/);
+    assert.deepEqual(datedRows.map(match => [match[1], match[2]]), [
+        ['06/02/2027', '40 ha'], ['07/02/2027', '60 ha']
+    ]);
+    assert.match(h.elements.get('planting-map-summary').innerHTML, /Área plantada<\/span><b>100 ha<\/b>/);
+    assert.match(h.elements.get('planting-map-summary').innerHTML, /Com previsão<\/span><b>100 ha<\/b>/);
+    assert.match(h.maps.tooltip(h.state, secondFeature), /07\/02\/2027/);
+    assert.notEqual(h.maps.style(h.state, feature).fillColor, h.maps.style(h.state, secondFeature).fillColor);
+});

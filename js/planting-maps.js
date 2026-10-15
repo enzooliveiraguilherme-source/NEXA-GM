@@ -11,7 +11,7 @@
     const fieldKey = (state, feature) => F.key(feature.properties.Fazenda, feature.properties.Campo, state.currentAno, state.currentCultura);
     function row(state, feature) { return F.project(feature, indexed.get(fieldKey(state, feature)), state.currentCultura); }
     function groupKey(state, value) {
-        return harvesting(state) ? value.estimatedDate ? F.weekStart(value.estimatedDate) : ''
+        return harvesting(state) ? value.estimatedDate || ''
             : value.variety ? F.normalize(value.variety).replace(/\s/g, '') : '';
     }
     function refresh(state, features) {
@@ -26,7 +26,7 @@
         for (const value of rows) {
             const key = groupKey(state, value);
             if (!value.planted || !key) continue;
-            const label = harvesting(state) ? `${date(key)} a ${date(F.harvestDate(key, 6))}` : value.variety;
+            const label = harvesting(state) ? date(key) : value.variety;
             const current = collected.get(key) || { key, label, area: 0 };
             current.area += value.plantedArea; collected.set(key, current);
         }
@@ -39,7 +39,7 @@
             (harvesting(state) ? `<div><span>Janela estimada</span><b>${totals.first ? `${date(totals.first)} – ${date(totals.last)}` : 'Sem previsão'}</b></div>` : '') + '</div>' +
             (!totals.plantedFields ? '<p>Não há plantio executado neste filtro. Registre a execução em “Atualizar Mapa de Plantio”.</p>' : harvesting(state) && !totals.estimatedArea ? '<p>Sem previsão: confira a variedade e a data de plantio nos registros de execução.</p>' : '') +
             (harvesting(state) && without > 0 ? `<p>${hectares(without)} plantados sem previsão: data, variedade ou ciclo ainda não definido.</p>` : '');
-        if (legend) legend.innerHTML = `<h3>${harvesting(state) ? 'Semana estimada de colheita' : 'Variedade · área plantada'}</h3>` +
+        if (legend) legend.innerHTML = `<h3>${harvesting(state) ? 'Dia estimado de colheita' : 'Variedade · área plantada'}</h3>` +
             groups.map(value => `<div class="planting-map-legend-row"><i style="background:${value.color}"></i><span>${escape(value.label)}</span><b>${hectares(value.area)}</b></div>`).join('') +
             `<div class="planting-map-legend-row"><i style="background:#94a3b8"></i><span>${harvesting(state) ? 'Sem previsão / sem plantio' : 'Sem variedade / sem plantio'}</span></div>` +
             '<p>Contorno tracejado: plantio parcial.<br>O cálculo considera apenas os hectares realizados.</p>' +
