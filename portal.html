@@ -384,7 +384,330 @@
                                 <div class="status-pill-numbers">
                                     <span class="status-ha" id="sum-andamento-ha">0 ha</span>
                                     <span class="status-pct" id="sum-andamento-pct">(0%)</span>
-               …5260 tokens truncated…                 </label>
+                                </div>
+                                <span class="status-count" id="sum-andamento-count">0 talhões</span>
+                            </div>
+
+                            <div class="status-pill pill-nao-iniciado">
+                                <div class="status-pill-header">
+                                    <span class="status-dot dot-nao-iniciado"></span>
+                                    <strong>Não Iniciado</strong>
+                                </div>
+                                <div class="status-pill-numbers">
+                                    <span class="status-ha" id="sum-nao-iniciado-ha">0 ha</span>
+                                    <span class="status-pct" id="sum-nao-iniciado-pct">(0%)</span>
+                                </div>
+                                <span class="status-count" id="sum-nao-iniciado-count">0 talhões</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Painel Flutuante Fixo para Outras Abas (Colheita, etc.) -->
+                <div id="info-panel" class="info-panel hidden">
+                    <div class="info-panel-header">
+                        <h4 id="info-title">Talhão</h4>
+                        <button type="button" class="btn-close-panel" id="btn-close-info">&times;</button>
+                    </div>
+                    <div class="info-panel-body">
+                        <div class="custom-popup-row">
+                            <span class="popup-label">Fazenda:</span>
+                            <span class="popup-value" id="info-fazenda">N/A</span>
+                        </div>
+                        <div class="custom-popup-row">
+                            <span class="popup-label">Gleba:</span>
+                            <span class="popup-value" id="info-gleba">N/A</span>
+                        </div>
+                        <div class="custom-popup-row">
+                            <span class="popup-label">Área:</span>
+                            <span class="popup-value" id="info-area">N/A</span>
+                        </div>
+                        <div class="custom-popup-row">
+                            <span class="popup-label">Variedade:</span>
+                            <span class="popup-value" id="info-variedade">N/A</span>
+                        </div>
+                        <div class="custom-popup-row">
+                            <span class="popup-label">Início da colheita:</span>
+                            <span class="popup-value" id="info-colheita">N/A</span>
+                        </div>
+                        <div class="custom-popup-row harvest-detail hidden">
+                            <span class="popup-label">Fim da colheita:</span>
+                            <span class="popup-value" id="info-colheita-fim">Dados não importados</span>
+                        </div>
+                        <div class="custom-popup-row harvest-detail hidden">
+                            <span class="popup-label">Ano / cultura:</span>
+                            <span class="popup-value" id="info-colheita-contexto">2026 / Milho</span>
+                        </div>
+                        <div class="custom-popup-row harvest-detail hidden">
+                            <span class="popup-label">Safra:</span>
+                            <span class="popup-value" id="info-colheita-safra">Dados não importados</span>
+                        </div>
+                        <div class="custom-popup-row harvest-detail hidden">
+                            <span class="popup-label" id="info-produtividade-label">Produtividade:</span>
+                            <span class="popup-value" id="info-produtividade">Dados não importados</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ============================================== -->
+            <!-- PAINEL DE PLANTIO (exibido no lugar do mapa)  -->
+            <!-- ============================================== -->
+            <div id="plantio-panel" class="plantio-panel hidden">
+
+                <!-- Cabeçalho do Painel -->
+                <div class="plantio-panel-header">
+                    <div class="plantio-header-left">
+                        <i class="fa-solid fa-leaf plantio-header-icon"></i>
+                        <div class="plantio-header-text">
+                            <h2>Resumo de Plantio</h2>
+                            <span class="plantio-header-sub">Planejamento e execução de plantio — Grupo Michels</span>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-primary editor-control" id="btn-add-plantio">
+                        <i class="fa-solid fa-plus"></i> Adicionar Plantio
+                    </button>
+                </div>
+
+                <!-- Barra de Filtros -->
+                <div class="plantio-filter-bar">
+                    <div class="plantio-filter-title">
+                        <i class="fa-solid fa-sliders"></i>
+                        <span>Filtros:</span>
+                    </div>
+                    <div class="plantio-filter-group">
+                        <label for="plantio-filter-safra">Safra:</label>
+                        <div class="select-wrapper"><select id="plantio-filter-safra"><option value="">Todas</option></select></div>
+                    </div>
+                    <div class="plantio-filter-group">
+                        <label for="plantio-filter-fazenda">Fazenda:</label>
+                        <div class="select-wrapper"><select id="plantio-filter-fazenda"><option value="">Todas</option></select></div>
+                    </div>
+                    <div class="plantio-filter-group">
+                        <label for="plantio-filter-variedade">Variedade:</label>
+                        <div class="select-wrapper"><select id="plantio-filter-variedade"><option value="">Todas</option></select></div>
+                    </div>
+                    <div class="plantio-filter-group">
+                        <label for="plantio-filter-status">Status:</label>
+                        <div class="select-wrapper">
+                            <select id="plantio-filter-status">
+                                <option value="">Todos</option>
+                                <option value="em_andamento">Em Andamento</option>
+                                <option value="concluido">Concluído</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-clear-filters" id="btn-plantio-clear-filters" title="Limpar todos os filtros">
+                        <i class="fa-solid fa-xmark"></i> Limpar
+                    </button>
+                </div>
+
+                <!-- KPI Cards -->
+                <div class="plantio-kpi-section">
+                    <div class="plantio-kpi-grid">
+                        <div class="kpi-card card-planejada">
+                            <div class="kpi-icon-wrapper icon-blue"><i class="fa-solid fa-calendar-check"></i></div>
+                            <div class="kpi-data">
+                                <span class="kpi-title">ÁREA PLANEJADA</span>
+                                <h2 class="kpi-value" id="plantio-kpi-planejada">0 ha</h2>
+                                <span class="kpi-subtitle">Total programado</span>
+                            </div>
+                        </div>
+                        <div class="kpi-card card-realizada">
+                            <div class="kpi-icon-wrapper icon-green"><i class="fa-solid fa-circle-check"></i></div>
+                            <div class="kpi-data">
+                                <span class="kpi-title">ÁREA PLANTADA</span>
+                                <h2 class="kpi-value" id="plantio-kpi-plantada">0 ha</h2>
+                                <span class="kpi-subtitle">Plantios concluídos</span>
+                            </div>
+                        </div>
+                        <div class="kpi-card card-progresso">
+                            <div class="kpi-icon-wrapper icon-orange"><i class="fa-solid fa-clock"></i></div>
+                            <div class="kpi-data">
+                                <span class="kpi-title">EM ANDAMENTO</span>
+                                <h2 class="kpi-value" id="plantio-kpi-andamento">0 ha</h2>
+                                <span class="kpi-subtitle">Aguardando execução</span>
+                            </div>
+                        </div>
+                        <div class="kpi-card card-plantio-pct">
+                            <div class="kpi-icon-wrapper icon-indigo"><i class="fa-solid fa-chart-pie"></i></div>
+                            <div class="kpi-data">
+                                <span class="kpi-title">PROGRESSO</span>
+                                <h2 class="kpi-value" id="plantio-kpi-progresso">0%</h2>
+                                <span class="kpi-subtitle" id="plantio-kpi-progresso-sub">0 de 0 ha plantados</span>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Barra de Progresso Segmentada -->
+                    <div class="progress-bar-section">
+                        <div class="progress-bar-label-row">
+                            <span class="progress-bar-title">Distribuição do Progresso de Plantio:</span>
+                            <span class="progress-bar-pct" id="plantio-progress-badge">0% Plantado</span>
+                        </div>
+                        <div class="segmented-progress-track">
+                            <div class="progress-segment seg-concluido" id="plantio-seg-concluido" style="width:0%;" title="Plantado"></div>
+                            <div class="progress-segment seg-andamento" id="plantio-seg-andamento" style="width:100%;" title="Em Andamento"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tabela de Registros -->
+                <div class="plantio-table-section">
+                    <div class="plantio-table-header">
+                        <h3><i class="fa-solid fa-table-list"></i> Planejamentos</h3>
+                        <span class="plantio-count-badge" id="plantio-count-badge">0 registros</span>
+                    </div>
+                    <div class="plantio-table-wrapper">
+                        <table class="plantio-table" id="plantio-table">
+                            <thead>
+                                <tr>
+                                    <th>Safra</th>
+                                    <th>Fazenda</th>
+                                    <th>Variedade</th>
+                                    <th>Talhões</th>
+                                    <th>Área Total</th>
+                                    <th>Data Plantio</th>
+                                    <th>Status</th>
+                                    <th class="editor-control">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="plantio-table-body">
+                                <tr class="plantio-empty-row">
+                                    <td colspan="8">
+                                        <div class="plantio-empty-state">
+                                            <i class="fa-solid fa-leaf fa-2x"></i>
+                                            <p>Nenhum planejamento de plantio cadastrado.</p>
+                                            <small>Clique em "Adicionar Plantio" para começar.</small>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Loading Overlay -->
+            <div id="loading-overlay" class="loading-overlay">
+                <div class="spinner"></div>
+                <p>Carregando dados operacionais e espaciais...</p>
+            </div>
+        </main>
+    </div>
+
+    <!-- ============================================== -->
+    <!-- MODAL DE EDIÇÃO / CONSULTA DE ADUBAÇÃO (CALCÁRIO) -->
+    <!-- ============================================== -->
+    <div class="modal-backdrop hidden" id="adubacao-modal-backdrop">
+        <div class="adubacao-modal-card" id="adubacao-modal">
+            <!-- Cabeçalho -->
+            <div class="modal-header">
+                <div class="modal-title-group">
+                    <span class="modal-tag"><i class="fa-solid fa-map-pin"></i> <span id="adubacao-modal-tag-text">ATUALIZAR APLICAÇÃO</span></span>
+                    <h3 id="adubacao-modal-title">Talhão: -</h3>
+                </div>
+                <button type="button" class="modal-btn-close" id="btn-close-adubacao-modal" title="Fechar">&times;</button>
+            </div>
+
+            <!-- Corpo -->
+            <div class="modal-body">
+                <p class="operation-bulk-help hidden" id="operation-bulk-help">Os valores deste formulário serão aplicados a todos os talhões listados abaixo. O percentual é calculado sobre a área de cada talhão; em hectares, o mesmo valor é aplicado a cada um. Campos com valores diferentes ficam vazios para você preencher.</p>
+                <!-- Informações Cadastrais em Grid -->
+                <div class="talhao-cadastral-card">
+                    <div class="cadastral-col">
+                        <span class="cadastral-lbl">FAZENDA</span>
+                        <strong class="cadastral-val" id="cadastral-fazenda">-</strong>
+                    </div>
+                    <div class="cadastral-col">
+                                <span class="cadastral-lbl">GLEBA</span>
+                                <strong class="cadastral-val" id="cadastral-gleba">-</strong>
+                            </div>
+                            <div class="cadastral-col">
+                                <span class="cadastral-lbl">TALHÃO</span>
+                        <strong class="cadastral-val" id="cadastral-talhao">-</strong>
+                    </div>
+                    <div class="cadastral-col">
+                        <span class="cadastral-lbl">ÁREA TOTAL</span>
+                        <strong class="cadastral-val val-highlight-blue" id="cadastral-area">0.00 ha</strong>
+                    </div>
+                    <div class="cadastral-col">
+                        <span class="cadastral-lbl">ANO / SAFRA</span>
+                        <strong class="cadastral-val" id="cadastral-ano">-</strong>
+                    </div>
+                    <div class="cadastral-col">
+                        <span class="cadastral-lbl">CULTURA</span>
+                        <strong class="cadastral-val" id="cadastral-cultura">-</strong>
+                    </div>
+                    <div class="cadastral-col">
+                        <span class="cadastral-lbl" id="cadastral-produto-label">PRODUTO</span>
+                        <strong class="cadastral-val" id="cadastral-produto">-</strong>
+                    </div>
+                    <div class="cadastral-col plantio-only hidden">
+                        <span class="cadastral-lbl">VARIEDADE DA SEMENTE</span>
+                        <strong class="cadastral-val val-highlight-green" id="cadastral-variedade-semente">-</strong>
+                    </div>
+                    <div class="cadastral-col plantio-only hidden">
+                        <span class="cadastral-lbl">DATA DO PLANTIO</span>
+                        <strong class="cadastral-val val-highlight-green" id="cadastral-data-plantio">-</strong>
+                    </div>
+                </div>
+
+                <!-- Painel Exclusivo do Visualizador (Somente Leitura) -->
+                <div class="viewer-view-container hidden" id="adubacao-viewer-view">
+                    <div class="viewer-status-card">
+                        <div class="viewer-status-header">
+                            <span class="viewer-status-badge" id="viewer-status-badge">🟢 Concluído</span>
+                            <span class="viewer-status-time" id="viewer-status-time">-</span>
+                        </div>
+                        <div class="viewer-status-details">
+                            <div class="viewer-detail-row">
+                                <span class="viewer-detail-label">Progresso Realizado:</span>
+                                <strong class="viewer-detail-val" id="viewer-detail-progresso">0% (0.00 ha)</strong>
+                            </div>
+                            <div class="viewer-detail-row" id="viewer-row-taxa">
+                                <span class="viewer-detail-label">Taxa Aplicada:</span>
+                                <strong class="viewer-detail-val" id="viewer-detail-taxa">-</strong>
+                            </div>
+                            <div class="viewer-detail-row plantio-only hidden" id="viewer-row-variedade-semente">
+                                <span class="viewer-detail-label">Variedade da Semente:</span>
+                                <strong class="viewer-detail-val" id="viewer-detail-variedade-semente">-</strong>
+                            </div>
+                            <div class="viewer-detail-row plantio-only hidden" id="viewer-row-data-plantio">
+                                <span class="viewer-detail-label">Data do Plantio:</span>
+                                <strong class="viewer-detail-val" id="viewer-detail-data-plantio">-</strong>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn-secondary" id="btn-fechar-adubacao-viewer">Fechar</button>
+                    </div>
+                </div>
+
+                <!-- Formulário de Edição (Exclusivo Editor) -->
+                <form id="form-adubacao-edit" class="adubacao-edit-form" novalidate>
+                    <div class="plantio-details-panel plantio-only hidden" id="plantio-details-panel">
+                        <div class="plantio-details-heading">
+                            <i class="fa-solid fa-seedling"></i>
+                            <span>Dados do Plantio neste Talhão</span>
+                        </div>
+                        <div class="plantio-details-grid">
+                            <div class="form-field-group">
+                                <label for="input-variedade-semente">
+                                    <span class="star-req">*</span> Variedade da Semente:
+                                </label>
+                                <div class="seed-combobox" id="seed-combobox">
+                                    <input type="text" id="input-variedade-semente" maxlength="80" placeholder="Digite ou selecione uma variedade" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="lista-variedades-semente">
+                                    <button type="button" class="seed-combobox-toggle" id="btn-toggle-variedades" title="Ver variedades cadastradas" aria-label="Ver variedades cadastradas">
+                                        <i class="fa-solid fa-chevron-down"></i>
+                                    </button>
+                                    <div class="seed-suggestions hidden" id="lista-variedades-semente" role="listbox" aria-label="Variedades de sementes cadastradas"></div>
+                                </div>
+                                <small class="field-help-text">Informe a cultivar utilizada neste talhão.</small>
+                            </div>
+                            <div class="form-field-group">
+                                <label for="input-data-plantio">
+                                    <span class="star-req">*</span> Data do Plantio:
+                                </label>
                                 <input type="date" id="input-data-plantio">
                                 <small class="field-help-text">Informe a data em que o plantio foi realizado.</small>
                             </div>
