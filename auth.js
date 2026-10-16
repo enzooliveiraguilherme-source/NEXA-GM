@@ -8,6 +8,7 @@
     let loginPending = false;
     let recoveryReady = false;
     let passwordPurpose = 'recovery';
+    let pendingEmailLink = null;
     let allowedFarms = [];
     let preferencePrefix;
 
@@ -74,6 +75,7 @@
             window.sessionStorage.removeItem(`${storageKey}.entry`);
             window.sessionStorage.removeItem(`${storageKey}.farm`);
             window.sessionStorage.removeItem(`${storageKey}.recovery`);
+            window.sessionStorage.removeItem(`${storageKey}.email-link`);
         } catch (_) { /* O acesso continua bloqueado se o armazenamento estiver indisponível. */ }
     }
 
@@ -95,6 +97,7 @@
     }
 
     function showRecovery(active) {
+        document.getElementById('email-link-confirmation').hidden = true;
         for (const id of ['login-form', 'invite-only-help', 'btn-forgot-password']) {
             const element = document.getElementById(id); if (element) element.hidden = active;
         }
@@ -193,6 +196,30 @@
         });
 
         if (isLoginPage) {
+            const emailQuery = new URLSearchParams(window.location.search);
+            let savedEmailLink;
+            try { savedEmailLink = JSON.parse(window.sessionStorage.getItem(`${storageKey}.email-link`) || 'null'); } catch (_) { /* Ignora pendência inválida. */ }
+            const queryLink = emailQuery.has('token_hash');
+            const candidate = queryLink ? { token_hash: emailQuery.get('token_hash'), type: emailQuery.get('type') } : reload ? savedEmailLink : null;
+            if (queryLink) window.history.replaceState(null, '', window.location.pathname);
+            if (candidate) {
+                try { await endSession(); } catch (_) { clearSession(); }
+                if (!['invite', 'recovery'].includes(candidate.type) || typeof candidate.token_hash !== 'string' || !candidate.token_hash || candidate.token_hash.length > 2048) {
+                    showRecovery(false);
+                    setMessage('O link recebido é inválido ou expirou. Solicite um novo ao administrador.');
+                    return false;
+                }
+                pendingEmailLink = candidate;
+                passwordPurpose = candidate.type;
+                window.sessionStorage.setItem(`${storageKey}.email-link`, JSON.stringify(candidate));
+                showRecovery(false);
+                for (const id of ['login-form', 'invite-only-help', 'btn-forgot-password']) document.getElementById(id).hidden = true;
+                document.getElementById('email-link-confirmation').hidden = false;
+                document.getElementById('login-title').textContent = candidate.type === 'invite' ? 'Você recebeu um convite' : 'Recuperar sua senha';
+                document.getElementById('login-intro').textContent = 'Confirme abaixo para continuar e escolher sua senha de acesso.';
+                document.getElementById('btn-accept-invite').textContent = candidate.type === 'invite' ? 'Aceitar convite e criar senha' : 'Continuar para redefinir senha';
+                return false;
+            }
             const recovery = new URLSearchParams(String(window.location.hash || '').replace(/^#/, ''));
             const recoveryLink = ['recovery', 'invite'].includes(recovery.get('type'));
             const passwordMarker = window.sessionStorage.getItem(`${storageKey}.recovery`);
@@ -359,6 +386,29 @@
         } finally { loginPending = false; button.disabled = false; }
     };
 
+    window.acceptEmailLink = async function () {
+        await window.portalReady;
+        if (loginPending || !pendingEmailLink) return false;
+        loginPending = true;
+        const button = document.getElementById('btn-accept-invite'); button.disabled = true;
+        setMessage('Validando seu link…');
+        try {
+            // Apenas o clique da pessoa consome o token. Abrir o link no Outlook não o valida.
+            const { error } = await window.supabaseClient.auth.verifyOtp(pendingEmailLink);
+            if (error) throw error;
+            const { data: { user }, error: userError } = await window.supabaseClient.auth.getUser();
+            if (userError || !user?.email_confirmed_at) throw Error('expired');
+            window.sessionStorage.removeItem(`${storageKey}.email-link`);
+            pendingEmailLink = null;
+            window.sessionStorage.setItem(`${storageKey}.recovery`, passwordPurpose === 'invite' ? 'invite' : '1');
+            recoveryReady = true; showRecovery(true); setMessage('');
+            return true;
+        } catch (_) {
+            setMessage('O link recebido é inválido ou expirou. Solicite um novo ao administrador ou use “Esqueci minha senha”.');
+            return false;
+        } finally { loginPending = false; button.disabled = false; }
+    };
+
     window.saveRecoveredPassword = async function (password, confirmation) {
         await window.portalReady;
         if (loginPending) return false;
@@ -390,6 +440,7 @@
         await window.portalReady;
         if (loginPending) return;
         recoveryReady = false;
+        pendingEmailLink = null;
         try { await endSession(); } catch (_) { clearSession(); }
         document.getElementById('new-password').value = '';
         document.getElementById('confirm-password').value = '';

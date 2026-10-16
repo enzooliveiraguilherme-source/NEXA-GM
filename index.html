@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="referrer" content="no-referrer">
     <title>Entrar | Geoportal Grupo Michels</title>
     <link rel="stylesheet" href="brand.css?v=14">
     <link rel="icon" type="image/jpeg" href="apoio/GP Michels.jpg">
@@ -36,6 +37,10 @@
                     <button type="submit" id="btn-send-password-reset">Enviar link de recuperação</button>
                     <button type="button" id="btn-back-from-reset">Voltar para entrar</button>
                 </form>
+                <div class="login-form" id="email-link-confirmation" hidden>
+                    <button type="button" id="btn-accept-invite">Aceitar convite e criar senha</button>
+                    <button type="button" id="btn-cancel-email-link">Voltar para entrar</button>
+                </div>
                 <form class="login-form" id="new-password-form" hidden>
                     <label>Nova senha<input id="new-password" type="password" autocomplete="new-password" minlength="6" required></label>
                     <label>Confirmar nova senha<input id="confirm-password" type="password" autocomplete="new-password" minlength="6" required></label>
@@ -50,7 +55,7 @@
     </main>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="config.js"></script>
-    <script src="auth.js?v=10"></script>
+    <script src="auth.js?v=11"></script>
     <script src="js/password-visibility.js?v=1"></script>
     <script>
         document.querySelectorAll('.login-form').forEach(form => {
@@ -94,6 +99,8 @@
         });
         document.getElementById('btn-back-from-reset').addEventListener('click', () => window.cancelPasswordRecovery());
         document.getElementById('btn-cancel-password-reset').addEventListener('click', () => window.cancelPasswordRecovery());
+        document.getElementById('btn-accept-invite').addEventListener('click', () => window.acceptEmailLink());
+        document.getElementById('btn-cancel-email-link').addEventListener('click', () => window.cancelPasswordRecovery());
     </script>
 </body>
 </html>

@@ -9,7 +9,7 @@ let tabCounter = 0;
 
 function run({ page = 'portal', sessionMap = new Map(), initialSession, role = 'visualizador',
     profileError = false, userError = false, loginError, offlineLogout = false, storageBlocked = false,
-    hash = '', resetError, recoveryError, updateError,
+    hash = '', search = '', resetError, recoveryError, verifyOtpError, verifiedUser = user, updateError,
     suppliedUser = user, configured = true, failProfile = false, navigation = 'reload',
     farms = [{code:'FE',name:'Esperança'}], farmError = false, chosenFarm = 'FE', fetchImpl,
     localMap = new Map([['sb-example-auth-token', JSON.stringify(session)], ['geoportal_calcario_records_v1', 'preserved']]) } = {}) {
@@ -18,23 +18,23 @@ function run({ page = 'portal', sessionMap = new Map(), initialSession, role = '
         setItem(key, value) { if (storageBlocked) throw Error('blocked'); map.set(key, value); }, removeItem: key => map.delete(key) });
     const sessionStorage = storage(sessionMap);
     function element() {
-        return { textContent: '', value: 'typed-password', disabled: false, hidden: false, children: [],
-            classList: { toggle() {} }, remove() { this.removed = true; }, addEventListener() {},
+        return { textContent: '', value: 'typed-password', disabled: false, hidden: false, children: [], listeners: {},
+            classList: { toggle() {} }, remove() { this.removed = true; }, addEventListener(event, fn) { this.listeners[event] = fn; },
             replaceChildren() { this.children = []; }, appendChild(child) { this.children.push(child); }, add() {} };
     }
     const document = { body: { dataset: { page } }, documentElement: { classList: {
         add: c => classes.add(c), remove: c => classes.delete(c) } },
         createElement: () => element(),
         getElementById(id) { if (!elements.has(id)) elements.set(id, element()); return elements.get(id); } };
-    const calls = { getUser: 0, signOut: [], signIn: [], signUp: [], profile: 0, reset: [], setSession: [], update: [] };
+    const calls = { getUser: 0, signOut: [], signIn: [], signUp: [], profile: 0, reset: [], setSession: [], verifyOtp: [], update: [] };
     let clientOptions, authCallback;
     const window = {
         fetch: fetchImpl,
         GEO_PORTAL_CONFIG: configured ? { supabaseUrl: 'https://example.supabase.co', supabaseAnonKey: 'public-test-key' } : {},
         sessionStorage, localStorage: storage(localMap), crypto: { randomUUID: () => `tab-${++tabCounter}` },
         performance: { getEntriesByType: () => [{ type: navigation }] },
-        location: { href: 'https://example.test/index.html', pathname: '/index.html', hash, search: '', replace: url => redirects.push(url), reload: () => redirects.push('reload') },
-        history: { replaceState(){window.location.hash='';} },
+        location: { href: `https://example.test/index.html${search}${hash}`, pathname: '/index.html', hash, search, replace: url => redirects.push(url), reload: () => redirects.push('reload') },
+        history: { replaceState(){window.location.hash='';window.location.search='';} },
         addEventListener(event, fn) { listeners[event] = fn; },
         supabase: { createClient(url, key, options) {
             clientOptions = options;
@@ -47,7 +47,8 @@ function run({ page = 'portal', sessionMap = new Map(), initialSession, role = '
                     onAuthStateChange(fn) { authCallback = fn; },
                     async resetPasswordForEmail(email,options) { calls.reset.push({email,options}); return {error:resetError}; },
                     async setSession(tokens) { calls.setSession.push(tokens); if(recoveryError)return {error:recoveryError};sessionStorage.setItem(options.auth.storageKey,JSON.stringify(session));return {data:{session},error:null}; },
-                    async updateUser(attributes) { calls.update.push(attributes); return {data:{user},error:updateError}; },
+                    async verifyOtp(params) { calls.verifyOtp.push({ ...params }); if(verifyOtpError)return {data:{},error:verifyOtpError};const verifiedSession={...session,user:verifiedUser};sessionStorage.setItem(options.auth.storageKey,JSON.stringify(verifiedSession));return {data:{user:verifiedUser,session:verifiedSession},error:null}; },
+                    async updateUser(attributes) { calls.update.push({ ...attributes }); return {data:{user},error:updateError}; },
                     async getSession() { return { data: { session: read() }, error: null }; },
                     async getUser() { calls.getUser++; return { data: { user: userError ? null : read()?.user }, error: userError ? Error('revoked') : null }; },
                     async signInWithPassword(credentials) {
@@ -353,6 +354,74 @@ test('convite abre criação de senha sem entrar no portal e mantém fluxo após
  assert.equal(await reload.window.saveRecoveredPassword('123456','123456'),true);
  assert.match(reload.document.getElementById('login-message').textContent,/Convite concluído/);
  assert.equal(reload.redirects.length,0);
+});
+test('link de convite ou recuperação só prepara confirmação; scanner não consome o token', async () => {
+ for (const type of ['invite','recovery']) {
+  const search=`?token_hash=hash-${type}&type=${type}`;
+  const h=run({page:'login',search}); await h.window.portalReady;
+  assert.equal(h.calls.verifyOtp.length,0); assert.equal(h.calls.setSession.length,0);
+  assert.equal(h.calls.update.length,0);
+  assert.deepEqual(h.sessionMap.has(h.options().auth.storageKey),false);
+  assert.equal(h.document.getElementById('email-link-confirmation').hidden,false);
+  assert.equal(h.document.getElementById('btn-accept-invite').hidden,false);
+  assert.equal(h.document.getElementById('new-password-form').hidden,true);
+  assert.equal(h.window.location.search,'');
+  assert.deepEqual(JSON.parse(h.sessionMap.get(`${h.options().auth.storageKey}.email-link`)),{token_hash:`hash-${type}`,type});
+ }
+});
+test('aceitação explícita verifica o hash uma vez, confirma usuário e só então permite criar senha', async () => {
+ const h=run({page:'login',search:'?token_hash=invite-hash&type=invite'}); await h.window.portalReady;
+ assert.equal(await h.window.acceptEmailLink(),true);
+ assert.deepEqual(h.calls.verifyOtp,[{token_hash:'invite-hash',type:'invite'}]);
+ assert.equal(h.calls.getUser,1); assert.equal(h.document.getElementById('new-password-form').hidden,false);
+ assert.equal(h.document.getElementById('login-title').textContent,'Crie sua senha de acesso');
+ assert.equal(h.sessionMap.has(`${h.options().auth.storageKey}.email-link`),false);
+ assert.equal(h.calls.update.length,0);
+ assert.equal(await h.window.saveRecoveredPassword('123456','123456'),true);
+ assert.deepEqual(h.calls.update,[{password:'123456'}]);
+});
+test('pending link sobrevive F5 e chamadas simultâneas não verificam duas vezes', async () => {
+ const h=run({page:'login',search:'?token_hash=reset-hash&type=recovery'}); await h.window.portalReady;
+ const again=run({page:'login',sessionMap:h.sessionMap}); await again.window.portalReady;
+ assert.equal(again.document.getElementById('email-link-confirmation').hidden,false);
+ assert.equal(again.document.getElementById('new-password-form').hidden,true);
+ await Promise.all([again.window.acceptEmailLink(),again.window.acceptEmailLink()]);
+ assert.equal(again.calls.verifyOtp.length,1);
+ assert.deepEqual(again.calls.verifyOtp[0],{token_hash:'reset-hash',type:'recovery'});
+ assert.equal(again.document.getElementById('new-password-form').hidden,false);
+});
+test('tipo inválido não verifica OTP e cancelar apaga link pendente', async () => {
+ for (const search of ['?token_hash=bad&type=signup','?token_hash=&type=invite','?token_hash=bad']) {
+  const invalid=run({page:'login',search}); await invalid.window.portalReady;
+  assert.equal(invalid.calls.verifyOtp.length,0);
+  assert.equal(invalid.document.getElementById('email-link-confirmation').hidden,true);
+  assert.equal(invalid.document.getElementById('new-password-form').hidden,true);
+ }
+ const h=run({page:'login',search:'?token_hash=invite-hash&type=invite'}); await h.window.portalReady;
+ await h.window.cancelPasswordRecovery();
+ assert.equal(h.calls.verifyOtp.length,0);
+ assert.equal(h.sessionMap.has(`${h.options().auth.storageKey}.email-link`),false);
+ assert.equal(h.sessionMap.has(`${h.options().auth.storageKey}.recovery`),false);
+ assert.equal(h.document.getElementById('email-link-confirmation').hidden,true);
+});
+test('falha na verificação OTP mantém confirmação para nova tentativa e não libera senha', async () => {
+ const h=run({page:'login',search:'?token_hash=expired-hash&type=invite',verifyOtpError:Error('expired')}); await h.window.portalReady;
+ assert.equal(await h.window.acceptEmailLink(),false);
+ assert.deepEqual(h.calls.verifyOtp,[{token_hash:'expired-hash',type:'invite'}]);
+ assert.equal(h.document.getElementById('email-link-confirmation').hidden,false);
+ assert.equal(h.document.getElementById('new-password-form').hidden,true);
+ assert.ok(h.sessionMap.has(`${h.options().auth.storageKey}.email-link`));
+ assert.match(h.document.getElementById('login-message').textContent,/inválido ou expirou/);
+});
+test('OTP sem usuário confirmado não libera a criação de senha', async () => {
+ for (const options of [{userError:true},{verifiedUser:{...user,email_confirmed_at:null}}]) {
+  const h=run({page:'login',search:'?token_hash=valid-hash&type=invite',...options}); await h.window.portalReady;
+  assert.equal(await h.window.acceptEmailLink(),false);
+  assert.equal(h.calls.verifyOtp.length,1);
+  assert.equal(h.document.getElementById('email-link-confirmation').hidden,false);
+  assert.equal(h.document.getElementById('new-password-form').hidden,true);
+  assert.ok(h.sessionMap.has(`${h.options().auth.storageKey}.email-link`));
+ }
 });
 test('seleção e troca de fazenda só aparecem com mais de uma fazenda liberada', async () => {
  for (const farms of [[{code:'FE',name:'Esperança'}],[{code:'FE',name:'Esperança'},{code:'FS',name:'Outra'}]]) {
