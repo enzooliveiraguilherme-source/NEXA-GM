@@ -1,16 +1,25 @@
-# E-mails do Geoportal Grupo Michels
+# Autenticação por senha temporária
 
-Fluxo atualizado em 16/10/2026 para convite e escolha de senha pelo colaborador.
+Fluxo autorizado e publicado em 16/10/2026: o administrador cadastra e-mail e permissões; o colaborador recebe OTP de seis dígitos, válido por 3600 segundos e de uso único. O email aponta somente para a página pública do portal. O colaborador informa email e código e escolhe uma senha definitiva de pelo menos oito caracteres. Depois entra normalmente com sua senha.
 
-- Invite user: invite.html. Assunto: Seu convite para o Geoportal Grupo Michels.
-- Reset password: recovery.html. Assunto: Redefinir senha do Geoportal Grupo Michels.
+Primeiro convite usa verifyOtp do tipo invite. Recuperação e reenvio usam recovery; o email explica selecionar Recuperar senha na tela de senha temporária. O administrador não recebe o código nem a senha definitiva. Senhas antigas continuam aceitas no login normal.
 
-O administrador informa nome, e-mail, cargo e glebas em Membros e acessos → Adicionar membro. A função invite-member valida o administrador, envia o convite pelo SMTP configurado no Supabase e salva as permissões. O administrador não escolhe nem recebe a senha do colaborador.
+## Proteção no banco
 
-Os modelos usam TokenHash em um link para o portal. Abrir a página apenas apresenta a confirmação; verifyOtp ocorre após clicar em Aceitar convite e criar senha. Essa etapa evita consumir o convite durante a pré-verificação automática de links por clientes de e-mail, como Outlook. Depois, a pessoa define e confirma sua senha, encerra a sessão temporária e entra com e-mail e senha. Links antigos com tokens no fragmento continuam compatíveis.
+Aplicada a migração temporary_password_flow: pendência privada em private.password_setup, dois triggers em auth.users, proteção nas quatro funções de autorização existentes e restrição nas cinco tabelas farms, user_farm_access, seed_varieties, seed_variety_cycles e harvest_user_legends. O hash interno gerado antes de confirmar o convite não elimina a pendência; uma troca de senha posterior à confirmação libera o acesso conforme o cargo e as fazendas cadastrados.
 
-Os dois modelos foram salvos também em Authentication → Emails no projeto qdvlwszyehblmrjnqglx. Publicar o site não altera os modelos do Supabase. O nome e as credenciais SMTP existentes foram preservados. A entrega na caixa de entrada do Outlook depende também do provedor e dos filtros da organização, e deve ser conferida com um destinatário real.
+Contas principais enzo.oliveira e enzo.geox preservadas. Silvio e Nicolas continuam pendentes e sem fazendas concedidas até a conclusão do primeiro acesso e eventual liberação pelo administrador.
 
-Validação: 43 testes automatizados de autenticação e convites passaram, executados e ampliados pelo Luna. Publicação Vercel confirmada para o commit 6b313d42a4c95c675a306c869622a7fa795dff7e. Conferido o carregamento da confirmação de convite em produção com um hash fictício, sem criar conta nem enviar e-mail real.
+## Validação
+
+- Luna: 72 testes automatizados de sessão, convite e templates passaram.
+- Teste SQL transacional tests/temporary-password-rls.sql executado com sucesso no projeto: confirmação, senha interna, mudança de senha, bloqueio de dados, Storage e limites por cargo/fazenda. Fixtures revertidas por rollback.
+- Função invite-member publicada na versão 3.
+- Configuração do Auth: código de seis dígitos, expiração 3600 segundos e senha definitiva mínima de oito caracteres.
+- Templates devem estar salvos também em Authentication → Emails; a publicação do site não os altera.
+
+A conferência automática de segurança registra o acesso intencional a funções SECURITY DEFINER, cuja autorização foi coberta pelo teste SQL, e a tabela privada sem política direta (sem privilégios aos clientes). A proteção contra senhas vazadas depende do plano Pro e continua indisponível no plano atual.
+
+A entrega real no Outlook e a conclusão pelo colaborador devem ser confirmadas separadamente; HTTP 200 significa somente solicitação aceita pelo serviço. Nenhum código ou senha deve ser registrado neste repositório.
 
 Referência: https://supabase.com/docs/guides/auth/auth-email-templates

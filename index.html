@@ -32,9 +32,17 @@
                     <button type="submit" id="btn-login">Entrar no geoportal</button>
                 </form>
                 <button type="button" class="login-secondary" id="btn-forgot-password">Esqueci minha senha</button>
+                <button type="button" class="login-secondary" id="btn-use-temporary-password">Primeiro acesso / senha temporária</button>
+                <form class="login-form" id="temporary-access-form" hidden>
+                    <label>E-mail corporativo<input id="temporary-email" type="email" autocomplete="email" required></label>
+                    <label>Senha temporária<input id="temporary-password" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" minlength="6" maxlength="6" placeholder="6 dígitos recebidos por e-mail" required></label>
+                    <label>Tipo de acesso<select id="temporary-purpose"><option value="invite">Primeiro acesso</option><option value="recovery">Recuperar senha</option></select></label>
+                    <button type="submit" id="btn-temporary-login">Continuar e escolher minha senha</button>
+                    <button type="button" id="btn-cancel-temporary">Voltar para entrar</button>
+                </form>
                 <form class="login-form" id="password-request-form" hidden>
                     <label>E-mail cadastrado<input id="reset-email" type="email" autocomplete="email" placeholder="Seu e-mail de acesso" required></label>
-                    <button type="submit" id="btn-send-password-reset">Enviar link de recuperação</button>
+                    <button type="submit" id="btn-send-password-reset">Enviar senha temporária</button>
                     <button type="button" id="btn-back-from-reset">Voltar para entrar</button>
                 </form>
                 <div class="login-form" id="email-link-confirmation" hidden>
@@ -42,8 +50,8 @@
                     <button type="button" id="btn-cancel-email-link">Voltar para entrar</button>
                 </div>
                 <form class="login-form" id="new-password-form" hidden>
-                    <label>Nova senha<input id="new-password" type="password" autocomplete="new-password" minlength="6" required></label>
-                    <label>Confirmar nova senha<input id="confirm-password" type="password" autocomplete="new-password" minlength="6" required></label>
+                    <label>Senha definitiva<input id="new-password" type="password" autocomplete="new-password" minlength="8" required></label>
+                    <label>Confirmar senha definitiva<input id="confirm-password" type="password" autocomplete="new-password" minlength="8" required></label>
                     <button type="submit" id="btn-save-password">Salvar nova senha</button>
                     <button type="button" id="btn-cancel-password-reset">Voltar para entrar</button>
                 </form>
@@ -55,7 +63,7 @@
     </main>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="config.js"></script>
-    <script src="auth.js?v=11"></script>
+    <script src="auth.js?v=12"></script>
     <script src="js/password-visibility.js?v=1"></script>
     <script>
         document.querySelectorAll('.login-form').forEach(form => {
@@ -67,7 +75,9 @@
                     email: 'Informe seu e-mail corporativo para entrar.',
                     password: 'Informe sua senha para entrar. Se ainda não tem uma conta, solicite um convite ao administrador.',
                     'reset-email': 'Informe seu e-mail cadastrado.',
-                    'new-password': 'Informe uma nova senha com ao menos 6 caracteres.',
+                    'new-password': 'Informe uma nova senha com ao menos 8 caracteres.',
+                    'temporary-email': 'Informe o e-mail que recebeu a senha temporária.',
+                    'temporary-password': 'Informe a senha temporária de 6 dígitos.',
                     'confirm-password': 'Confirme sua nova senha.'
                 };
                 document.getElementById('login-message').textContent = field.validity.typeMismatch
@@ -84,6 +94,8 @@
             document.getElementById('login-form').hidden = true;
             document.getElementById('invite-only-help').hidden = true;
             document.getElementById('btn-forgot-password').hidden = true;
+            document.getElementById('btn-use-temporary-password').hidden = true;
+            document.getElementById('temporary-access-form').hidden = true;
             document.getElementById('password-request-form').hidden = false;
             document.getElementById('reset-email').value = document.getElementById('email').value;
             document.getElementById('login-title').textContent = 'Recuperar senha';
@@ -101,6 +113,12 @@
         document.getElementById('btn-cancel-password-reset').addEventListener('click', () => window.cancelPasswordRecovery());
         document.getElementById('btn-accept-invite').addEventListener('click', () => window.acceptEmailLink());
         document.getElementById('btn-cancel-email-link').addEventListener('click', () => window.cancelPasswordRecovery());
+        document.getElementById('btn-use-temporary-password').addEventListener('click', () => window.showTemporaryAccess('invite', document.getElementById('email').value));
+        document.getElementById('temporary-access-form').addEventListener('submit', async event => {
+            event.preventDefault();
+            await window.loginTemporaryPassword(document.getElementById('temporary-email').value, document.getElementById('temporary-password').value, document.getElementById('temporary-purpose').value);
+        });
+        document.getElementById('btn-cancel-temporary').addEventListener('click', () => window.cancelPasswordRecovery());
     </script>
 </body>
 </html>

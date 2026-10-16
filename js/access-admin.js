@@ -34,6 +34,22 @@
                 const edit = document.createElement('button'); edit.type = 'button'; edit.textContent = 'Editar acesso';
                 edit.setAttribute('aria-label', 'Editar acesso de ' + person.email); edit.disabled = busy;
                 edit.addEventListener('click', () => showEditor(person)); cell.append(edit); row.append(cell); list.append(row);
+                if (!person.email_confirmed) {
+                    const resend = document.createElement('button'); resend.type = 'button'; resend.textContent = 'Reenviar senha temporária'; resend.disabled = busy;
+                    resend.addEventListener('click', async () => {
+                        if (busy) return;
+                        busy = true; resend.disabled = true; add.disabled = true;
+                        status.textContent = 'Solicitando uma nova senha temporária…';
+                        try {
+                            const { data, error } = await window.supabaseClient.functions.invoke('invite-member', { body: { email: person.email, resend_existing: true } });
+                            if (error) { let detail; try { detail = await error.context?.json(); } catch (_) {} throw Error(detail?.error || 'Não foi possível reenviar a senha temporária.'); }
+                            if (!data?.invited) throw Error('O reenvio não foi confirmado.');
+                            status.textContent = data.message;
+                        } catch (error) { status.textContent = error.message; }
+                        finally { busy = false; add.disabled = false; render(); }
+                    });
+                    cell.append(resend);
+                }
             }
             if (!visible.length) { const row = document.createElement('tr'), cell = document.createElement('td'); cell.colSpan = 6;
                 cell.textContent = members.length ? 'Nenhum membro encontrado.' : 'Nenhum membro cadastrado.'; row.append(cell); list.append(row); }
@@ -48,7 +64,7 @@
             editor.replaceChildren(); editor.hidden = false;
             const form = document.createElement('form'); form.className = 'member-form';
             const heading = document.createElement('h3'); heading.textContent = person ? 'Editar permissões' : 'Adicionar membro';
-            const help = document.createElement('p'); help.textContent = person ? 'Atualize o cargo e as glebas liberadas para este membro.' : 'A pessoa receberá um convite por e-mail para criar sua própria senha.';
+            const help = document.createElement('p'); help.textContent = person ? 'Atualize o cargo e as glebas liberadas para este membro.' : 'A pessoa receberá uma senha temporária de uso único, válida por 1 hora. No primeiro acesso deverá escolher a senha definitiva.';
             function field(title, input) { const label = document.createElement('label'); label.textContent = title; label.append(input); return label; }
             const name = document.createElement('input'); name.autocomplete = 'name'; name.maxLength = 100; name.value = person?.full_name || '';
             const email = document.createElement('input'); email.type = 'email'; email.autocomplete = 'email'; email.required = true; email.maxLength = 254; email.value = person?.email || ''; email.disabled = !!person;

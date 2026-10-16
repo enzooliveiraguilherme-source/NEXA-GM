@@ -9,7 +9,9 @@ let tabCounter = 0;
 
 function run({ page = 'portal', sessionMap = new Map(), initialSession, role = 'visualizador',
     profileError = false, userError = false, loginError, offlineLogout = false, storageBlocked = false,
-    hash = '', search = '', resetError, recoveryError, verifyOtpError, verifiedUser = user, updateError,
+    hash = '', search = '', resetError, recoveryError, verifyOtpError, verifyOtpUserError = false,
+    otpAlreadyUsedOnRetry = false, verifiedUser = user, updateError,
+    hasPermanentPassword = true, permanentPasswordError = false,
     suppliedUser = user, configured = true, failProfile = false, navigation = 'reload',
     farms = [{code:'FE',name:'Esperança'}], farmError = false, chosenFarm = 'FE', fetchImpl,
     localMap = new Map([['sb-example-auth-token', JSON.stringify(session)], ['geoportal_calcario_records_v1', 'preserved']]) } = {}) {
@@ -26,8 +28,8 @@ function run({ page = 'portal', sessionMap = new Map(), initialSession, role = '
         add: c => classes.add(c), remove: c => classes.delete(c) } },
         createElement: () => element(),
         getElementById(id) { if (!elements.has(id)) elements.set(id, element()); return elements.get(id); } };
-    const calls = { getUser: 0, signOut: [], signIn: [], signUp: [], profile: 0, reset: [], setSession: [], verifyOtp: [], update: [] };
-    let clientOptions, authCallback;
+    const calls = { getUser: 0, signOut: [], signIn: [], signUp: [], profile: 0, reset: [], setSession: [], verifyOtp: [], update: [], rpc: [] };
+    let clientOptions, authCallback, otpConsumed = false;
     const window = {
         fetch: fetchImpl,
         GEO_PORTAL_CONFIG: configured ? { supabaseUrl: 'https://example.supabase.co', supabaseAnonKey: 'public-test-key' } : {},
@@ -42,15 +44,19 @@ function run({ page = 'portal', sessionMap = new Map(), initialSession, role = '
             if (initialSession) sessionStorage.setItem(options.auth.storageKey, JSON.stringify(initialSession));
             if (initialSession && chosenFarm) sessionStorage.setItem(`${options.auth.storageKey}.farm`, chosenFarm);
             return {
-                async rpc(name) { assert.equal(name,'list_accessible_farms_by_gleba'); return {data:farms,error:farmError ? Error('denied'):null}; },
+                async rpc(name, args) {
+                    calls.rpc.push({name,args});
+                    if(name === 'has_permanent_password') return {data:hasPermanentPassword,error:permanentPasswordError ? Error('denied'):null};
+                    assert.equal(name,'list_accessible_farms_by_gleba'); return {data:farms,error:farmError ? Error('denied'):null};
+                },
                 auth: {
                     onAuthStateChange(fn) { authCallback = fn; },
                     async resetPasswordForEmail(email,options) { calls.reset.push({email,options}); return {error:resetError}; },
                     async setSession(tokens) { calls.setSession.push(tokens); if(recoveryError)return {error:recoveryError};sessionStorage.setItem(options.auth.storageKey,JSON.stringify(session));return {data:{session},error:null}; },
-                    async verifyOtp(params) { calls.verifyOtp.push({ ...params }); if(verifyOtpError)return {data:{},error:verifyOtpError};const verifiedSession={...session,user:verifiedUser};sessionStorage.setItem(options.auth.storageKey,JSON.stringify(verifiedSession));return {data:{user:verifiedUser,session:verifiedSession},error:null}; },
+                    async verifyOtp(params) { calls.verifyOtp.push({ ...params }); if(verifyOtpError || (otpConsumed && otpAlreadyUsedOnRetry))return {data:{},error:verifyOtpError || Error('OTP already used')};otpConsumed=true;const verifiedSession={...session,user:verifiedUser};sessionStorage.setItem(options.auth.storageKey,JSON.stringify(verifiedSession));return {data:{user:verifiedUser,session:verifiedSession},error:null}; },
                     async updateUser(attributes) { calls.update.push({ ...attributes }); return {data:{user},error:updateError}; },
                     async getSession() { return { data: { session: read() }, error: null }; },
-                    async getUser() { calls.getUser++; return { data: { user: userError ? null : read()?.user }, error: userError ? Error('revoked') : null }; },
+                    async getUser() { calls.getUser++; const failed = userError || (verifyOtpUserError && otpConsumed); return { data: { user: failed ? null : read()?.user }, error: failed ? Error('revoked') : null }; },
                     async signInWithPassword(credentials) {
                         calls.signIn.push(credentials);
                         if (loginError) return { data: {}, error: loginError };
@@ -322,10 +328,10 @@ test('link de recuperação limpa tokens da URL, valida identidade e não abre o
     assert.equal(h.elements.get('login-form').hidden,true);
     assert.deepEqual(h.redirects,[]);assert.equal(h.window.portalAccessRole,undefined);
     assert.equal(await h.window.saveRecoveredPassword('123','123'),false);
-    assert.equal(await h.window.saveRecoveredPassword('123456','654321'),false);
+    assert.equal(await h.window.saveRecoveredPassword('12345678','87654321'),false);
     assert.equal(h.calls.update.length,0);
-    assert.equal(await h.window.saveRecoveredPassword('123456','123456'),true);
-    assert.equal(h.calls.update[0].password,'123456');
+    assert.equal(await h.window.saveRecoveredPassword('12345678','12345678'),true);
+    assert.equal(h.calls.update[0].password,'12345678');
     assert.equal(h.sessionMap.has(h.options().auth.storageKey),false);
     assert.equal(h.elements.get('new-password').value,'');assert.equal(h.elements.get('confirm-password').value,'');
     assert.equal(h.elements.get('login-form').hidden,false);assert.deepEqual(h.redirects,[]);
@@ -333,15 +339,15 @@ test('link de recuperação limpa tokens da URL, valida identidade e não abre o
 test('link inválido e sessão comum não permitem alterar senha pelo fluxo de recuperação', async () => {
     const invalid=run({page:'login',hash:'#type=recovery&access_token=test-token&refresh_token=test-refresh',recoveryError:Error('expired')});
     await invalid.window.portalReady;assert.match(invalid.elements.get('login-message').textContent,/inválido ou expirou/);
-    assert.equal(await invalid.window.saveRecoveredPassword('123456','123456'),false);assert.equal(invalid.calls.update.length,0);
+    assert.equal(await invalid.window.saveRecoveredPassword('12345678','12345678'),false);assert.equal(invalid.calls.update.length,0);
     const ordinary=run({page:'login',initialSession:session});await ordinary.window.portalReady;
-    assert.equal(await ordinary.window.saveRecoveredPassword('123456','123456'),false);assert.equal(ordinary.calls.update.length,0);
+    assert.equal(await ordinary.window.saveRecoveredPassword('12345678','12345678'),false);assert.equal(ordinary.calls.update.length,0);
 });
 test('F5 retoma recuperação validada e falha ao salvar não apresenta sucesso', async () => {
     const h=run({page:'login',hash:'#type=recovery&access_token=test-token&refresh_token=test-refresh'});await h.window.portalReady;
     const again=run({page:'login',sessionMap:h.sessionMap,updateError:{code:'same_password'}});await again.window.portalReady;
     assert.equal(again.elements.get('new-password-form').hidden,false);
-    assert.equal(await again.window.saveRecoveredPassword('123456','123456'),false);
+    assert.equal(await again.window.saveRecoveredPassword('12345678','12345678'),false);
     assert.match(again.elements.get('login-message').textContent,/diferente da anterior/);
     assert.equal(again.elements.get('btn-save-password').disabled,false);
 });
@@ -351,7 +357,7 @@ test('convite abre criação de senha sem entrar no portal e mantém fluxo após
  assert.equal(h.calls.profile,0);assert.equal(h.redirects.length,0);assert.equal(h.window.location.hash,'');
  const reload=run({page:'login',sessionMap:h.sessionMap}); await reload.window.portalReady;
  assert.equal(reload.document.getElementById('login-title').textContent,'Crie sua senha de acesso');
- assert.equal(await reload.window.saveRecoveredPassword('123456','123456'),true);
+ assert.equal(await reload.window.saveRecoveredPassword('12345678','12345678'),true);
  assert.match(reload.document.getElementById('login-message').textContent,/Convite concluído/);
  assert.equal(reload.redirects.length,0);
 });
@@ -377,8 +383,8 @@ test('aceitação explícita verifica o hash uma vez, confirma usuário e só en
  assert.equal(h.document.getElementById('login-title').textContent,'Crie sua senha de acesso');
  assert.equal(h.sessionMap.has(`${h.options().auth.storageKey}.email-link`),false);
  assert.equal(h.calls.update.length,0);
- assert.equal(await h.window.saveRecoveredPassword('123456','123456'),true);
- assert.deepEqual(h.calls.update,[{password:'123456'}]);
+ assert.equal(await h.window.saveRecoveredPassword('12345678','12345678'),true);
+    assert.deepEqual(h.calls.update,[{password:'12345678'}]);
 });
 test('pending link sobrevive F5 e chamadas simultâneas não verificam duas vezes', async () => {
  const h=run({page:'login',search:'?token_hash=reset-hash&type=recovery'}); await h.window.portalReady;
@@ -423,6 +429,35 @@ test('OTP sem usuário confirmado não libera a criação de senha', async () =>
   assert.ok(h.sessionMap.has(`${h.options().auth.storageKey}.email-link`));
  }
 });
+test('OTP consumido com falha temporária ao confirmar usuário não pode ser repetido', async () => {
+ const h=run({page:'login',search:'?token_hash=single-use-hash&type=invite',verifyOtpUserError:true,otpAlreadyUsedOnRetry:true}); await h.window.portalReady;
+ assert.equal(await h.window.acceptEmailLink(),false);
+ assert.equal(h.sessionMap.has(`${h.options().auth.storageKey}.email-link`),true);
+ assert.equal(h.sessionMap.has(`${h.options().auth.storageKey}.recovery`),false);
+ assert.equal(h.document.getElementById('new-password-form').hidden,true);
+ assert.equal(await h.window.acceptEmailLink(),false);
+ assert.equal(h.calls.verifyOtp.length,2);
+ assert.match(h.document.getElementById('login-message').textContent,/inválido ou expirou/);
+});
+test('senha salva continua confirmada ao falhar o encerramento local da sessão', async () => {
+ const h=run({page:'login',hash:'#type=recovery&access_token=test-token&refresh_token=test-refresh',offlineLogout:true}); await h.window.portalReady;
+ assert.equal(await h.window.saveRecoveredPassword('12345678','12345678'),true);
+ assert.deepEqual(h.calls.update,[{password:'12345678'}]);
+ assert.equal(h.sessionMap.has(h.options().auth.storageKey),false);
+ assert.equal(h.document.getElementById('new-password-form').hidden,true);
+ assert.match(h.document.getElementById('login-message').textContent,/Senha atualizada/);
+});
+test('após criar senha no convite, o login ainda exige perfil válido e fazenda liberada', async () => {
+ for (const options of [{profileError:true},{farms:[]}]) {
+  const h=run({page:'login',search:'?token_hash=invite-hash&type=invite',...options}); await h.window.portalReady;
+  assert.equal(await h.window.acceptEmailLink(),true);
+  assert.equal(await h.window.saveRecoveredPassword('12345678','12345678'),true);
+  assert.equal(await h.window.loginGeoportal(user.email,'123456'),false);
+  assert.equal(h.calls.signIn.length,1);
+  assert.equal(h.sessionMap.has(h.options().auth.storageKey),false);
+  assert.equal(h.redirects.length,0);
+ }
+});
 test('seleção e troca de fazenda só aparecem com mais de uma fazenda liberada', async () => {
  for (const farms of [[{code:'FE',name:'Esperança'}],[{code:'FE',name:'Esperança'},{code:'FS',name:'Outra'}]]) {
   const h=run({initialSession:session,farms}); assert.equal(await h.window.portalReady,true);
@@ -440,5 +475,147 @@ test('recuperação e convite aceitam senha numérica de dez caracteres sem exig
 test('recusa do servidor não informa falsamente que a senha longa tem menos de seis caracteres', async () => {
  const h=run({page:'login',hash:'#type=recovery&access_token=test&refresh_token=test',updateError:{code:'weak_password'}}); await h.window.portalReady;
  assert.equal(await h.window.saveRecoveredPassword('9876543210','9876543210'),false);
- assert.doesNotMatch(h.document.getElementById('login-message').textContent,/6 caracteres/);
+ assert.doesNotMatch(h.document.getElementById('login-message').textContent,/8 caracteres/);
+});
+test('OTP temporário de convite ou recuperação abre só a definição de senha, sem autenticar no portal', async () => {
+ for (const purpose of ['invite','recovery']) {
+  const h=run({page:'login'}); await h.window.portalReady;
+  h.window.showTemporaryAccess(purpose,user.email);
+  assert.equal(h.document.getElementById('temporary-access-form').hidden,false);
+  assert.equal(await h.window.loginTemporaryPassword(user.email,'654321',purpose),true);
+  assert.deepEqual(h.calls.verifyOtp,[{email:user.email,token:'654321',type:purpose}]);
+  assert.equal(h.calls.signIn.length,0); assert.equal(h.calls.getUser,0);
+  assert.equal(h.calls.profile,0);
+  assert.equal(h.calls.rpc.some(call=>call.name==='list_accessible_farms_by_gleba'),false);
+  assert.deepEqual(h.redirects,[]);
+  assert.equal(h.document.getElementById('temporary-password').value,'');
+  assert.equal(h.document.getElementById('new-password-form').hidden,false);
+  assert.equal(h.sessionMap.get(`${h.options().auth.storageKey}.recovery`),purpose==='invite'?'invite':'1');
+ }
+});
+test('OTP temporário expirado, inválido ou limitado não ativa a definição de senha', async () => {
+ for (const verifyOtpError of [Error('expired'),{code:'otp_expired'},{status:429}]) {
+  const h=run({page:'login',verifyOtpError}); await h.window.portalReady;
+  h.window.showTemporaryAccess('recovery',user.email);
+  assert.equal(await h.window.loginTemporaryPassword(user.email,'654321','recovery'),false);
+  assert.equal(h.document.getElementById('new-password-form').hidden,true);
+  assert.equal(h.document.getElementById('temporary-access-form').hidden,false);
+  assert.equal(h.calls.signIn.length,0); assert.equal(h.calls.profile,0);
+  assert.deepEqual(h.redirects,[]);
+  assert.equal(h.document.getElementById('btn-temporary-login').disabled,false);
+ }
+});
+test('pedido de recuperação oferece OTP temporário sem abrir o portal', async () => {
+ const h=run({page:'login'}); await h.window.portalReady;
+ assert.equal(await h.window.requestPasswordReset(` ${user.email} `),true);
+ assert.equal(h.calls.reset.length,1);
+ assert.equal(h.calls.reset[0].email,user.email);
+ assert.equal(h.document.getElementById('temporary-access-form').hidden,false);
+ assert.equal(h.document.getElementById('temporary-purpose').value,'recovery');
+ assert.match(h.document.getElementById('login-message').textContent,/6 dígitos.*1 hora/);
+ assert.equal(h.calls.verifyOtp.length,0);
+ assert.equal(h.calls.signIn.length,0);
+ assert.deepEqual(h.redirects,[]);
+});
+test('finalidade inválida não envia OTP nem abre definição de senha', async () => {
+ const h=run({page:'login'}); await h.window.portalReady;
+ h.window.showTemporaryAccess('invite',user.email);
+ assert.equal(await h.window.loginTemporaryPassword(user.email,'654321','signup'),false);
+ assert.equal(h.calls.verifyOtp.length,0);
+ assert.equal(h.document.getElementById('new-password-form').hidden,true);
+});
+test('OTP que não contém seis dígitos não chega ao serviço de Auth', async () => {
+ for (const token of ['12345','1234567','12ab56','']) {
+  const h=run({page:'login'}); await h.window.portalReady;
+  h.window.showTemporaryAccess('invite',user.email);
+  assert.equal(await h.window.loginTemporaryPassword(user.email,token,'invite'),false);
+  assert.equal(h.calls.verifyOtp.length,0);
+  assert.equal(h.document.getElementById('new-password-form').hidden,true);
+ }
+});
+test('sessão e usuário retornados pelo OTP são usados mesmo se uma chamada separada a getUser falharia', async () => {
+ const h=run({page:'login',userError:true}); await h.window.portalReady;
+ h.window.showTemporaryAccess('invite',user.email);
+ assert.equal(await h.window.loginTemporaryPassword(user.email,'654321','invite'),true);
+ assert.equal(h.calls.getUser,0);
+ assert.equal(h.calls.verifyOtp.length,1);
+ assert.equal(h.document.getElementById('new-password-form').hidden,false);
+});
+test('OTP temporário de uso único não aceita nova validação após cancelar o primeiro uso', async () => {
+ const h=run({page:'login',otpAlreadyUsedOnRetry:true}); await h.window.portalReady;
+ h.window.showTemporaryAccess('recovery',user.email);
+ assert.equal(await h.window.loginTemporaryPassword(user.email,'654321','recovery'),true);
+ await h.window.cancelPasswordRecovery();
+ h.window.showTemporaryAccess('recovery',user.email);
+ assert.equal(await h.window.loginTemporaryPassword(user.email,'654321','recovery'),false);
+ assert.equal(h.calls.verifyOtp.length,2);
+ assert.equal(h.document.getElementById('new-password-form').hidden,true);
+});
+test('OTP temporário não pode ser reutilizado como senha permanente', async () => {
+ const h=run({page:'login'}); await h.window.portalReady;
+ h.window.showTemporaryAccess('invite',user.email);
+ assert.equal(await h.window.loginTemporaryPassword(user.email,'654321','invite'),true);
+ assert.equal(await h.window.saveRecoveredPassword('654321','654321'),false);
+ assert.equal(h.calls.update.length,0);
+ assert.match(h.document.getElementById('login-message').textContent,/8 caracteres/i);
+ assert.equal(await h.window.saveRecoveredPassword('98765432','98765432'),true);
+ assert.equal(h.calls.update.length,1);
+});
+test('sessão temporária retoma formulário após F5 e cancelar limpa estado de OTP', async () => {
+ const h=run({page:'login'}); await h.window.portalReady;
+ h.window.showTemporaryAccess('recovery',user.email);
+ assert.equal(await h.window.loginTemporaryPassword(user.email,'654321','recovery'),true);
+ const reload=run({page:'login',sessionMap:h.sessionMap}); await reload.window.portalReady;
+ assert.equal(reload.document.getElementById('new-password-form').hidden,false);
+ assert.equal(reload.sessionMap.get(`${reload.options().auth.storageKey}.recovery`),'1');
+ await reload.window.cancelPasswordRecovery();
+ assert.equal(reload.document.getElementById('new-password-form').hidden,true);
+ assert.equal(reload.sessionMap.has(reload.options().auth.storageKey),false);
+ assert.equal(reload.sessionMap.has(`${reload.options().auth.storageKey}.recovery`),false);
+});
+test('URL pública de primeiro acesso ou recuperação mostra a entrada OTP sem validar email', async () => {
+ for (const [search,purpose] of [['?acesso=temporario','invite'],['?acesso=temporario&type=recovery','recovery']]) {
+  const h=run({page:'login',search}); await h.window.portalReady;
+  assert.equal(h.document.getElementById('temporary-access-form').hidden,false);
+  assert.equal(h.document.getElementById('temporary-purpose').value,purpose);
+  assert.equal(h.window.location.search,'');
+  assert.equal(h.calls.verifyOtp.length,0);
+  assert.equal(h.calls.signIn.length,0);
+  assert.equal(h.calls.profile,0);
+  assert.deepEqual(h.redirects,[]);
+ }
+});
+test('cancelar acesso temporário limpa senha e email inseridos no formulário', async () => {
+ const h=run({page:'login',search:'?acesso=temporario'}); await h.window.portalReady;
+ h.document.getElementById('temporary-email').value=user.email;
+ h.document.getElementById('temporary-password').value='654321';
+ await h.window.cancelPasswordRecovery();
+ assert.equal(h.document.getElementById('temporary-email').value,'');
+ assert.equal(h.document.getElementById('temporary-password').value,'');
+ assert.equal(h.document.getElementById('temporary-access-form').hidden,true);
+ assert.equal(h.sessionMap.has(`${h.options().auth.storageKey}.recovery`),false);
+});
+test('conta sem senha permanente não pode abrir o portal', async () => {
+ const h=run({initialSession:session,hasPermanentPassword:false});
+ assert.equal(await h.window.portalReady,false);
+ assert.equal(h.classes.has('portal-loading'),true);
+ assert.equal(h.calls.profile,0);
+ assert.equal(h.calls.rpc.some(call=>call.name==='list_accessible_farms_by_gleba'),false);
+ assert.match(h.redirects[0],/index\.html/);
+});
+test('login permanente normal verifica a existência de senha permanente antes de entrar', async () => {
+ const h=run({page:'login'}); await h.window.portalReady;
+ assert.equal(await h.window.loginGeoportal(user.email,'Regular-password!'),true);
+ assert.equal(h.calls.rpc.some(call=>call.name==='has_permanent_password'),true);
+ assert.deepEqual(h.redirects,['./portal.html']);
+});
+test('login normal de conta sem senha permanente abre definição de senha e bloqueia o portal', async () => {
+ const h=run({page:'login',hasPermanentPassword:false}); await h.window.portalReady;
+ assert.equal(await h.window.loginGeoportal(user.email,'Regular-password!'),true);
+ assert.equal(h.calls.signIn.length,1);
+ assert.equal(h.calls.rpc.some(call=>call.name==='has_permanent_password'),true);
+ assert.equal(h.redirects.length,0);
+ assert.equal(h.calls.profile,0);
+ assert.equal(h.calls.rpc.some(call=>call.name==='list_accessible_farms_by_gleba'),false);
+ assert.equal(h.document.getElementById('new-password-form').hidden,false);
 });

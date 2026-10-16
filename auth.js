@@ -9,6 +9,7 @@
     let recoveryReady = false;
     let passwordPurpose = 'recovery';
     let pendingEmailLink = null;
+    let usedTemporaryPassword = null;
     let allowedFarms = [];
     let preferencePrefix;
 
@@ -98,6 +99,8 @@
 
     function showRecovery(active) {
         document.getElementById('email-link-confirmation').hidden = true;
+        document.getElementById('temporary-access-form').hidden = true;
+        document.getElementById('btn-use-temporary-password').hidden = active;
         for (const id of ['login-form', 'invite-only-help', 'btn-forgot-password']) {
             const element = document.getElementById(id); if (element) element.hidden = active;
         }
@@ -105,7 +108,34 @@
         document.getElementById('new-password-form').hidden = !active;
         document.getElementById('login-title').textContent = active ? (passwordPurpose === 'invite' ? 'Crie sua senha de acesso' : 'Defina sua nova senha') : 'Bem-vindo ao Geoportal';
         document.getElementById('btn-save-password').textContent = active && passwordPurpose === 'invite' ? 'Criar senha e concluir convite' : 'Salvar nova senha';
-        document.getElementById('login-intro').textContent = active ? 'Use ao menos 6 caracteres. Pode ser somente números. Confirme a senha abaixo.' : 'Entre com seu acesso corporativo para continuar.';
+        document.getElementById('login-intro').textContent = active ? 'Escolha sua senha definitiva com ao menos 8 caracteres. Pode ser somente números. Confirme abaixo.' : 'Entre com seu acesso corporativo para continuar.';
+    }
+
+    window.showTemporaryAccess = function (purpose = 'invite', email = '') {
+        if (loginPending || recoveryReady || !['invite', 'recovery'].includes(purpose)) return false;
+        showRecovery(false);
+        for (const id of ['login-form', 'invite-only-help', 'btn-forgot-password', 'btn-use-temporary-password']) document.getElementById(id).hidden = true;
+        document.getElementById('temporary-access-form').hidden = false;
+        document.getElementById('temporary-email').value = email;
+        document.getElementById('temporary-password').value = '';
+        document.getElementById('temporary-purpose').value = purpose;
+        document.getElementById('login-title').textContent = 'Entre com sua senha temporária';
+        document.getElementById('login-intro').textContent = 'Informe seu e-mail e os 6 dígitos recebidos. A senha temporária vale por 1 hora e só pode ser usada uma vez.';
+        return true;
+    };
+
+    async function hasPermanentPassword() {
+        const { data, error } = await window.supabaseClient.rpc('has_permanent_password');
+        if (error || typeof data !== 'boolean') throw Error('Não foi possível conferir a situação da sua senha.');
+        return data;
+    }
+
+    function beginPasswordCreation(purpose, user) {
+        passwordPurpose = purpose;
+        window.sessionStorage.setItem(`${storageKey}.recovery`, purpose === 'invite' ? 'invite' : '1');
+        recoveryReady = true;
+        if (user?.email) document.getElementById('email').value = user.email;
+        showRecovery(true); setMessage('');
     }
 
     function showAccount(profile, user) {
@@ -197,6 +227,12 @@
 
         if (isLoginPage) {
             const emailQuery = new URLSearchParams(window.location.search);
+            if (emailQuery.get('acesso') === 'temporario') {
+                await endSession();
+                window.history.replaceState(null, '', window.location.pathname);
+                window.showTemporaryAccess(emailQuery.get('type') === 'recovery' ? 'recovery' : 'invite');
+                return false;
+            }
             let savedEmailLink;
             try { savedEmailLink = JSON.parse(window.sessionStorage.getItem(`${storageKey}.email-link`) || 'null'); } catch (_) { /* Ignora pendência inválida. */ }
             const queryLink = emailQuery.has('token_hash');
@@ -256,6 +292,7 @@
                 sessao: 'Sua sessão foi encerrada. Entre novamente para continuar.',
                 acesso: 'Não foi possível validar seu acesso. Entre novamente.',
                 fazenda: 'Sua fazenda não está liberada. Solicite acesso ao administrador.',
+                senha: 'Conclua a criação da sua senha em Primeiro acesso / senha temporária antes de acessar o portal.',
                 email: 'Confirme seu e-mail antes de entrar.' }[reason] ||
                 (window.location.hash ? 'Após confirmar o e-mail, entre com sua senha. A fazenda depende da liberação do administrador.' : ''));
             // O link confirma o e-mail no Supabase. Nunca usa o token da URL para entrar automaticamente.
@@ -274,6 +311,9 @@
         }
         if (!user.email_confirmed_at) {
             goToLogin('email'); await endSession(); return false;
+        }
+        if (!await hasPermanentPassword()) {
+            goToLogin('senha'); await endSession(); return false;
         }
         const profile = await getProfile(user);
         if (!profile) {
@@ -325,6 +365,10 @@
             if (!data.user.email_confirmed_at) {
                 await endSession(); setMessage('Confirme seu e-mail antes de entrar.'); return false;
             }
+            if (!await hasPermanentPassword()) {
+                beginPasswordCreation('invite', data.user);
+                return true;
+            }
             const profile = await getProfile(data.user);
             if (!profile) {
                 await endSession();
@@ -374,14 +418,45 @@
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) { setMessage('Informe um e-mail válido para recuperar sua senha.'); return false; }
         loginPending = true;
         const button = document.getElementById('btn-send-password-reset'); button.disabled = true;
-        setMessage('Solicitando o link de recuperação…');
+        setMessage('Solicitando a senha temporária…');
         try {
             const { error } = await window.supabaseClient.auth.resetPasswordForEmail(address, { redirectTo: 'https://nexa-gm.vercel.app/index.html' });
             if (error) throw error;
-            setMessage('Se este e-mail estiver cadastrado, você receberá um link para criar uma nova senha. Confira também a caixa de spam.');
+            loginPending = false;
+            window.showTemporaryAccess('recovery', address);
+            setMessage('Se este e-mail estiver cadastrado, você receberá uma senha temporária de 6 dígitos, válida por 1 hora. Confira também a caixa de spam.');
             return true;
         } catch (error) {
             setMessage(error.status === 429 ? 'Muitas solicitações. Aguarde alguns minutos e tente novamente.' : 'Não foi possível solicitar o link. Confira sua conexão e tente novamente.');
+            return false;
+        } finally { loginPending = false; button.disabled = false; }
+    };
+
+    window.loginTemporaryPassword = async function (email, token, purpose = 'invite') {
+        await window.portalReady;
+        if (loginPending || recoveryReady) return false;
+        const address = String(email || '').trim().toLowerCase();
+        const code = String(token || '').trim();
+        if (!['invite', 'recovery'].includes(purpose) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address) || !/^\d{6}$/.test(code)) {
+            setMessage('Informe seu e-mail e a senha temporária de 6 dígitos recebida.'); return false;
+        }
+        if (!window.supabaseClient) { setMessage('O serviço de acesso está indisponível.'); return false; }
+        loginPending = true;
+        const button = document.getElementById('btn-temporary-login'); button.disabled = true;
+        setMessage('Validando sua senha temporária…');
+        try {
+            const { data, error } = await window.supabaseClient.auth.verifyOtp({ email: address, token: code, type: purpose });
+            if (error) throw error;
+            // O próprio Auth já validou o usuário. Não repete getUser após consumir o código.
+            if (!data?.session || !data?.user?.email_confirmed_at || data.user.email?.toLowerCase() !== address) throw Error('invalid');
+            usedTemporaryPassword = code;
+            document.getElementById('temporary-password').value = '';
+            document.getElementById('password').value = '';
+            beginPasswordCreation(purpose, data.user);
+            return true;
+        } catch (error) {
+            try { await endSession(); } catch (_) { clearSession(); }
+            setMessage(error.status === 429 ? 'Muitas tentativas. Aguarde antes de tentar novamente.' : 'Senha temporária inválida, já utilizada ou expirada. Confira o e-mail ou solicite uma nova.');
             return false;
         } finally { loginPending = false; button.disabled = false; }
     };
@@ -413,7 +488,8 @@
         await window.portalReady;
         if (loginPending) return false;
         if (!recoveryReady) { setMessage('Abra o link recebido por e-mail para definir sua nova senha.'); return false; }
-        if (String(password || '').length < 6) { setMessage('Use uma senha com ao menos 6 caracteres.'); return false; }
+        if (String(password || '').length < 8) { setMessage('Use uma senha com ao menos 8 caracteres.'); return false; }
+        if (usedTemporaryPassword && password === usedTemporaryPassword) { setMessage('Escolha uma senha definitiva diferente da senha temporária.'); return false; }
         if (password !== confirmation) { setMessage('As senhas não coincidem. Confira os dois campos.'); return false; }
         loginPending = true;
         const button = document.getElementById('btn-save-password'); button.disabled = true;
@@ -422,9 +498,11 @@
             if (userError || !user) throw Error('expired');
             const { error } = await window.supabaseClient.auth.updateUser({ password });
             if (error) throw error;
+            if (!await hasPermanentPassword()) throw Error('password_not_saved');
             document.getElementById('new-password').value = '';
             document.getElementById('confirm-password').value = '';
             recoveryReady = false;
+            usedTemporaryPassword = null;
             try { await endSession(); } catch (_) { clearSession(); }
             showRecovery(false);
             setMessage(passwordPurpose === 'invite' ? 'Convite concluído. Entre com seu e-mail e a senha que você criou.' : 'Senha atualizada. Entre com seu e-mail e a nova senha.');
@@ -440,10 +518,13 @@
         await window.portalReady;
         if (loginPending) return;
         recoveryReady = false;
+        usedTemporaryPassword = null;
         pendingEmailLink = null;
         try { await endSession(); } catch (_) { clearSession(); }
         document.getElementById('new-password').value = '';
         document.getElementById('confirm-password').value = '';
+        document.getElementById('temporary-email').value = '';
+        document.getElementById('temporary-password').value = '';
         showRecovery(false); setMessage('');
     };
 
