@@ -175,11 +175,11 @@
                     .select(PLAN_COLUMNS, { count: 'exact' }).eq('fazenda_scope', requiredText(farm, 'a fazenda'))
                     .order('id', { ascending: true }))).map(toPlan);
             },
-            async listFields(farm) {
+            async listFields(farm, {includeArchived = false} = {}) {
                 return (await listPages(() => client.from('farm_fields')
                     .select('campo,feature', { count: 'exact' }).eq('farm_code', requiredText(farm, 'a fazenda'))
                     .order('campo', { ascending: true }))).map(row => row.feature)
-                    .filter(feature => feature.properties?.OperationalArchived !== true);
+                    .filter(feature => includeArchived || feature.properties?.OperationalArchived !== true);
             },
             async saveRecords(records, type) {
                 if (!Array.isArray(records) || !records.length || records.length > 500) {
@@ -255,3 +255,4 @@
 
     root.GeoOperations = Object.freeze({ createRepository, OperationRepositoryError });
 })(typeof window !== 'undefined' ? window : globalThis);
+

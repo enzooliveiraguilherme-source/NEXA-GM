@@ -23,3 +23,24 @@ test('novas partes operacionais não entram na colheita e seus limites anteriore
     assert.equal(new Set(operational.map(f=>api.TalhaoSelection.key(f))).size,6);
     assert.equal(operational[0].properties.Campo,'FE 01.1');
 });
+
+test('colheita usa o pai arquivado FE11 quando o índice não tem geometria e ignora o filho homônimo', async () => {
+    const parent={properties:{Fazenda:'FE',Gleba:'FE',Campo:'FE11',Area:167.44,OperationalArchived:true},geometry:{type:'MultiPolygon',coordinates:['parent-FE11']}};
+    const child={properties:{Fazenda:'FE',Gleba:'FE',Campo:'FE 11 (167,44 ha)',Area:167.44},geometry:{type:'MultiPolygon',coordinates:['child-FE11']}};
+    const records=[{fazenda:'FE',campo:'FE11',mean:142}];
+    const warnings=[];
+    const context=vm.createContext({window:{portalFarms:[{code:'FE',gleba:'FE'}]},document:{addEventListener(){},getElementById(){return null;}},console:{warn(...args){warnings.push(args);}},
+        HarvestStore:{async load(){return {index:{records},datasets:[{farm:'FE',index:{features:[]}}]};},fieldKey:(farm,campo)=>JSON.stringify([farm,campo])},HarvestView:{init(){}}});
+    vm.runInContext(fs.readFileSync(require.resolve('../app.js'),'utf8'),context);
+    const api=vm.runInContext('({state,loadHarvestTest})',context);
+    api.state.geojsonData={type:'FeatureCollection',features:[child]};
+    api.state.cloudStore={getArchivedFields:()=>[parent]};
+    await api.loadHarvestTest();
+    assert.deepEqual(warnings,[]);
+    const displayed=Array.from(api.state.harvestData.features);
+    assert.equal(displayed.length,1);
+    assert.equal(displayed[0].properties.Campo,'FE11');
+    assert.equal(displayed[0].geometry,parent.geometry);
+    assert.equal(displayed[0].properties.produtividade,142);
+    assert.equal(displayed.some(feature=>feature.properties.Campo==='FE 11 (167,44 ha)'),false);
+});

@@ -525,7 +525,8 @@ async function loadHarvestTest() {
         state.harvestDataset = await HarvestStore.load();
         state.harvestSummary = state.harvestDataset.index;
         const fields=new Set(state.harvestSummary.records.map(record=>HarvestStore.fieldKey(record.fazenda,record.campo)));
-        const features=new Map(state.geojsonData.features.filter(feature=>fields.has(HarvestStore.fieldKey(feature.properties.Fazenda,feature.properties.Campo)))
+        const cadastralFeatures=[...(state.cloudStore?.getArchivedFields?.() || []),...state.geojsonData.features];
+        const features=new Map(cadastralFeatures.filter(feature=>fields.has(HarvestStore.fieldKey(feature.properties.Fazenda,feature.properties.Campo)))
             .map(feature=>[HarvestStore.fieldKey(feature.properties.Fazenda,feature.properties.Campo),feature]));
         for(const dataset of state.harvestDataset.datasets)for(const feature of dataset.index.features||[]) {
             const key=HarvestStore.fieldKey(feature.properties.Fazenda,feature.properties.Campo);
@@ -2481,3 +2482,4 @@ function setupEventListeners() {
         });
     });
 }
+

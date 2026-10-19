@@ -11,18 +11,20 @@
     function create(client, farm) {
         const farms = Array.isArray(farm) ? [...new Set(farm)] : [farm];
         const repository = root.GeoOperations.createRepository(client);
-        let records = {}, plans = {}, pending = false;
+        let records = {}, plans = {}, pending = false, archivedFields = [];
         async function load() {
             const batches = await Promise.all(farms.map(async code => {
                 const [features, rows, plans] = await Promise.all([
-                    repository.listFields(code), repository.listFarmRecords(code), repository.listFarmPlans(code)
+                    repository.listFields(code, {includeArchived:true}), repository.listFarmRecords(code), repository.listFarmPlans(code)
                 ]);
                 if (features.some(feature => feature?.properties?.Fazenda !== code) || rows.some(row => row.fazenda !== code) || plans.some(row => row.fazenda !== code)) {
                     throw new Error('O banco retornou uma fazenda diferente do acesso selecionado.');
                 }
                 return {features, rows, plans};
             }));
-            const features = batches.flatMap(batch => batch.features);
+            const allFields = batches.flatMap(batch => batch.features);
+            const features = allFields.filter(feature => feature.properties?.OperationalArchived !== true);
+            archivedFields = allFields.filter(feature => feature.properties?.OperationalArchived === true);
             const rows = batches.flatMap(batch => batch.rows);
             const planRows = batches.flatMap(batch => batch.plans);
             records = Object.fromEntries(rows.map(row => [recordKey(row), row]));
@@ -36,6 +38,7 @@
         }
         return {
             load,
+            getArchivedFields: () => [...archivedFields],
             getRecords: () => ({ ...records }),
             getPlanning: () => Object.fromEntries(Object.entries(plans).map(([key, plan]) => [key, plan.plannedFields.map(field => field.campo)])),
             async saveRecords(input, type) {
@@ -71,3 +74,4 @@
     }
     root.GeoCloudStore = Object.freeze({ create, recordKey, planKey });
 })(typeof window !== 'undefined' ? window : globalThis);
+
