@@ -336,6 +336,11 @@ body[data-page="login"] { margin: 0; min-height: 100vh; background: #f5f7fa; col
 .planting-map-legend button:focus-visible { outline:2px solid #005eea; outline-offset:2px; }
 .planting-legend-reset { width:100%; margin-top:7px; padding:9px; min-height:38px; border:1px solid #b8cadd; border-radius:7px; background:#edf3fa; color:#102c4d; font:inherit; cursor:pointer; }
 .planting-map-legend .planting-legend-hint { margin:6px 0; }
+.planting-legend-window { display:flex; flex-direction:column; gap:4px; margin-bottom:12px; padding-bottom:10px; border-bottom:1px solid #dce6df; }
+.planting-legend-window span { font-size:10px; color:#708276; }
+.planting-legend-window strong { font-size:13px; color:#244638; }
+.planting-map-legend #planting-report-button { display:block; margin-top:12px; }
+.planting-map-legend #planting-report-status { display:block; font-size:11px; margin-top:6px; }
 .operation-export-dialog { margin:auto; width:min(650px,calc(100vw - 24px)); max-height:calc(100svh - 24px); padding:22px; border:1px solid #dce5ef; border-radius:18px; color:#102c4d; overflow-y:auto; overscroll-behavior:contain; background:#f3f7fa; }
 .operation-export-dialog::backdrop { background:#102c4d99; }
 .operation-export-dialog header { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; position:sticky; top:-22px; padding-top:8px; background:#f3f7fa; z-index:2; }
