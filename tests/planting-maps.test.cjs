@@ -7,7 +7,7 @@ const feature = { properties: { Fazenda: 'FE', Campo: 'FE 01', Area: 100, Varied
 function harness(options = {}) {
     const elements = new Map();
     const document = { addEventListener() {}, querySelectorAll: () => [], getElementById(id) {
-        if (!elements.has(id)) elements.set(id, { innerHTML: '', classList: { toggle(name, value) { this[name] = value; } } });
+        if (!elements.has(id)) elements.set(id, { innerHTML: '', hidden: false, classList: { toggle(name, value) { this[name] = value; } } });
         return elements.get(id);
     } };
     const window = { PlantingForecast: F, ...options };
@@ -114,14 +114,17 @@ test('legenda de colheita separa dias consecutivos da mesma semana e soma as ár
     assert.notEqual(h.maps.style(h.state, feature).fillColor, h.maps.style(h.state, secondFeature).fillColor);
 });
 
-test('cores fortes são compartilhadas e exportação fica no painel da aba ativa para perfis autorizados', () => {
+test('cores fortes são compartilhadas e exportação aparece uma vez na legenda inferior para perfis autorizados', () => {
     for (const role of ['admin', 'projetista', 'visualizador']) {
         let exported = 0;
         const h = harness({portalAccessRole:role, PlantingReport:{download(state) { assert.equal(state,h.state); exported++; }}});
         for (const tab of ['data-estimada-colheita','variedades-plantadas']) {
             h.state.currentSubTab=tab; h.maps.refresh(h.state,[feature]);
-            const html=h.elements.get(tab === 'data-estimada-colheita' ? 'planting-map-legend' : 'planting-map-summary').innerHTML;
+            const html=h.elements.get('planting-map-legend').innerHTML;
+            assert.equal(h.elements.get('planting-map-summary').innerHTML,'');
+            assert.equal(h.elements.get('planting-map-summary').classList.hidden,true);
             assert.equal(html.includes('Exportar relatório PDF'),role!=='visualizador');
+            assert.equal((html.match(/Exportar relatório PDF/g)||[]).length,role==='visualizador'?0:1);
             if(role!=='visualizador') {h.elements.get('planting-report-button').onclick();assert.ok(exported);}
             assert.equal(h.maps.style(h.state,feature).fillColor,h.maps.palette[0]);
             assert.equal(h.maps.style(h.state,feature).fillOpacity,.88);
@@ -154,11 +157,11 @@ test('o botão PDF desaparece no modo Visualizador mesmo para ADM e volta em Edi
     const h=harness({portalAccessRole:'admin'});
     for(const tab of ['data-estimada-colheita','variedades-plantadas']){
         h.state.currentSubTab=tab;h.state.userRole='editor';h.maps.refresh(h.state,[feature]);
-        assert.match(h.elements.get(tab === 'data-estimada-colheita' ? 'planting-map-legend' : 'planting-map-summary').innerHTML,/Exportar relatório PDF/);
+        assert.match(h.elements.get('planting-map-legend').innerHTML,/Exportar relatório PDF/);
         h.state.userRole='viewer';h.maps.refresh(h.state,[feature]);
-        assert.doesNotMatch(h.elements.get(tab === 'data-estimada-colheita' ? 'planting-map-legend' : 'planting-map-summary').innerHTML,/Exportar relatório PDF/);
+        assert.doesNotMatch(h.elements.get('planting-map-legend').innerHTML,/Exportar relatório PDF/);
         h.state.userRole='editor';h.maps.refresh(h.state,[feature]);
-        assert.match(h.elements.get(tab === 'data-estimada-colheita' ? 'planting-map-legend' : 'planting-map-summary').innerHTML,/Exportar relatório PDF/);
+        assert.match(h.elements.get('planting-map-legend').innerHTML,/Exportar relatório PDF/);
     }
 });
 
@@ -182,32 +185,42 @@ test('textos das variedades e da colheita têm conteúdos próprios para cada ma
     assert.doesNotMatch(varieties,/Colheita estimada|Ciclo:/);assert.notEqual(varieties,harvest);
 });
 
-test('resumo e exportação acompanham a aba ao alternar entre colheita e variedades',()=>{
+test('legenda e exportação acompanham a aba sem preencher o resumo superior',()=>{
     const h=harness({portalAccessRole:'projetista',PlantingReport:{download(state){assert.equal(state,h.state);}}});
     h.maps.refresh(h.state,[feature]);
     assert.equal(h.elements.get('planting-map-summary').innerHTML,'');
+    assert.equal(h.elements.get('planting-map-summary').classList.hidden,true);
     assert.match(h.elements.get('planting-map-legend').innerHTML,/Janela estimada/);
     assert.match(h.elements.get('planting-map-legend').innerHTML,/Exportar relatório PDF/);
     assert.equal(typeof h.elements.get('planting-report-button').onclick,'function');
     h.elements.get('planting-report-button').onclick();
     h.state.currentSubTab='variedades-plantadas';h.maps.refresh(h.state,[feature]);
-    assert.match(h.elements.get('planting-map-summary').innerHTML,/Área plantada/);
-    assert.match(h.elements.get('planting-map-summary').innerHTML,/Exportar relatório PDF/);
+    assert.equal(h.elements.get('planting-map-summary').innerHTML,'');
+    assert.equal(h.elements.get('planting-map-summary').classList.hidden,true);
+    assert.match(h.elements.get('planting-map-legend').innerHTML,/área plantada/i);
+    assert.match(h.elements.get('planting-map-legend').innerHTML,/Exportar relatório PDF/);
     assert.doesNotMatch(h.elements.get('planting-map-legend').innerHTML,/Janela estimada/);
     assert.equal(typeof h.elements.get('planting-report-button').onclick,'function');
 });
 
-test('sem previsão mostra estado e área pendente na legenda sem preencher o resumo superior',()=>{
+test('resumo permanece oculto e vazio nas duas abas; legenda mostra dados e estados da cultura',()=>{
     const h=harness();
     h.setRecords({a:{produto:'Plantio',fazenda:'FE',campo:'FE 01',ano:'2026',cultura:'Soja',status:'em_andamento',areaRealizada:40}});
     h.maps.refresh(h.state,[feature]);
     assert.equal(h.elements.get('planting-map-summary').innerHTML,'');
+    assert.equal(h.elements.get('planting-map-summary').classList.hidden,true);
     const legend=h.elements.get('planting-map-legend').innerHTML;
     assert.match(legend,/<strong>Sem previsão<\/strong>/);
     assert.match(legend,/Sem previsão: confira a variedade e a data de plantio/);
     assert.match(legend,/40 ha plantados sem previsão/);
     assert.match(legend,/Sem previsão \/ sem plantio/);
+    h.state.currentSubTab='variedades-plantadas';h.maps.refresh(h.state,[feature]);
+    assert.equal(h.elements.get('planting-map-summary').innerHTML,'');
+    assert.equal(h.elements.get('planting-map-summary').classList.hidden,true);
+    assert.match(h.elements.get('planting-map-legend').innerHTML,/área plantada/i);
+    h.state.currentSubTab='data-estimada-colheita';
     h.setRecords({});h.maps.refresh(h.state,[feature]);
     assert.equal(h.elements.get('planting-map-summary').innerHTML,'');
+    assert.equal(h.elements.get('planting-map-summary').classList.hidden,true);
     assert.match(h.elements.get('planting-map-legend').innerHTML,/Não há plantio executado neste filtro/);
 });

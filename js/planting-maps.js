@@ -19,7 +19,8 @@
         const enabled = active(state);
         const context = JSON.stringify([state.currentTab,state.currentSubTab,state.currentAno,state.currentCultura,state.currentGleba,state.currentFazenda]);
         if (context !== highlightContext || !enabled) { selectedGroup = null; highlightContext = context; }
-        summary?.classList.toggle('hidden', !enabled || harvesting(state)); legend?.classList.toggle('hidden', !enabled);
+        summary?.classList.toggle('hidden', true); legend?.classList.toggle('hidden', !enabled);
+        if (summary) summary.innerHTML = '';
         if (!enabled) return;
         state.map?.closePopup();
         indexed = new Map(Object.values(state.cloudStore?.getRecords() || {}).filter(record => record.operationType === 'plantio' || record.produto === 'Plantio')
@@ -35,14 +36,7 @@
         groups = [...collected.values()].sort((a, b) => a.key.localeCompare(b.key)).map((value, index, all) => ({ ...value,
             color: palette[index % palette.length] }));
         if (selectedGroup !== null && selectedGroup !== '' && !groups.some(group => group.key === selectedGroup)) selectedGroup = null;
-        const title = harvesting(state) ? 'Data estimada de colheita' : 'Variedades plantadas';
         const without = Math.max(0, totals.plantedArea - totals.estimatedArea);
-        if (summary) summary.innerHTML = `<header><strong>${title}</strong><span>Plantio executado · ${escape(state.currentCultura)} · safra ${escape(state.currentAno)}</span></header>` +
-            `<div class="planting-map-kpis"><div><span>Área plantada</span><b>${hectares(totals.plantedArea)}</b></div><div><span>${harvesting(state) ? 'Com previsão' : 'Talhões com plantio'}</span><b>${harvesting(state) ? hectares(totals.estimatedArea) : `${totals.plantedFields} de ${rows.length}`}</b></div>` +
-            (harvesting(state) ? `<div><span>Janela estimada</span><b>${totals.first ? `${date(totals.first)} – ${date(totals.last)}` : 'Sem previsão'}</b></div>` : '') + '</div>' +
-            (['admin', 'projetista'].includes(root.portalAccessRole) && state.userRole === 'editor' ? '<button type="button" class="operation-export-trigger" id="planting-report-button">Exportar relatório PDF</button><span id="planting-report-status" role="status"></span>' : '') +
-            (!totals.plantedFields ? '<p>Não há plantio executado neste filtro. Registre a execução em “Atualizar Mapa de Plantio”.</p>' : harvesting(state) && !totals.estimatedArea ? '<p>Sem previsão: confira a variedade e a data de plantio nos registros de execução.</p>' : '') +
-            (harvesting(state) && without > 0 ? `<p>${hectares(without)} plantados sem previsão: data, variedade ou ciclo ainda não definido.</p>` : '');
         if (legend) legend.innerHTML = `<h3>${harvesting(state) ? 'Dia estimado de colheita' : 'Variedade · área plantada'}</h3>` +
             `<p class="planting-legend-hint">Clique ${harvesting(state) ? 'em uma data' : 'em uma variedade'} para destacar as áreas.</p>` +
             `<button type="button" class="planting-legend-reset" id="planting-legend-reset"${selectedGroup === null ? ' hidden' : ''}>Mostrar todas as áreas</button>` +
@@ -50,13 +44,11 @@
             `<button type="button" class="planting-map-legend-row" data-planting-group="" aria-pressed="${selectedGroup === ''}"><i style="background:#94a3b8"></i><span>${harvesting(state) ? 'Sem previsão / sem plantio' : 'Sem variedade / sem plantio'}</span></button>` +
             '<p>Contorno tracejado: plantio parcial.<br>O cálculo considera apenas os hectares realizados.</p>' +
             (harvesting(state) ? '<p>' + (root.SeedCycleCatalog && !root.SeedCycleCatalog.available ? 'Catálogo de ciclos indisponível. Recarregue para consultar as previsões.' : 'Ciclos definidos pelo administrador em Variedades e ciclos. Previsão de referência; confirme a maturação no campo.') + '</p>' : '');
-        if (harvesting(state)) {
-            const report = ['admin', 'projetista'].includes(root.portalAccessRole) && state.userRole === 'editor' ? '<button type="button" class="operation-export-trigger" id="planting-report-button">Exportar relatório PDF</button><span id="planting-report-status" role="status"></span>' : '';
-            const notice = (!totals.plantedFields ? '<p>Não há plantio executado neste filtro. Registre a execução em “Atualizar Mapa de Plantio”.</p>' : !totals.estimatedArea ? '<p>Sem previsão: confira a variedade e a data de plantio nos registros de execução.</p>' : '') +
-                (without > 0 ? `<p>${hectares(without)} plantados sem previsão: data, variedade ou ciclo ainda não definido.</p>` : '');
-            if (summary) summary.innerHTML = '';
-            if (legend) legend.innerHTML = `<div class="planting-legend-window"><span>Janela estimada</span><strong>${totals.first ? `${date(totals.first)} – ${date(totals.last)}` : 'Sem previsão'}</strong></div>` + legend.innerHTML + notice + report;
-        }
+        const report = ['admin', 'projetista'].includes(root.portalAccessRole) && state.userRole === 'editor' ? '<button type="button" class="operation-export-trigger" id="planting-report-button">Exportar relatório PDF</button><span id="planting-report-status" role="status"></span>' : '';
+        const notice = (!totals.plantedFields ? '<p>Não há plantio executado neste filtro. Registre a execução em “Atualizar Mapa de Plantio”.</p>' : harvesting(state) && !totals.estimatedArea ? '<p>Sem previsão: confira a variedade e a data de plantio nos registros de execução.</p>' : '') +
+            (harvesting(state) && without > 0 ? `<p>${hectares(without)} plantados sem previsão: data, variedade ou ciclo ainda não definido.</p>` : '');
+        const windowLabel = harvesting(state) ? `<div class="planting-legend-window"><span>Janela estimada</span><strong>${totals.first ? `${date(totals.first)} – ${date(totals.last)}` : 'Sem previsão'}</strong></div>` : '';
+        if (legend) legend.innerHTML = windowLabel + legend.innerHTML + notice + report;
         const reportButton = document.getElementById('planting-report-button');
         if (reportButton && root.PlantingReport) reportButton.onclick = () => root.PlantingReport.download(state);
         if (legend) legend.onclick = event => {
