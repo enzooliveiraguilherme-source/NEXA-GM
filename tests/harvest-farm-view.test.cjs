@@ -5,17 +5,17 @@ const vm=require('node:vm');
 
 function setup(){
     const elements=new Map(),events=new Map(),pyramids=[],chunks=[],removed=[];
-    let viewportFarm='FE2',zoom=16;
+    let viewportFarm='FE2',zoom=16,center='initial',stops=0,fitBoundsCalls=0;
     const features=['FE2','RM'].map(Fazenda=>({properties:{Fazenda,Gleba:Fazenda==='FE2'?'FE':'RM',Campo:'T1'}}));
     const datasets=['FE2','RM'].map(farm=>({farm,version:farm,source:'storage'}));
     const records=datasets.map(dataset=>({fazenda:dataset.farm,campo:'T1',chunks:['original/field.001.bin.gz'],dataset}));
-    const map={getZoom:()=>zoom,getBounds:()=>viewportFarm,stop(){},fitBounds(){},removeLayer(layer){layer.remove?.();},
+    const map={getZoom:()=>zoom,getBounds:()=>viewportFarm,stop(){stops++;},fitBounds(){fitBoundsCalls++;center=`fit-${fitBoundsCalls}`;},removeLayer(layer){layer.remove?.();},
         on(names,fn){for(const name of names.split(' '))events.set(name,fn);return this;},
         off(names,fn){for(const name of names.split(' '))if(events.get(name)===fn)events.delete(name);return this;}};
     const group=()=>{const listeners=new Map();return {addTo(){return this;},once(name,fn){listeners.set(name,fn);},
         removeLayer(layer){removed.push(layer.farm);},remove(){listeners.get('remove')?.();}};};
     const L={layerGroup:group,geoJSON(data){return {getBounds(){return {intersects(farm){return data.features.some(f=>f.properties.Fazenda===farm);}};}};}};
-    const document={getElementById(id){if(!elements.has(id))elements.set(id,{classList:{add(){},remove(){},toggle(name,hidden){this[name]=hidden;}},children:[],appendChild(child){this.children.push(child);},set innerHTML(value){this.children=[];},value:''});return elements.get(id);},createElement(){return {};}};
+    const document={getElementById(id){if(!elements.has(id))elements.set(id,{classList:{add(name){if(name==='hidden')this.hidden=true;},remove(name){if(name==='hidden')this.hidden=false;},toggle(name,hidden){if(name==='hidden')this.hidden=hidden;}},children:[],appendChild(child){this.children.push(child);},set innerHTML(value){this.children=[];},value:''});return elements.get(id);},createElement(){return {};}};
     let state;
     const root={featureMatchesFilters:f=>(state.currentFazenda==='ALL'||f.properties.Fazenda===state.currentFazenda)&&(state.currentGleba==='ALL'||f.properties.Gleba===state.currentGleba),getFeatureStyle(){},HarvestLegend:{init(){},show(){}},
         refreshMapFilters(){root.HarvestView.refreshFilters(state);},updateFilterTag(){},renderMap(){return root.HarvestView.showAll(state);},
@@ -25,7 +25,8 @@ function setup(){
     vm.runInNewContext(fs.readFileSync(require.resolve('../js/harvest-view.js'),'utf8'),{window:root,document,L,AbortController,console});
     state={map,currentTab:'colheita',currentFazenda:'ALL',currentGleba:'ALL',harvestDataset:{datasets,version:'combined'},harvestSummary:{bounds:[0,0,1,1],records},harvestData:{features}};
     root.HarvestView.init(state);
-    return {api:root.HarvestView,state,features,events,pyramids,chunks,removed,elements,setViewport(farm){viewportFarm=farm;},setZoom(value){zoom=value;}};
+    return {api:root.HarvestView,state,features,events,pyramids,chunks,removed,elements,
+        camera(){return {center,zoom,stops,fitBoundsCalls};},setViewport(farm){viewportFarm=farm;},setZoom(value){zoom=value;}};
 }
 
 test('visão geral separa as fazendas e carrega pontos apenas da área visível',async()=>{
@@ -90,11 +91,54 @@ test('selecionar FE inclui FE e FE2 juntas e voltar de um talhão mantém a gleb
     assert.equal(s.pyramids.some(p=>p.farm==='RM'),false);
 });
 
+test('clique no fundo volta à visão filtrada da gleba sem alterar câmera e restaura métricas',async()=>{
+    const s=setup();s.setZoom(12);
+    const farms=s.elements.get('harvest-gleba-select');farms.value='RM';farms.onchange();await new Promise(setImmediate);
+    await s.api.select(s.state,s.features[1]);
+    const camera=s.camera();
+    assert.equal(s.elements.get('harvest-field-metrics').classList.hidden,false);
+    assert.equal(s.state.harvestSelected,s.api.fieldKey(s.features[1]));
+    s.events.get('click')({sourceTarget:s.state.map});await new Promise(setImmediate);
+    assert.deepEqual(s.camera(),camera);
+    assert.equal(s.state.harvestSelected,null);
+    assert.equal(s.state.currentGleba,'RM');
+    assert.deepEqual(s.pyramids.slice(-1)[0].fields,['RM']);
+    assert.equal(s.elements.get('harvest-selection-title').textContent,'Todos os talhões');
+    assert.equal(s.elements.get('harvest-import-status').textContent,'1 talhão · Milho 2026');
+    assert.equal(s.elements.get('harvest-field-metrics').classList.hidden,true);
+    assert.equal(s.elements.get('harvest-back').classList.hidden,true);
+});
+
+test('botão Todos os talhões ajusta a câmera',async()=>{
+    const s=setup();s.setZoom(12);await s.api.select(s.state,s.features[1]);
+    const before=s.camera();
+    await s.elements.get('harvest-all').onclick();
+    assert.equal(s.camera().stops,before.stops+1);
+    assert.equal(s.camera().fitBoundsCalls,before.fitBoundsCalls+1);
+    assert.notEqual(s.camera().center,before.center);
+});
+
+test('cliques propagados por camada de talhão não limpam a seleção',async()=>{
+    const s=setup();s.setZoom(12);await s.api.select(s.state,s.features[1]);
+    const selected=s.state.harvestSelected, click=s.events.get('click');
+    click({sourceTarget:{},propagatedFrom:{}});
+    assert.equal(s.state.harvestSelected,selected);
+    click({sourceTarget:{}});
+    assert.equal(s.state.harvestSelected,selected);
+});
+
+test('clique fora da aba Colheita não altera a seleção',async()=>{
+    const s=setup();s.setZoom(12);await s.api.select(s.state,s.features[1]);
+    const selected=s.state.harvestSelected;s.state.currentTab='mapa';
+    s.events.get('click')({sourceTarget:s.state.map});
+    assert.equal(s.state.harvestSelected,selected);
+});
+
 test('seleção do T1 de RM não usa o T1 de FE2 nem altera o retorno pelo botão',async()=>{
     const s=setup();s.setZoom(12);await s.api.select(s.state,s.features[1]);
     assert.equal(s.state.harvestSelected,s.api.fieldKey(s.features[1]));
     assert.deepEqual(s.pyramids.map(p=>p.farm),['RM']);
     await s.api.select(s.state,s.features[1]);assert.equal(s.state.harvestSelected,s.api.fieldKey(s.features[1]));
     await s.elements.get('harvest-all').onclick();assert.equal(s.state.harvestSelected,null);
-    s.api.clear(s.state);assert.equal(s.events.size,0);
+    s.api.clear(s.state);assert.deepEqual([...s.events.keys()],['click']);
 });

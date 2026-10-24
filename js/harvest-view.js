@@ -124,7 +124,7 @@
         text('harvest-mean',format(record.mean)); text('harvest-min',format(record.min)); text('harvest-max',format(record.max));
         await draw(state,[record],token);
     }
-    async function showAll(state) {
+    async function showAll(state, { fitBounds = true } = {}) {
         if(!state.harvestSummary||state.currentTab!=='colheita') return;
         clear(state); const token=request;
         const features=state.harvestData.features.filter(root.featureMatchesFilters);
@@ -132,7 +132,9 @@
         const records=state.harvestSummary.records.filter(r=>allowed.has(recordKey(r)));
         text('harvest-selection-title','Todos os talhões');
         if(!records.length) return;
-        state.map.stop(); state.map.fitBounds(L.geoJSON({type:'FeatureCollection',features}).getBounds(),{padding:[45,45],animate:false});
+        if (fitBounds) {
+            state.map.stop(); state.map.fitBounds(L.geoJSON({type:'FeatureCollection',features}).getBounds(),{padding:[45,45],animate:false});
+        }
         await draw(state,records,token);
     }
     function init(state) {
@@ -141,7 +143,7 @@
             if (state.currentTab !== 'colheita' || !state.harvestSelected) return;
             if (event.sourceTarget && event.sourceTarget !== state.map) return;
             if (event.propagatedFrom) return;
-            showAll(state);
+            showAll(state, { fitBounds: false });
         });
         if(state.currentTab==='colheita') refreshFilters(state);
         document.getElementById('harvest-back').onclick=()=>showAll(state);
