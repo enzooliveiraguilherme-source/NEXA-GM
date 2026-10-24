@@ -1118,7 +1118,7 @@ function renderMap(shouldFitBounds = true) {
         if (planningBanner) planningBanner.classList.add('hidden');
         
         if (genericOpBar) {
-            genericOpBar.classList.remove('hidden');
+            genericOpBar.classList.toggle('hidden', state.currentTab === 'colheita');
             const opCfg = OPERACOES_CONFIG[state.currentTab] || OPERACOES_CONFIG.colheita;
             const opIcon = document.getElementById('generic-op-icon');
             const opName = document.getElementById('generic-op-name');

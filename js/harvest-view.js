@@ -137,6 +137,12 @@
     }
     function init(state) {
         root.HarvestLegend.init(state.map);root.HarvestLegend.show(state.currentTab==='colheita');
+        state.map.on('click', event => {
+            if (state.currentTab !== 'colheita' || !state.harvestSelected) return;
+            if (event.sourceTarget && event.sourceTarget !== state.map) return;
+            if (event.propagatedFrom) return;
+            showAll(state);
+        });
         if(state.currentTab==='colheita') refreshFilters(state);
         document.getElementById('harvest-back').onclick=()=>showAll(state);
         document.getElementById('harvest-all').onclick=()=>showAll(state);
