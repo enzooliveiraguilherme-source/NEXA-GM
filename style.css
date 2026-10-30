@@ -2177,3 +2177,24 @@ svg.leaflet-zoom-animated:focus,
 .access-person { padding:20px 0; border-bottom:1px solid #dbe3ef; display:grid; gap:12px; }
 .access-person fieldset { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:8px; padding:12px; }
 .access-person button,.access-dialog>button { padding:10px 16px; border-radius:8px; cursor:pointer; }
+
+.savefarm-panel { flex-shrink:0;padding:16px 22px;background:#fff;border-bottom:1px solid #dce5e2;color:#244638;max-height:42vh;overflow:auto; }
+.savefarm-panel[hidden] { display:none; }
+.savefarm-panel header { display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:14px; }
+.savefarm-panel header div { display:grid;gap:4px; }
+.savefarm-panel header span,.savefarm-panel small { font-size:11px;color:#63796c;line-height:1.5; }
+.savefarm-panel form { display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin-bottom:8px; }
+.savefarm-panel label { display:grid;gap:5px;font-size:11px;flex:1 1 145px; }
+.savefarm-panel select,.savefarm-panel input,.savefarm-panel button { min-height:38px;border:1px solid #cad9d1;border-radius:7px;padding:8px;font:inherit;background:#fff;color:#244638; }
+.savefarm-panel label select,.savefarm-panel label input { width:100%;font-size:12px;min-width:0; }
+.savefarm-panel button { font-size:12px;cursor:pointer; }
+.savefarm-panel button[type=submit] { background:#087b5a;border-color:#087b5a;color:#fff; }
+.savefarm-panel :disabled { opacity:.55;cursor:default; }
+.savefarm-panel :focus-visible { outline:2px solid #078363;outline-offset:2px; }
+.savefarm-panel p { font-size:12px;line-height:1.5;margin:9px 0; }
+.savefarm-results { display:flex;flex-wrap:wrap;gap:12px 26px;margin:12px 0; }
+.savefarm-results:empty { display:none; }
+.savefarm-results>div { display:grid;gap:4px; }
+.savefarm-results span { font-size:10px;color:#63796c; }
+.savefarm-results strong { font-size:17px; }
+@media(max-width:820px) { .savefarm-panel { padding:12px;max-height:45dvh; }.savefarm-panel label { flex-basis:calc(50% - 10px); }.savefarm-panel label input,.savefarm-panel label select { font-size:16px;min-height:44px; }.savefarm-panel button { min-height:44px; } }

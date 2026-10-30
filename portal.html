@@ -15,7 +15,7 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
     
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="style.css?v=3.5">
+    <link rel="stylesheet" href="style.css?v=savecloud-1">
     <link rel="stylesheet" href="brand.css?v=22">
 </head>
 <body data-page="portal">
@@ -176,6 +176,22 @@
                 <button type="button" class="mobile-control" id="mobile-field-toggle" hidden aria-controls="portal-sidebar"><i class="fa-solid fa-draw-polygon" aria-hidden="true"></i> Talhões</button>
                 <button type="button" id="btn-account-menu" class="account-menu-trigger"><i class="fa-solid fa-gear" aria-hidden="true"></i> Opções</button>
             </header>
+            <section id="savefarm-panel" class="savefarm-panel" aria-label="Consulta Save Farm" hidden>
+                <header><div><strong>Save Farm</strong><span>Aplicações consultadas na SaveCloud</span></div><button id="savefarm-reload" type="button">Verificar conexão</button></header>
+                <form id="savefarm-form">
+                    <label>Fazenda<select id="savefarm-farm" required disabled><option value="">Aguardando conexão</option></select></label>
+                    <label>Talhão<select id="savefarm-polygon" required disabled><option value="">Aguardando conexão</option></select></label>
+                    <label>Máquina<select id="savefarm-machine" required disabled><option value="">Aguardando conexão</option></select></label>
+                    <label>Camada<select id="savefarm-mode" disabled><option value="5">Cobertura consolidada</option><option value="3">Faixas aplicadas</option><option value="4">Percurso e aplicação</option><option value="1">Percurso</option><option value="boundaries">Limite do talhão</option></select></label>
+                    <label>Início<input id="savefarm-from" type="datetime-local" step="3600" required disabled></label>
+                    <label>Fim<input id="savefarm-to" type="datetime-local" step="3600" required disabled></label>
+                    <button type="submit" disabled>Consultar</button><button id="savefarm-clear" type="button">Limpar mapa</button>
+                </form>
+                <small id="savefarm-timezone">Período máximo: sete dias.</small>
+                <p id="savefarm-status" role="status" aria-live="polite">Aguardando conexão com a SaveCloud.</p>
+                <div id="savefarm-results" class="savefarm-results"></div>
+                <small>Os resultados são descartados ao mudar os filtros ou sair desta aba. Aplicação seletiva não precisa cobrir todo o talhão.</small>
+            </section>
             <!-- Barra Superior Informativa para Outras Operações -->
             <div class="generic-op-bar hidden" id="generic-op-bar">
                 <div class="generic-op-title">
@@ -1014,7 +1030,8 @@
     <script src="js/seed-cycles.js?v=2"></script>
     <script src="js/planting-maps.js?v=9"></script>
     <script src="js/planting-report.js?v=5"></script>
-    <script src="app.js?v=3.23"></script>
+    <script src="js/savefarm-view.js?v=1"></script>
+    <script src="app.js?v=savecloud-1"></script>
     <script src="js/mobile-layout.js?v=3"></script>
 </body>
 </html>

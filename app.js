@@ -733,7 +733,7 @@ function updateOperationUI() {
     if (heading && operation) heading.textContent = operation.name;
     document.getElementById('calcario-dashboard')?.classList.toggle('hidden', !operational);
     document.getElementById('calcario-filter-bar')?.classList.toggle('hidden', !operational && !analysis);
-    document.getElementById('generic-op-bar')?.classList.toggle('hidden', operational || analysis);
+    document.getElementById('generic-op-bar')?.classList.toggle('hidden', operational || analysis || state.currentTab === 'savefarm');
     document.body.classList.toggle('planting-analysis', analysis);
     if (operation) {
         const name = document.getElementById('generic-op-name');
@@ -1074,6 +1074,7 @@ function updateMapStylesAndKPIs() {
 }
 
 function renderMap(shouldFitBounds = true) {
+    window.SaveFarmView?.refresh(state);
     state.selectedFeatures.clear();
     TalhaoSelection.updateUI();
     HarvestView.clear(state);
@@ -1118,7 +1119,7 @@ function renderMap(shouldFitBounds = true) {
         if (planningBanner) planningBanner.classList.add('hidden');
         
         if (genericOpBar) {
-            genericOpBar.classList.toggle('hidden', state.currentTab === 'colheita');
+            genericOpBar.classList.toggle('hidden', state.currentTab === 'colheita' || state.currentTab === 'savefarm');
             const opCfg = OPERACOES_CONFIG[state.currentTab] || OPERACOES_CONFIG.colheita;
             const opIcon = document.getElementById('generic-op-icon');
             const opName = document.getElementById('generic-op-name');
