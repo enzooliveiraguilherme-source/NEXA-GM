@@ -29,7 +29,7 @@ function harness({ role = 'admin', request = async () => ({}) } = {}) {
         },
         createElement: tag => new Element(tag)
     };
-    for (const name of ['farm', 'polygon', 'machine', 'from', 'to', 'mode', 'submit']) document.getElementById(name === 'submit' ? 'savefarm-submit' : 'savefarm-' + name);
+    for (const name of ['farm', 'polygon', 'machine', 'from', 'to', 'mode', 'submit', 'connect', 'connect-form', 'connect-submit', 'username', 'password', 'token', 'token-row']) document.getElementById(name === 'submit' ? 'savefarm-submit' : 'savefarm-' + name);
     const nativeReplaceChildren = Element.prototype.replaceChildren;
     Element.prototype.replaceChildren = function (...items) {
         nativeReplaceChildren.call(this, ...items);
@@ -113,6 +113,77 @@ test('perfil não administrador mantém a visão sem chamar o catálogo', async 
     assert.match(h.el('status').textContent, /inicialmente para administradores/);
     assert.equal(h.el('farm').children.length, 1);
     assert.equal(h.el('farm').disabled, true);
+    assert.equal(h.el('connect').hidden, true);
+    h.el('username').value = 'demo-user'; h.el('password').value = 'demo-password';
+    await h.el('connect-form').dispatch('submit');
+    assert.equal(calls, 0);
+});
+
+test('admin gera token de conexão na sessão e limpa a senha após sucesso', async () => {
+    const requests = [];
+    const h = harness({ request: async body => {
+        requests.push(body);
+        if (body.action === 'catalog') return { ...catalog, configured: false, farms: [] };
+        if (body.action === 'authenticate') return { connectionToken: 'token-ficticio-da-sessao' };
+        throw new Error('Ação inesperada');
+    } });
+    h.api.refresh(h.state); await tick();
+    assert.equal(h.el('connect').hidden, false);
+    h.el('username').value = 'usuario-ficticio';
+    h.el('password').value = 'senha-ficticia';
+    await h.el('connect-form').dispatch('submit');
+    assert.deepEqual(requests[1], { action: 'authenticate', username: 'usuario-ficticio', password: 'senha-ficticia' });
+    assert.equal(h.el('password').value, '');
+    assert.equal(h.el('token').value, 'token-ficticio-da-sessao');
+    assert.equal(h.el('token-row').hidden, false);
+    assert.match(h.el('status').textContent, /Token gerado pela SaveCloud/);
+    assert.equal(Object.hasOwn(h.elements, 'localStorage'), false);
+});
+
+test('erro ao autenticar limpa a senha e não exibe token', async () => {
+    const h = harness({ request: async body => {
+        if (body.action === 'catalog') return { ...catalog, configured: false, farms: [] };
+        if (body.action === 'authenticate') throw new Error('Credenciais rejeitadas');
+        throw new Error('Ação inesperada');
+    } });
+    h.api.refresh(h.state); await tick();
+    h.el('username').value = 'usuario-ficticio'; h.el('password').value = 'senha-ficticia';
+    await h.el('connect-form').dispatch('submit');
+    assert.equal(h.el('password').value, '');
+    assert.equal(h.el('token').value, '');
+    assert.equal(h.el('token-row').hidden, true);
+    assert.match(h.el('status').textContent, /Credenciais rejeitadas/);
+});
+
+test('sair da aba e logout limpam senha, token e detalhes; resposta atrasada não restaura token', async () => {
+    let finishAuthentication, authenticationCalls = 0;
+    const h = harness({ request: body => {
+        if (body.action === 'catalog') return Promise.resolve({ ...catalog, configured: false, farms: [] });
+        if (body.action === 'authenticate' && ++authenticationCalls === 1) return new Promise(resolve => { finishAuthentication = resolve; });
+        if (body.action === 'authenticate') return Promise.resolve({ connectionToken: 'outro-token-ficticio' });
+    } });
+    h.api.refresh(h.state); await tick();
+    h.el('username').value = 'usuario-ficticio'; h.el('password').value = 'senha-ficticia';
+    const pending = h.el('connect-form').dispatch('submit');
+    await tick();
+    h.state.currentTab = 'mapa'; h.api.refresh(h.state);
+    assert.equal(h.el('password').value, '');
+    assert.equal(h.el('token').value, '');
+    assert.equal(h.el('token-row').hidden, true);
+    assert.equal(h.el('connect').hidden, true);
+    finishAuthentication({ connectionToken: 'token-atrasado-ficticio' });
+    await pending;
+    assert.equal(h.el('token').value, '');
+
+    h.state.currentTab = 'savefarm'; h.api.refresh(h.state); await tick();
+    h.el('username').value = 'usuario-ficticio'; h.el('password').value = 'senha-ficticia';
+    await h.el('connect-form').dispatch('submit');
+    assert.equal(h.el('token').value, 'outro-token-ficticio');
+    h.logout();
+    assert.equal(h.el('password').value, '');
+    assert.equal(h.el('token').value, '');
+    assert.equal(h.el('token-row').hidden, true);
+    assert.equal(h.el('connect').hidden, true);
 });
 
 test('catálogo simulado popula filtros, e consulta renderiza mapa e cartões', async () => {

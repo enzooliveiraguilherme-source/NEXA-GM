@@ -348,3 +348,105 @@ test('account mode remains admin-only and the sentinel scope stays disabled when
   assert.equal(response.status, 403);
   assert.equal(disabled.calls.fetch.length, 0);
 });
+
+test('trims an optional Token prefix from the configured SaveCloud secret', async () => {
+  let authorization;
+  const ctx = setup({ token: '  Token secret-test-token  ', fetchImpl: async (_url, options) => {
+    authorization = options.headers.Authorization;
+    return Response.json({ type: 'Feature', geometry: { type: 'Point', coordinates: [1, 2] } });
+  } });
+  const response = await ctx.handler(ctx.request(query('map', { machine: 'machine-1', ...dateRange, mode: 1 })));
+  assert.equal(response.status, 200);
+  assert.equal(authorization, 'Token secret-test-token');
+  assert.equal((await response.text()).includes('secret-test-token'), false);
+});
+
+test('maps upstream 401, 403 and other HTTP errors to safe, distinct messages', async () => {
+  const expectedHints = new Map([
+    [401, 'recusou o token configurado (401)'],
+    [403, 'recusou a permissão da conexão (403)'],
+    [500, 'SaveCloud (HTTP 500)'],
+  ]);
+  for (const [upstreamStatus, hint] of expectedHints) {
+    const ctx = setup({ fetchImpl: async () => new Response('UPSTREAM_PRIVATE_RAW_BODY', { status: upstreamStatus }) });
+    const response = await ctx.handler(ctx.request(query('map', { machine: 'machine-1', ...dateRange, mode: 1 })));
+    assert.equal(response.status, 502, `upstream ${upstreamStatus}`);
+    const text = await response.text();
+    assert.ok(text.includes(hint), text);
+    assert.equal(text.includes('UPSTREAM_PRIVATE_RAW_BODY'), false);
+    assert.equal(text.includes('test-token'), false);
+  }
+});
+
+test('authenticate returns only the fictitious token for successful SaveCloud responses', async () => {
+  const fakeToken = 'a'.repeat(40);
+  for (const upstreamStatus of [200, 201]) {
+    const ctx = setup({ token: 'invalid-configured-token', fetchImpl: async (url, options) => {
+      assert.equal(url, 'https://savecloud.savefarm.com.br/api/auth');
+      assert.equal(options.method, 'POST');
+      assert.equal(options.redirect, 'error');
+      assert.equal(options.cache, 'no-store');
+      assert.equal(options.headers['Content-Type'], 'application/x-www-form-urlencoded');
+      const form = new URLSearchParams(options.body);
+      assert.equal(form.get('username'), 'operator@example.test');
+      assert.equal(form.get('password'), 'fictional-password');
+      assert.deepEqual([...form.keys()].sort(), ['password', 'username']);
+      return Response.json({ token: fakeToken, account: 'do-not-return', password: 'upstream-secret' }, { status: upstreamStatus });
+    } });
+    const response = await ctx.handler(ctx.request({ action: 'authenticate', username: ' operator@example.test ', password: 'fictional-password' }));
+    assert.equal(response.status, 200);
+    const text = await response.text();
+    assert.deepEqual(Object.keys(JSON.parse(text)).sort(), ['connectionToken', 'message']);
+    assert.equal(JSON.parse(text).connectionToken, fakeToken);
+    assert.equal(text.includes('fictional-password'), false);
+    assert.equal(text.includes('upstream-secret'), false);
+    assert.equal(text.includes('invalid-configured-token'), false);
+    assert.equal(ctx.calls.fetch.length, 1);
+  }
+});
+
+test('authenticate remains admin-only and rejects malformed credentials without upstream calls', async () => {
+  const nonAdmin = setup({ admin: false });
+  const denied = await nonAdmin.handler(nonAdmin.request({ action: 'authenticate', username: 'operator', password: 'fictional-password' }));
+  assert.equal(denied.status, 403);
+  assert.equal(nonAdmin.calls.fetch.length, 0);
+  assert.deepEqual(nonAdmin.calls.rpc, ['is_admin']);
+
+  for (const body of [
+    { action: 'authenticate', username: '', password: 'p' },
+    { action: 'authenticate', username: 'operator' },
+    { action: 'authenticate', username: 'operator', password: '' },
+    { action: 'authenticate', username: 'operator', password: 'p', extra: 'not-allowed' },
+    { action: 'authenticate', username: 'x'.repeat(151), password: 'p' },
+    { action: 'authenticate', username: 'operator', password: 'p'.repeat(1001) },
+  ]) {
+    const ctx = setup();
+    const response = await ctx.handler(ctx.request(body));
+    assert.equal(response.status, 400, JSON.stringify(body).slice(0, 100));
+    assert.equal(ctx.calls.fetch.length, 0);
+  }
+});
+
+test('authenticate hides upstream failures, rejects malformed tokens and enforces its 64 KiB response cap', async () => {
+  for (const upstreamStatus of [401, 429]) {
+    const ctx = setup({ fetchImpl: async () => new Response('UPSTREAM_PRIVATE_BODY fictional-password secret-token', { status: upstreamStatus }) });
+    const response = await ctx.handler(ctx.request({ action: 'authenticate', username: 'operator', password: 'fictional-password' }));
+    assert.equal(response.status, upstreamStatus === 429 ? 429 : 502);
+    const text = await response.text();
+    assert.equal(text.includes('UPSTREAM_PRIVATE_BODY'), false);
+    assert.equal(text.includes('fictional-password'), false);
+    assert.equal(text.includes('secret-token'), false);
+  }
+
+  const invalidToken = setup({ fetchImpl: async () => Response.json({ token: 'not-a-40-character-token', private: 'UPSTREAM_PRIVATE_BODY' }) });
+  const invalidResponse = await invalidToken.handler(invalidToken.request({ action: 'authenticate', username: 'operator', password: 'fictional-password' }));
+  assert.equal(invalidResponse.status, 502);
+  const invalidText = await invalidResponse.text();
+  assert.equal(invalidText.includes('UPSTREAM_PRIVATE_BODY'), false);
+  assert.equal(invalidText.includes('fictional-password'), false);
+
+  const tooLarge = setup({ fetchImpl: async () => new Response('x'.repeat(65537), { headers: { 'content-length': '65537' } }) });
+  const largeResponse = await tooLarge.handler(tooLarge.request({ action: 'authenticate', username: 'operator', password: 'fictional-password' }));
+  assert.equal(largeResponse.status, 413);
+  assert.equal((await largeResponse.text()).includes('fictional-password'), false);
+});

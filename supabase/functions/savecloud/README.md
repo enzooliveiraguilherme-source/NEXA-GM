@@ -24,6 +24,10 @@ Cadastrar no painel Supabase, Edge Functions -> Secrets:
 
 O fuso informado é apresentado na tela. Ele documenta a interpretação esperada; a função recebe horários sem offset e não os converte silenciosamente. Confirmar fuso e inclusão dos limites do intervalo com a Save Farm antes de interpretar totais diários como definitivos.
 
+Se a documentação Swagger não enviar o formulário de autenticação, o administrador pode abrir **Configurar acesso SaveCloud** no NEXA. O formulário envia usuário e senha uma única vez à função autenticada do Supabase, que faz POST no endpoint fixo `/api/auth` da SaveCloud. Não grava senha, não registra o corpo em logs e limpa o campo após a solicitação. O token retornado fica em um campo mascarado, somente nesta sessão, para ser transferido ao segredo protegido `SAVECLOUD_TOKEN`. Esse fluxo não salva o segredo automaticamente nem dá acesso a outros perfis.
+
+A ação `authenticate` tem a mesma exigência de administrador, entrada limitada e resposta externa limitada a 64 KiB. O token de 40 caracteres hexadecimais é aceito no retorno; mensagens de erro não repetem senha, token ou corpo bruto do fornecedor. Sair da aba ou da conta limpa senha e token do formulário. Trate o envio desse formulário como geração de uma credencial: o administrador deve saber que sua senha passa pelo Supabase até a SaveCloud e autorizar a ação.
+
 Exemplo fictício de vínculos (IDs externos devem ser strings):
 
 ```json

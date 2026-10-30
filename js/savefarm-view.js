@@ -73,6 +73,29 @@
                 if (current === version && active && error.name !== 'AbortError') message(error.message);
             }
         }
+        async function authenticate(event) {
+            event.preventDefault();
+            if (!active || role() !== 'admin') return;
+            cancel(); clearResults(); locked(true);
+            const current = version; controller = new AbortController();
+            el('token').value = ''; el('token-row').hidden = true;
+            el('connect-submit').disabled = true;
+            message('Solicitando token à SaveCloud…');
+            try {
+                const result = await request({ action: 'authenticate', username: el('username').value,
+                    password: el('password').value }, controller.signal);
+                if (!active || current !== version) return;
+                el('token').value = result.connectionToken;
+                el('token-row').hidden = false;
+                message('Token gerado pela SaveCloud. Salve-o no campo protegido SAVECLOUD_TOKEN do Supabase e depois verifique a conexão.');
+            } catch (error) {
+                if (active && current === version && error.name !== 'AbortError') message(error.message);
+            } finally {
+                el('password').value = '';
+                el('connect-submit').disabled = false;
+                if (active && current === version) locked(!catalog?.configured);
+            }
+        }
         function addStat(label, value, unit) {
             const card = document.createElement('div'), title = document.createElement('span'), number = document.createElement('strong');
             title.textContent = label;
@@ -126,6 +149,7 @@
         function init() {
             initialized = true;
             el('form').addEventListener('submit', query);
+            el('connect-form').addEventListener('submit', authenticate);
             el('reload').addEventListener('click', loadCatalog);
             el('clear').addEventListener('click', () => { clearQuery(); message('Mapa e indicadores descartados.'); });
             for (const name of ['farm', 'polygon', 'machine', 'mode', 'from', 'to']) el(name).addEventListener('change', () => {
@@ -137,6 +161,8 @@
             cancel(); clearResults(); catalog = null; active = false;
             if (initialized) {
                 el('panel').hidden = true;
+                el('password').value = ''; el('token').value = ''; el('token-row').hidden = true;
+                el('connect').hidden = true;
                 for (const name of ['farm', 'polygon', 'machine']) options(el(name), [], 'Aguardando conexão');
                 locked(true);
             }
@@ -148,6 +174,7 @@
             const enabled = state.currentTab === 'savefarm';
             el('panel').hidden = !enabled;
             if (!enabled) { if (active) dispose(); return; }
+            el('connect').hidden = role() !== 'admin';
             if (!active) { active = true; defaults(); loadCatalog(); }
             state.map?.invalidateSize();
         }

@@ -15,7 +15,7 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
     
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="style.css?v=savecloud-1">
+    <link rel="stylesheet" href="style.css?v=savecloud-2">
     <link rel="stylesheet" href="brand.css?v=22">
 </head>
 <body data-page="portal">
@@ -178,6 +178,16 @@
             </header>
             <section id="savefarm-panel" class="savefarm-panel" aria-label="Consulta Save Farm" hidden>
                 <header><div><strong>Save Farm</strong><span>Aplicações consultadas na SaveCloud</span></div><button id="savefarm-reload" type="button">Verificar conexão</button></header>
+                <details id="savefarm-connect" hidden>
+                    <summary>Configurar acesso SaveCloud</summary>
+                    <p>Seu acesso será enviado pelo Supabase à SaveCloud para gerar o token. A senha é usada apenas nesta solicitação e não é salva.</p>
+                    <form id="savefarm-connect-form" autocomplete="off">
+                        <label>Usuário SaveCloud<input id="savefarm-username" type="text" autocomplete="off" maxlength="150" required></label>
+                        <label>Senha SaveCloud<input id="savefarm-password" type="password" autocomplete="off" maxlength="1000" required></label>
+                        <button id="savefarm-connect-submit" type="submit">Gerar token</button>
+                    </form>
+                    <div id="savefarm-token-row" hidden><label>Token para configurar no Supabase<input id="savefarm-token" type="password" readonly autocomplete="off"></label><small>O token aparece somente nesta sessão. Ele deve ser salvo em SAVECLOUD_TOKEN no painel protegido do Supabase.</small></div>
+                </details>
                 <form id="savefarm-form">
                     <label>Fazenda<select id="savefarm-farm" required disabled><option value="">Aguardando conexão</option></select></label>
                     <label>Talhão<select id="savefarm-polygon" required disabled><option value="">Aguardando conexão</option></select></label>
@@ -1030,7 +1040,7 @@
     <script src="js/seed-cycles.js?v=2"></script>
     <script src="js/planting-maps.js?v=9"></script>
     <script src="js/planting-report.js?v=5"></script>
-    <script src="js/savefarm-view.js?v=1"></script>
+    <script src="js/savefarm-view.js?v=2"></script>
     <script src="app.js?v=savecloud-1"></script>
     <script src="js/mobile-layout.js?v=3"></script>
 </body>

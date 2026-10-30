@@ -125,10 +125,28 @@ export function makeSavecloudHandler({ env, userClient, fetchImpl = fetch, now =
                 if (error instanceof Failure && error.status === 502) throw new Failure(400, 'Consulta inválida.');
                 throw error;
             }
-            if (!body || typeof body !== 'object' || Array.isArray(body) ||
-                Object.keys(body).some(key => !['action', 'farm', 'polygon', 'machine', 'from', 'to', 'mode'].includes(key))) throw new Failure(400, 'Consulta inválida.');
+            if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Failure(400, 'Consulta inválida.');
+            if (body.action === 'authenticate') {
+                if (Object.keys(body).some(key => !['action', 'username', 'password'].includes(key)) ||
+                    typeof body.username !== 'string' || !body.username.trim() || body.username.length > 150 ||
+                    typeof body.password !== 'string' || !body.password || body.password.length > 1000) throw new Failure(400, 'Informe seu usuário e sua senha SaveCloud.');
+                // Uso único: a senha segue para a SaveCloud e não é gravada nem registrada.
+                const response = await fetchImpl(BASE + 'auth', { method: 'POST', redirect: 'error', cache: 'no-store',
+                    signal: AbortSignal.timeout(25000), headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+                    body: new URLSearchParams({ username: body.username.trim(), password: body.password }) });
+                body.password = '';
+                if (!response.ok) {
+                    await response.body?.cancel();
+                    throw new Failure(response.status === 429 ? 429 : 502, response.status === 429
+                        ? 'Aguarde antes de tentar gerar outro token.' : 'A SaveCloud não aceitou o acesso. Confira usuário e senha.');
+                }
+                const { value } = await readJson(response, 65536);
+                if (typeof value?.token !== 'string' || !/^[a-f0-9]{40}$/i.test(value.token)) throw new Failure(502, 'A SaveCloud não retornou um token reconhecido.');
+                return reply(200, { connectionToken: value.token, message: 'Token gerado. Salve-o no segredo SAVECLOUD_TOKEN do Supabase.' });
+            }
+            if (Object.keys(body).some(key => !['action', 'farm', 'polygon', 'machine', 'from', 'to', 'mode'].includes(key))) throw new Failure(400, 'Consulta inválida.');
             const directory = bindings(env('SAVECLOUD_BINDINGS'), accessible.data);
-            const token = env('SAVECLOUD_TOKEN');
+            const token = env('SAVECLOUD_TOKEN')?.trim().replace(/^Token\s+/i, '');
             const timezone = env('SAVECLOUD_TIME_ZONE');
             let validZone = false;
             try { if (timezone) { new Intl.DateTimeFormat('pt-BR', { timeZone: timezone }); validZone = true; } } catch { /* falha fechada */ }
@@ -145,7 +163,10 @@ export function makeSavecloudHandler({ env, userClient, fetchImpl = fetch, now =
                     await response.body?.cancel();
                     const retry = response.headers.get('retry-after');
                     throw new Failure(response.status === 429 ? 429 : 502,
-                        response.status === 429 ? 'Limite SaveCloud atingido. Aguarde antes de atualizar.' : 'Não foi possível consultar a SaveCloud. Confira o acesso ou tente mais tarde.',
+                        response.status === 429 ? 'Limite SaveCloud atingido. Aguarde antes de atualizar.'
+                            : response.status === 401 ? 'A SaveCloud recusou o token configurado (401). Gere um token real em POST /api/auth e confira o segredo SAVECLOUD_TOKEN.'
+                            : response.status === 403 ? 'A SaveCloud recusou a permissão da conexão (403). Confira o acesso da conta às máquinas.'
+                            : `Não foi possível consultar a SaveCloud (HTTP ${response.status}). Tente mais tarde.`,
                         retry && /^\d{1,6}$/.test(retry) ? retry : undefined);
                 }
                 const result = await readJson(response, budget);
