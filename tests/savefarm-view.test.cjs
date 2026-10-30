@@ -11,6 +11,7 @@ function harness({ role = 'admin', request = async () => ({}) } = {}) {
         constructor(id = '') {
             this.id = id; this.children = []; this.listeners = new Map(); this.value = '';
             this.textContent = ''; this.hidden = false; this.disabled = false; this.selected = false;
+            this.style = {}; this.className = '';
         }
         append(...items) {
             this.children.push(...items);
@@ -29,7 +30,7 @@ function harness({ role = 'admin', request = async () => ({}) } = {}) {
         },
         createElement: tag => new Element(tag)
     };
-    for (const name of ['farm', 'polygon', 'machine', 'from', 'to', 'mode', 'submit', 'connect', 'connect-form', 'connect-submit', 'copy-token', 'username', 'password', 'token', 'token-row']) document.getElementById(name === 'submit' ? 'savefarm-submit' : 'savefarm-' + name);
+    for (const name of ['farm', 'polygon', 'machine', 'from', 'to', 'mode', 'submit', 'connect', 'connect-form', 'connect-submit', 'copy-token', 'username', 'password', 'token', 'token-row', 'legend']) document.getElementById(name === 'submit' ? 'savefarm-submit' : 'savefarm-' + name);
     const nativeReplaceChildren = Element.prototype.replaceChildren;
     Element.prototype.replaceChildren = function (...items) {
         nativeReplaceChildren.call(this, ...items);
@@ -70,6 +71,16 @@ const catalog = {
 const simulatedMap = {
     geojson: { type: 'FeatureCollection', features: [{ type: 'Feature', properties: { name: 'Simulado' }, geometry: { type: 'Polygon', coordinates: [] } }] },
     queriedAt: '2026-10-30T12:00:00Z'
+};
+const simulatedRateMap = {
+    geojson: { type: 'FeatureCollection', features: [
+        { type: 'Feature', properties: { applicationRate: 0 }, geometry: { type: 'Polygon', coordinates: [] } },
+        { type: 'Feature', properties: { applicationRate: 100 }, geometry: { type: 'Polygon', coordinates: [] } },
+        { type: 'Feature', properties: { applicationRate: null }, geometry: { type: 'Polygon', coordinates: [] } }
+    ] },
+    rate: { kind: 'continuous', origin: 'NEXA', min: 0, max: 100, missingCount: 2, stops: [
+        { value: 0, color: '#ff0000' }, { value: 100, color: '#0000ff' }
+    ] }
 };
 const simulatedStats = { summary: { ltsTotal: 1234.5, Hectareas: 20, hectareasSelectiva: 5, savedLiters: 80 } };
 const tick = () => new Promise(resolve => setImmediate(resolve));
@@ -248,6 +259,76 @@ test('catálogo simulado popula filtros, e consulta renderiza mapa e cartões', 
     assert.equal(h.el('results').children[0].children[1].textContent, '1.234,5 L');
     assert.match(h.el('status').textContent, /Mapa recebido/);
     assert.match(h.el('status').textContent, /Indicadores preliminares/);
+});
+
+test('modo taxa envia rate, colore valores por propriedade, mostra legenda e preserva estilo de cobertura', async () => {
+    const requests = [];
+    const h = harness({ request: async body => {
+        requests.push(body);
+        if (body.action === 'catalog') return catalog;
+        if (body.action === 'map') return body.mode === 'rate' ? simulatedRateMap : simulatedMap;
+        return simulatedStats;
+    } });
+    h.api.refresh(h.state); await tick();
+    h.el('mode').value = 'rate';
+    await h.el('form').dispatch('submit');
+    assert.equal(requests.find(item => item.action === 'map').mode, 'rate');
+    const rateLayer = h.mapCalls.added.at(-1);
+    const style = rateLayer.options.style;
+    assert.equal(typeof style, 'function');
+    assert.equal(style(simulatedRateMap.geojson.features[0]).fillColor, '#ff0000');
+    assert.equal(style(simulatedRateMap.geojson.features[1]).fillColor, '#0000ff');
+    assert.equal(style(simulatedRateMap.geojson.features[2]).fillColor, '#94a3b8');
+
+    let popup;
+    rateLayer.options.onEachFeature({ properties: { applicationRate: 12.5 } }, { bindPopup(value) { popup = value; } });
+    assert.match(popup.textContent, /Taxa aplicada: 12,5 L\/ha/);
+    const legend = h.el('legend');
+    assert.equal(legend.hidden, false);
+    assert.equal(legend.children[0].textContent, 'Taxa de aplicação · L/ha');
+    assert.equal(legend.children[1].className, 'savefarm-rate-bar');
+    assert.equal(legend.children[1].style.background, 'linear-gradient(to right,#ff0000 0%,#0000ff 100%)');
+    assert.deepEqual(legend.children[2].children.map(item => item.textContent), ['0', '50', '100']);
+    assert.match(legend.children[3].textContent, /Esquema NEXA/);
+    assert.match(legend.children[4].textContent, /Cinza: 2 trechos sem taxa/);
+
+    h.el('mode').dispatch('change');
+    assert.equal(legend.hidden, true);
+    assert.equal(legend.children.length, 0);
+    h.el('mode').value = '5';
+    await h.el('form').dispatch('submit');
+    const coverageLayer = h.mapCalls.added.at(-1);
+    assert.deepEqual(coverageLayer.options.style, { color: '#078363', weight: 1.5, fillColor: '#19b782', fillOpacity: 0.45 });
+    assert.equal(legend.hidden, true);
+});
+
+test('legenda de taxa é limpa ao sair e após falha da consulta', async () => {
+    let failRate = false;
+    const h = harness({ request: async body => {
+        if (body.action === 'catalog') return catalog;
+        if (body.action === 'map' && body.mode === 'rate') {
+            if (failRate) throw new Error('Taxa indisponível');
+            return simulatedRateMap;
+        }
+        if (body.action === 'map') return simulatedMap;
+        return simulatedStats;
+    } });
+    h.api.refresh(h.state); await tick();
+    h.el('mode').value = 'rate';
+    await h.el('form').dispatch('submit');
+    assert.equal(h.el('legend').hidden, false);
+
+    h.state.currentTab = 'mapa'; h.api.refresh(h.state);
+    assert.equal(h.el('legend').hidden, true);
+    assert.equal(h.el('legend').children.length, 0);
+
+    h.state.currentTab = 'savefarm'; h.api.refresh(h.state); await tick();
+    failRate = true;
+    h.el('mode').value = 'rate';
+    await h.el('form').dispatch('submit');
+    assert.equal(h.el('legend').hidden, true);
+    assert.equal(h.el('legend').children.length, 0);
+    assert.match(h.el('status').textContent, /Taxa indisponível/);
 });
 
 test('consulta por máquina avisa o escopo amplo e troca vinculada descarta resultados anteriores', async () => {

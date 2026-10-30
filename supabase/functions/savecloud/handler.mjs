@@ -60,7 +60,7 @@ function datePart(value) {
     return date;
 }
 
-function geojson(input) {
+function geojson(input, rateField = null) {
     const features = input?.type === 'FeatureCollection' ? input.features : input?.type === 'Feature' ? [input] : null;
     if (!Array.isArray(features) || features.length > 20000) throw new Failure(502, 'Formato do mapa SaveCloud não reconhecido.');
     const depths = { Point: 0, MultiPoint: 1, LineString: 1, MultiLineString: 2, Polygon: 2, MultiPolygon: 3 };
@@ -75,9 +75,63 @@ function geojson(input) {
         const geometry = feature?.geometry;
         if (feature?.type !== 'Feature' || !geometry || !Object.hasOwn(depths, geometry.type) ||
             !coordinates(geometry.coordinates, depths[geometry.type])) throw new Failure(502, 'Geometria SaveCloud inválida ou muito grande.');
-        // Primeiro ciclo: apenas geometria. Metadados por máquina exigem validação do contrato real.
-        return { type: 'Feature', geometry: { type: geometry.type, coordinates: geometry.coordinates }, properties: {} };
+        const properties = {};
+        if (rateField) {
+            const raw = feature.properties?.[rateField.key];
+            const value = typeof raw === 'number' && Number.isFinite(raw) ? raw * rateField.factor + rateField.offset : NaN;
+            properties.applicationRate = Number.isFinite(value) && value >= 0 ? value : null;
+        }
+        return { type: 'Feature', geometry: { type: geometry.type, coordinates: geometry.coordinates }, properties };
     }) };
+}
+
+function rateDescriptor(machine) {
+    const description = machine?.data_description;
+    const candidates = Object.entries(description?.headers || {}).filter(([, header]) => header &&
+        header.h !== true && header.h !== 1 && typeof header.u === 'string' &&
+        /^(l|lt|lts|litro|litros)\/ha$/i.test(header.u.replace(/\s/g, '')) &&
+        !/obj|target|m[ií]nim/i.test(header.n || ''));
+    // Campo confirmado no dicionário SaveCloud: Produto por hectare, nunca taxa alvo/mínima.
+    const selected = candidates.find(([key]) => key === '280') || (candidates.length === 1 ? candidates[0] : null);
+    if (!selected) throw new Failure(422, 'A máquina não disponibilizou um campo inequívoco de taxa aplicada em L/ha.');
+    const [key, header] = selected;
+    const factor = header.c ?? 1, offset = header.o ?? 0;
+    if (!Number.isFinite(factor) || !Number.isFinite(offset)) throw new Failure(502, 'A conversão da taxa fornecida pela SaveCloud é inválida.');
+    const schemes = description.colors || {};
+    const schemeKey = typeof header.s === 'string' ? header.s : 'def';
+    const scheme = Object.hasOwn(schemes, schemeKey) ? schemes[schemeKey] : null;
+    return { key, factor, offset, sourceLabel: String(header.n || key).slice(0, 150), scheme };
+}
+
+function rateScale(raw, collection, descriptor) {
+    const values = collection.features.map(feature => feature.properties.applicationRate).filter(value => value !== null);
+    const missingCount = collection.features.length - values.length;
+    const base = { field: descriptor.key, label: 'Taxa de aplicação', unit: 'L/ha', sourceLabel: descriptor.sourceLabel,
+        missingCount, sampleCount: values.length };
+    if (!values.length) return { ...base, kind: 'unavailable', origin: 'none', stops: [], min: null, max: null };
+    const observedMin = Math.min(...values), observedMax = Math.max(...values);
+    let cfg = descriptor.scheme;
+    const valid = cfg && ['grad', 'solid'].includes(cfg.mode) && Array.isArray(cfg.breaks) && Array.isArray(cfg.colors) &&
+        cfg.breaks.length >= 2 && cfg.breaks.length <= 32 && cfg.breaks.every(Number.isFinite) &&
+        cfg.breaks.every((value, i, array) => i === 0 || value > array[i - 1]) &&
+        cfg.colors.every(color => typeof color === 'string' && /^#[a-f0-9]{6}$/i.test(color)) &&
+        (cfg.colors.length === cfg.breaks.length || (cfg.mode === 'solid' && cfg.colors.length === cfg.breaks.length - 1));
+    const origin = valid ? 'SaveCloud' : 'NEXA';
+    if (!valid) cfg = { mode: 'grad', breaks: [0, 0.5, 1], colors: ['#008000', '#FFFF00', '#FF0000'] };
+    if (observedMin === observedMax) return { ...base, kind: 'constant', origin, min: observedMin, max: observedMax,
+        stops: [{ value: observedMin, color: cfg.colors[Math.floor((cfg.colors.length - 1) / 2)] }] };
+    const box = raw?.dbox?.[descriptor.key];
+    const convert = value => value * descriptor.factor + descriptor.offset;
+    let min = observedMin, max = observedMax;
+    if (Number.isFinite(box?.min) && Number.isFinite(box?.max)) {
+        const a = convert(box.min), b = convert(box.max);
+        if (Number.isFinite(a) && Number.isFinite(b) && a !== b) { min = Math.min(a, b); max = Math.max(a, b); }
+    }
+    const normalized = !Number.isFinite(cfg.min) && !Number.isFinite(cfg.max) && cfg.breaks.every(value => value >= 0 && value <= 1);
+    const stops = cfg.breaks.map((value, i) => ({ value: normalized ? min + value * (max - min) : convert(value),
+        color: cfg.colors[Math.min(i, cfg.colors.length - 1)] })).sort((a, b) => a.value - b.value);
+    if (stops.some(stop => !Number.isFinite(stop.value))) throw new Failure(502, 'A escala da taxa fornecida pela SaveCloud é inválida.');
+    return { ...base, kind: cfg.mode, origin, observedMin, observedMax, min: stops[0].value, max: stops.at(-1).value, stops };
 }
 
 function summary(rows) {
@@ -233,10 +287,15 @@ export function makeSavecloudHandler({ env, userClient, fetchImpl = fetch, now =
             if (to <= from || to - from > 7 * 86400000) throw new Failure(400, 'Escolha um período maior que zero e de até sete dias.');
             const stamp = value => value.replace('T', '-').replace(':', '-') + '-00';
             if (body.action === 'map') {
-                if (![1, 3, 4, 5].includes(body.mode)) throw new Failure(400, 'Camada inválida.');
+                const rateMode = body.mode === 'rate';
+                if (!rateMode && ![1, 3, 4, 5].includes(body.mode)) throw new Failure(400, 'Camada inválida.');
+                const descriptor = rateMode ? rateDescriptor(await remote(`moviles/${body.machine}/`)) : null;
                 const params = new URLSearchParams({ movil: body.machine, from: stamp(body.from), to: stamp(body.to),
-                    mode: String(body.mode), ...(!machineScope ? { poligonos_ids: body.polygon } : {}) });
-                return reply(200, { source: 'SaveCloud', scope, queriedAt, timezone, geojson: geojson(await remote('mapa?' + params)) });
+                    mode: rateMode ? '3' : String(body.mode), ...(rateMode ? { include_data: '1' } : {}),
+                    ...(!machineScope ? { poligonos_ids: body.polygon } : {}) });
+                const raw = await remote('mapa?' + params), collection = geojson(raw, descriptor);
+                return reply(200, { source: 'SaveCloud', scope, queriedAt, timezone, geojson: collection,
+                    ...(rateMode ? { rate: rateScale(raw, collection, descriptor) } : {}) });
             }
             const filters = { movil: body.machine, ...(!machineScope ? { poligono: body.polygon, campo: binding.campo } : {}), meta: '1',
                 from: stamp(body.from).slice(0, 13), to: stamp(body.to).slice(0, 13) };

@@ -68,6 +68,12 @@ Consulta por máquina ou talhão, período máximo de sete dias, com horas intei
 - modo 1: percurso;
 - boundaries: limite do talhão, quando houver vínculo externo real.
 
+**Taxa de aplicação (L/ha)** usa o modo 3 com `include_data=1`. A função consulta o dicionário da máquina e identifica a taxa efetivamente aplicada em L/ha, separada da taxa objetivo e mínima. No contrato observado, esse campo é `280` (Produto por hectare). Aplica os coeficientes `c` e `o` informados pelo fornecedor; valores ausentes, inválidos e negativos viram nulos, sem converter ausência em zero. Somente a taxa normalizada acompanha a geometria na resposta; os demais atributos brutos continuam descartados.
+
+A rampa utiliza o esquema `s` do campo ou o esquema `def` da máquina, com limites da consulta fornecidos por `dbox` e valores observados como alternativa. Esquemas graduais são interpolados em RGB; esquemas sólidos preservam intervalos. Na ausência de configuração válida, o mapa identifica o esquema alternativo como NEXA. Taxa constante e trechos sem taxa têm apresentação própria; ausência aparece em cinza. A legenda e os valores são descartados juntamente com a camada. Cobertura consolidada continua sendo uma camada de cor única, pois o modo 5 não preserva a taxa de cada faixa.
+
+Mapas detalhados têm o mesmo teto de resposta da integração. Se a consulta exceder o limite, reduza o período; o sistema não deve truncar ou apresentar um mapa parcial como completo.
+
 Estatísticas por trabalho são paginadas até o fim ou falham explicitamente ao atingir limites. Mapa e indicadores têm falhas independentes, sem conservar totais de uma consulta anterior. Metadados instantâneos dos polígonos não são exibidos nesta primeira etapa. `properties.area` do mapa não vira hectares sem unidade confirmada.
 
 Totais ausentes, strings numéricas não validadas, valores negativos ou não finitos produzem indicador indisponível. A economia calculada soma volumes convencionais de referência por registro e compara ao volume aplicado; não faz média simples de percentuais. Todas as métricas são apresentadas como prévia até comparação com o painel SaveCloud e confirmação de unidades/taxa/intervalos.
@@ -87,4 +93,6 @@ Conforme AGENTS.md, testes executados/ampliados por agentes Luna:
 - Regressões direcionadas de plantio, glebas, colheita e seleção em lote.
 - Na função publicada: OPTIONS autorizado 204; POST sem JWT e com JWT inválido 401.
 
-Ainda exigem validação real: token configurado, escopo de conta, retorno das geometrias e estatísticas, fuso/intervalos, comparação de totais com a SaveCloud e desempenho com dados reais. Testes simulados não comprovam conexão operacional com a SaveCloud.
+Foi confirmada pela tela autenticada do NEXA a conexão real: catálogo de máquinas, cobertura consolidada no mapa e estatísticas por trabalho, usando exclusivamente a função Supabase. Nenhum payload agrícola dessa verificação foi gravado no projeto.
+
+Ainda exigem validação: limites de talhões (a conta consultada retornou catálogo vazio), fuso/intervalos, unidades e comparação de totais/economia com o painel SaveCloud, desempenho em recortes maiores e isolamento antes de liberar outros perfis. Os testes unitários continuam usando somente dados simulados; a consulta real foi uma verificação separada na interface.

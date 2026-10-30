@@ -15,7 +15,7 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
     
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="style.css?v=savecloud-2">
+    <link rel="stylesheet" href="style.css?v=savecloud-rate-1">
     <link rel="stylesheet" href="brand.css?v=22">
 </head>
 <body data-page="portal">
@@ -192,7 +192,7 @@
                     <label>Fazenda<select id="savefarm-farm" required disabled><option value="">Aguardando conexão</option></select></label>
                     <label>Talhão<select id="savefarm-polygon" required disabled><option value="">Aguardando conexão</option></select></label>
                     <label>Máquina<select id="savefarm-machine" required disabled><option value="">Aguardando conexão</option></select></label>
-                    <label>Camada<select id="savefarm-mode" disabled><option value="5">Cobertura consolidada</option><option value="3">Faixas aplicadas</option><option value="4">Percurso e aplicação</option><option value="1">Percurso</option><option value="boundaries">Limite do talhão</option></select></label>
+                    <label>Camada<select id="savefarm-mode" disabled><option value="rate">Taxa de aplicação (L/ha)</option><option value="5">Cobertura consolidada</option><option value="3">Faixas aplicadas</option><option value="4">Percurso e aplicação</option><option value="1">Percurso</option><option value="boundaries">Limite do talhão</option></select></label>
                     <label>Início<input id="savefarm-from" type="datetime-local" step="3600" required disabled></label>
                     <label>Fim<input id="savefarm-to" type="datetime-local" step="3600" required disabled></label>
                     <button type="submit" disabled>Consultar</button><button id="savefarm-clear" type="button">Limpar mapa</button>
@@ -317,6 +317,7 @@
 
             <!-- Container do Mapa -->
             <div id="map-container" class="map-container">
+                <div id="savefarm-legend" class="savefarm-rate-legend" aria-label="Legenda da taxa de aplicação" hidden></div>
                 <div id="map"></div>
                 <section id="planting-map-summary" class="planting-map-summary hidden" aria-label="Resumo do plantio realizado" aria-live="polite"></section>
                 <aside id="planting-map-legend" class="planting-map-legend hidden" aria-label="Legenda do mapa de plantio"></aside>
@@ -1040,7 +1041,8 @@
     <script src="js/seed-cycles.js?v=2"></script>
     <script src="js/planting-maps.js?v=9"></script>
     <script src="js/planting-report.js?v=5"></script>
-    <script src="js/savefarm-view.js?v=3"></script>
+    <script src="js/savefarm-rate.js?v=1"></script>
+    <script src="js/savefarm-view.js?v=4"></script>
     <script src="app.js?v=savecloud-1"></script>
     <script src="js/mobile-layout.js?v=3"></script>
 </body>

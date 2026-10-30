@@ -1,5 +1,6 @@
 (function (root) {
     'use strict';
+    const Rate = root.SaveFarmRate || (typeof require === 'function' ? require('./savefarm-rate.js') : null);
     // Dados externos somente em memória. Sem banco, Storage ou cache persistente.
     function createClient({ client, config, fetchImpl = root.fetch.bind(root) }) {
         return async (body, signal) => {
@@ -26,6 +27,7 @@
         function clearResults() {
             if (layer) { layer.clearLayers(); state?.map?.removeLayer(layer); layer = null; }
             el('results').replaceChildren();
+            el('legend').replaceChildren(); el('legend').hidden = true;
             state?.map?.closePopup();
         }
         function locked(value) {
@@ -103,6 +105,28 @@
                 ? value.toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + (unit ? ' ' + unit : '') : 'Indisponível';
             card.append(title, number); el('results').append(card);
         }
+        function legend(scale) {
+            const target = el('legend'); target.replaceChildren(); target.hidden = false;
+            const title = document.createElement('strong'); title.textContent = 'Taxa de aplicação · L/ha'; target.append(title);
+            const format = value => typeof value === 'number' && Number.isFinite(value)
+                ? value.toLocaleString('pt-BR', { maximumFractionDigits: 2 }) : '—';
+            if (!scale || scale.kind === 'unavailable') {
+                const note = document.createElement('p'); note.textContent = 'Sem valores de taxa para esta consulta.'; target.append(note); return;
+            }
+            const bar = document.createElement('div'); bar.className = 'savefarm-rate-bar';
+            bar.style.background = Rate.gradient(scale); target.append(bar);
+            const ticks = document.createElement('div'); ticks.className = 'savefarm-rate-ticks';
+            const values = scale.kind === 'constant' ? [scale.min] : [scale.min, (scale.min + scale.max) / 2, scale.max];
+            for (const value of values) { const tick = document.createElement('span'); tick.textContent = format(value); ticks.append(tick); }
+            target.append(ticks);
+            const source = document.createElement('small');
+            source.textContent = scale.kind === 'constant' ? 'Taxa única na consulta.'
+                : (scale.origin === 'SaveCloud' ? 'Esquema SaveCloud · faixa da consulta.' : 'Esquema NEXA · faixa da consulta.');
+            target.append(source);
+            if (scale.missingCount) {
+                const note = document.createElement('p'); note.textContent = `Cinza: ${scale.missingCount.toLocaleString('pt-BR')} trechos sem taxa.`; target.append(note);
+            }
+        }
         async function query(event) {
             event.preventDefault();
             if (!active || !catalog?.configured) return;
@@ -113,7 +137,7 @@
                 from: el('from').value, to: el('to').value };
             message('Consultando a SaveCloud…');
             // Falhas de estatísticas não escondem um mapa válido, nem preservam indicadores antigos.
-            const requests = [request({ ...body, action: mode === 'boundaries' ? 'boundaries' : 'map', ...(mode === 'boundaries' ? {} : { mode: Number(mode) }) }, signal)];
+            const requests = [request({ ...body, action: mode === 'boundaries' ? 'boundaries' : 'map', ...(mode === 'boundaries' ? {} : { mode: mode === 'rate' ? 'rate' : Number(mode) }) }, signal)];
             if (mode !== 'boundaries') requests.push(request({ ...body, action: 'statistics' }, signal));
             const results = await Promise.allSettled(requests);
             if (!active || current !== version) return;
@@ -123,12 +147,20 @@
             if (map.status === 'fulfilled') {
                 try {
                     const geojson = map.value.geojson;
+                    const scale = mode === 'rate' ? map.value.rate : null;
                     const label = el('polygon').selectedOptions[0]?.textContent || 'Talhão';
                     layer = L.geoJSON(geojson, { renderer: L.canvas({ padding: 0.5 }),
-                        style: { color: mode === 'boundaries' ? '#163c51' : '#078363', weight: 1.5, fillColor: '#19b782', fillOpacity: 0.45 },
-                        onEachFeature: (_feature, featureLayer) => {
-                            const popup = document.createElement('span'); popup.textContent = 'SaveCloud · ' + label; featureLayer.bindPopup(popup);
+                        style: mode === 'rate' ? feature => ({ color: Rate.colorFor(feature.properties?.applicationRate, scale), weight: 0,
+                            fillColor: Rate.colorFor(feature.properties?.applicationRate, scale), fillOpacity: 0.85 })
+                            : { color: mode === 'boundaries' ? '#163c51' : '#078363', weight: 1.5, fillColor: '#19b782', fillOpacity: 0.45 },
+                        onEachFeature: (feature, featureLayer) => {
+                            const popup = document.createElement('span');
+                            const value = feature.properties?.applicationRate;
+                            popup.textContent = 'SaveCloud · ' + label + (mode === 'rate' ? '\nTaxa aplicada: ' +
+                                (typeof value === 'number' && Number.isFinite(value) ? value.toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + ' L/ha' : 'Sem taxa disponível') : '');
+                            featureLayer.bindPopup(popup);
                         } }).addTo(state.map);
+                    if (mode === 'rate') legend(scale);
                     const bounds = layer.getBounds(); if (bounds.isValid()) state.map.fitBounds(bounds, { padding: [30, 30], maxZoom: 18 });
                     text = geojson.features.length ? 'Mapa recebido da SaveCloud.' : 'Nenhuma geometria retornada para esta consulta.';
                     if (map.value.scope === 'machine') text += ' Consulta por máquina, sem vínculo de talhão; pode incluir várias fazendas.';

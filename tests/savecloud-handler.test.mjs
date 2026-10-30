@@ -450,3 +450,92 @@ test('authenticate hides upstream failures, rejects malformed tokens and enforce
   assert.equal(largeResponse.status, 413);
   assert.equal((await largeResponse.text()).includes('fictional-password'), false);
 });
+
+test('rate mode selects applied field 280, converts values, and strips every other attribute', async () => {
+  const machine = { data_description: {
+    headers: {
+      '280': { n: 'Producto aplicado', u: 'L/ha', c: 2, o: 1, s: 'applied' },
+      '281': { n: 'Objetivo', u: 'L/ha', c: 1, o: 0 },
+      '282': { n: 'Tasa mínima', u: 'L/ha', c: 1, o: 0 },
+      '283': { n: 'Otro campo', u: 'L/ha', h: 1 },
+    },
+    colors: { applied: { mode: 'grad', breaks: [0, 0.5, 1], colors: ['#000000', '#777777', '#FFFFFF'] } },
+  } };
+  const rawValues = [48, 49.5, 50.5, 0, null, undefined, -1];
+  const ctx = setup({ fetchImpl: async url => {
+    const parsed = new URL(url);
+    if (parsed.pathname === '/api/moviles/machine-1/') return Response.json(machine);
+    assert.equal(parsed.pathname, '/api/mapa');
+    assert.equal(parsed.searchParams.get('mode'), '3');
+    assert.equal(parsed.searchParams.get('include_data'), '1');
+    assert.equal(parsed.searchParams.get('poligonos_ids'), 'poly-1');
+    return Response.json({
+      type: 'FeatureCollection',
+      features: rawValues.map(value => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [1, 2] },
+        properties: { '280': value, '281': 900, '282': 800, '283': 700, arbitrary: 'must-not-leak' } })),
+      dbox: { '280': { min: 48, max: 51 } },
+    });
+  } });
+  const response = await ctx.handler(ctx.request(query('map', { machine: 'machine-1', ...dateRange, mode: 'rate' })));
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('cache-control'), 'private, no-store');
+  const body = await json(response);
+  assert.deepEqual(body.geojson.features.map(feature => feature.properties), [
+    { applicationRate: 97 }, { applicationRate: 100 }, { applicationRate: 102 }, { applicationRate: 1 },
+    { applicationRate: null }, { applicationRate: null }, { applicationRate: null },
+  ]);
+  assert.equal(body.rate.field, '280');
+  assert.equal(body.rate.unit, 'L/ha');
+  assert.equal(body.rate.sourceLabel, 'Producto aplicado');
+  assert.equal(body.rate.sampleCount, 4);
+  assert.equal(body.rate.missingCount, 3);
+  assert.deepEqual(body.rate.stops.map(stop => stop.value), [97, 100, 103]);
+  assert.equal(body.rate.origin, 'SaveCloud');
+  assert.deepEqual(ctx.calls.rpc, ['is_admin', 'list_accessible_farms_by_gleba']);
+});
+
+test('rate mode rejects absent or ambiguous applied-rate descriptors before requesting the map', async () => {
+  const descriptions = [
+    { headers: {} },
+    { headers: {
+      '10': { n: 'Aplicada', u: 'L/ha' },
+      '11': { n: 'Aplicada alternativa', u: 'L/ha' },
+    } },
+  ];
+  for (const data_description of descriptions) {
+    let calls = 0;
+    const ctx = setup({ fetchImpl: async () => {
+      calls++;
+      return Response.json({ data_description });
+    } });
+    const response = await ctx.handler(ctx.request(query('map', { machine: 'machine-1', ...dateRange, mode: 'rate' })));
+    assert.equal(response.status, 422);
+    assert.equal(calls, 1);
+  }
+});
+
+test('rate scale supports grad, solid, NEXA fallback, constant, and unavailable states', async () => {
+  const scenarios = [
+    { name: 'solid', descriptor: { s: 'scale' }, colors: { scale: { mode: 'solid', breaks: [90, 100, 110], colors: ['#112233', '#445566'] } }, values: [95, 105], expected: { kind: 'solid', origin: 'SaveCloud', stops: [{ value: 90, color: '#112233' }, { value: 100, color: '#445566' }, { value: 110, color: '#445566' }] } },
+    { name: 'fallback', descriptor: { s: 'missing' }, colors: {}, values: [97, 102], expected: { kind: 'grad', origin: 'NEXA', stops: [{ value: 97, color: '#008000' }, { value: 99.5, color: '#FFFF00' }, { value: 102, color: '#FF0000' }] } },
+    { name: 'constant', descriptor: { s: 'scale' }, colors: { scale: { mode: 'grad', breaks: [0, 0.5, 1], colors: ['#112233', '#445566', '#778899'] } }, values: [100, 100], expected: { kind: 'constant', origin: 'SaveCloud', stops: [{ value: 100, color: '#445566' }] } },
+    { name: 'unavailable', descriptor: { s: 'scale' }, colors: { scale: { mode: 'grad', breaks: [0, 1], colors: ['#112233', '#445566'] } }, values: [null, 'invalid', undefined], expected: { kind: 'unavailable', origin: 'none', stops: [], min: null, max: null } },
+  ];
+  for (const scenario of scenarios) {
+    const machine = { data_description: {
+      headers: { '280': { n: 'Aplicada', u: 'L/ha', ...scenario.descriptor } }, colors: scenario.colors,
+    } };
+    const ctx = setup({ fetchImpl: async url => {
+      const parsed = new URL(url);
+      if (parsed.pathname === '/api/moviles/machine-1/') return Response.json(machine);
+      return Response.json({
+        type: 'FeatureCollection',
+        features: scenario.values.map(value => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [1, 2] }, properties: value === undefined ? {} : { '280': value } })),
+      });
+    } });
+    const response = await ctx.handler(ctx.request(query('map', { machine: 'machine-1', ...dateRange, mode: 'rate' })));
+    assert.equal(response.status, 200, scenario.name);
+    const rate = (await json(response)).rate;
+    for (const [key, value] of Object.entries(scenario.expected)) assert.deepEqual(rate[key], value, `${scenario.name}: ${key}`);
+  }
+});
