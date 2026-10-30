@@ -29,7 +29,7 @@ function harness({ role = 'admin', request = async () => ({}) } = {}) {
         },
         createElement: tag => new Element(tag)
     };
-    for (const name of ['farm', 'polygon', 'machine', 'from', 'to', 'mode', 'submit', 'connect', 'connect-form', 'connect-submit', 'username', 'password', 'token', 'token-row']) document.getElementById(name === 'submit' ? 'savefarm-submit' : 'savefarm-' + name);
+    for (const name of ['farm', 'polygon', 'machine', 'from', 'to', 'mode', 'submit', 'connect', 'connect-form', 'connect-submit', 'copy-token', 'username', 'password', 'token', 'token-row']) document.getElementById(name === 'submit' ? 'savefarm-submit' : 'savefarm-' + name);
     const nativeReplaceChildren = Element.prototype.replaceChildren;
     Element.prototype.replaceChildren = function (...items) {
         nativeReplaceChildren.call(this, ...items);
@@ -138,6 +138,43 @@ test('admin gera token de conexão na sessão e limpa a senha após sucesso', as
     assert.equal(h.el('token-row').hidden, false);
     assert.match(h.el('status').textContent, /Token gerado pela SaveCloud/);
     assert.equal(Object.hasOwn(h.elements, 'localStorage'), false);
+});
+
+test('copiar token usa clipboard só para admin ativo com token, sem inspecionar o conteúdo', async () => {
+    const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+    let writes = 0;
+    Object.defineProperty(globalThis, 'navigator', {
+        configurable: true, writable: true,
+        value: { clipboard: { async writeText() { writes++; } } }
+    });
+    try {
+        const admin = harness({ request: async body => body.action === 'catalog'
+            ? { ...catalog, configured: false, farms: [] }
+            : { connectionToken: 'token-ficticio-para-mock' } });
+        admin.api.refresh(admin.state); await tick();
+        admin.el('username').value = 'usuario-ficticio'; admin.el('password').value = 'senha-ficticia';
+        await admin.el('connect-form').dispatch('submit');
+        await admin.el('copy-token').dispatch('click');
+        assert.equal(writes, 1);
+        assert.match(admin.el('status').textContent, /Token copiado/);
+
+        const empty = harness({ request: async body => body.action === 'catalog'
+            ? { ...catalog, configured: false, farms: [] }
+            : { connectionToken: 'token-ficticio-para-mock' } });
+        empty.api.refresh(empty.state); await tick();
+        await empty.el('copy-token').dispatch('click');
+        assert.equal(writes, 1);
+
+        let nonAdminRequests = 0;
+        const nonAdmin = harness({ role: 'operator', request: async () => { nonAdminRequests++; } });
+        nonAdmin.api.refresh(nonAdmin.state); await tick();
+        await nonAdmin.el('copy-token').dispatch('click');
+        assert.equal(nonAdminRequests, 0);
+        assert.equal(writes, 1);
+    } finally {
+        if (descriptor) Object.defineProperty(globalThis, 'navigator', descriptor);
+        else delete globalThis.navigator;
+    }
 });
 
 test('erro ao autenticar limpa a senha e não exibe token', async () => {

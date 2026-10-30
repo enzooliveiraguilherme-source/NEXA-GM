@@ -186,7 +186,7 @@
                         <label>Senha SaveCloud<input id="savefarm-password" type="password" autocomplete="off" maxlength="1000" required></label>
                         <button id="savefarm-connect-submit" type="submit">Gerar token</button>
                     </form>
-                    <div id="savefarm-token-row" hidden><label>Token para configurar no Supabase<input id="savefarm-token" type="password" readonly autocomplete="off"></label><small>O token aparece somente nesta sessão. Ele deve ser salvo em SAVECLOUD_TOKEN no painel protegido do Supabase.</small></div>
+                    <div id="savefarm-token-row" hidden><label>Token para configurar no Supabase<input id="savefarm-token" type="password" readonly autocomplete="off"></label><button id="savefarm-copy-token" type="button">Copiar token</button><small>O token aparece somente nesta sessão. Ele deve ser salvo em SAVECLOUD_TOKEN no painel protegido do Supabase.</small></div>
                 </details>
                 <form id="savefarm-form">
                     <label>Fazenda<select id="savefarm-farm" required disabled><option value="">Aguardando conexão</option></select></label>
@@ -1040,7 +1040,7 @@
     <script src="js/seed-cycles.js?v=2"></script>
     <script src="js/planting-maps.js?v=9"></script>
     <script src="js/planting-report.js?v=5"></script>
-    <script src="js/savefarm-view.js?v=2"></script>
+    <script src="js/savefarm-view.js?v=3"></script>
     <script src="app.js?v=savecloud-1"></script>
     <script src="js/mobile-layout.js?v=3"></script>
 </body>

@@ -28,6 +28,8 @@ Se a documentação Swagger não enviar o formulário de autenticação, o admin
 
 A ação `authenticate` tem a mesma exigência de administrador, entrada limitada e resposta externa limitada a 64 KiB. O token de 40 caracteres hexadecimais é aceito no retorno; mensagens de erro não repetem senha, token ou corpo bruto do fornecedor. Sair da aba ou da conta limpa senha e token do formulário. Trate o envio desse formulário como geração de uma credencial: o administrador deve saber que sua senha passa pelo Supabase até a SaveCloud e autorizar a ação.
 
+Use **Copiar token** no formulário e cole diretamente no painel protegido do Supabase. Não extraia o valor do campo mascarado por uma ferramenta de navegação: ela pode substituir o conteúdo por `<redacted>`, invalidando a configuração. A cópia ocorre dentro da própria página, por ação explícita, sem exibir a credencial no chat.
+
 Exemplo fictício de vínculos (IDs externos devem ser strings):
 
 ```json

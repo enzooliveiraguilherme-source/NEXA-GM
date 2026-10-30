@@ -150,6 +150,13 @@
             initialized = true;
             el('form').addEventListener('submit', query);
             el('connect-form').addEventListener('submit', authenticate);
+            el('copy-token').addEventListener('click', async () => {
+                if (!active || role() !== 'admin' || !el('token').value) return;
+                try {
+                    await root.navigator.clipboard.writeText(el('token').value);
+                    message('Token copiado. Cole no segredo SAVECLOUD_TOKEN do Supabase.');
+                } catch { message('Não foi possível copiar o token. Confira a permissão de cópia do navegador.'); }
+            });
             el('reload').addEventListener('click', loadCatalog);
             el('clear').addEventListener('click', () => { clearQuery(); message('Mapa e indicadores descartados.'); });
             for (const name of ['farm', 'polygon', 'machine', 'mode', 'from', 'to']) el(name).addEventListener('change', () => {
