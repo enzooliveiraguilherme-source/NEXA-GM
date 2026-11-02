@@ -400,6 +400,8 @@ body.spraying.spray-map-view #map-container { flex:1; height:100%; min-height:0;
 body.spraying.spray-table-view .spray-control-panel { display:flex; flex:1; flex-direction:column; width:100%; min-height:0; padding:10px 16px; overflow:auto; }
 .spray-view-switch #spray-op-save-status { margin-left:auto; align-self:center; color:#637b90; font-size:11px; }
 .spray-view-switch #spray-op-save-status.is-error { color:#b42323; }
+.spray-view-switch #spray-report-status { align-self:center; font-size:11px; color:#637b90; }
+@media(max-width:820px) { .spray-view-switch { flex-wrap:wrap; }.spray-view-switch #spray-report-status:not(:empty) { flex-basis:100%; } }
 body.spray-table-view #spray-op-table { flex:1; min-height:220px; max-height:none; }
 body.spraying #spray-op-summary,body.spraying #spray-op-counts,body.spraying #spray-op-next,body.spraying #spray-op-permission,body.spraying #spray-op-batch-message,
 body.spraying .spray-control-panel>.spray-note,body.spraying #spray-op-map-jump { display:none; }

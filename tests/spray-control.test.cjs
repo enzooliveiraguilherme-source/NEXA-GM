@@ -311,12 +311,36 @@ test('application table filter and independent map filter can show different sco
     h.el('application').value = 'post1'; h.el('application').onchange();
     assert.match(h.el('table').innerHTML, /Herbicida A/);
     assert.doesNotMatch(h.el('table').innerHTML, /Fungicida/);
+    const tableReport = h.api.reportData();
+    assert.equal(tableReport.application, 'post1');
+    assert.ok(tableReport.rows.every(row => row.stage === 'post1'));
     h.el('map-application').value = 'fungicide'; h.el('map-application').onchange();
     assert.match(h.el('table').innerHTML, /Herbicida A/);
     assert.doesNotMatch(h.el('table').innerHTML, /Fungicida/);
     const popup = h.api.popup(h.features[0]);
     assert.match(popup, /Fungicida/);
     assert.doesNotMatch(popup, /Herbicida A/);
+    h.state.currentSubTab = 'mapa-pulverizacao';
+    const mapReport = h.api.reportData();
+    assert.equal(mapReport.application, 'fungicide');
+    assert.ok(mapReport.rows.every(row => row.stage.startsWith('fung')));
+});
+
+test('report data is blocked while loading, while a grid save is pending, and after save failure', async () => {
+    const h = harness({ batchDelay: true });
+    h.api.refresh(h.state, h.features);
+    assert.throws(() => h.api.reportData(), /carregamento/i);
+    await h.tick();
+    assert.ok(h.api.reportData().rows.length > 0);
+    const pending = h.el('table').onchange({ target: { dataset: { sprayKey: 'plant-1:post1', sprayCell: 'actual' }, value: '2026-10-17' } });
+    assert.throws(() => h.api.reportData(), /confirmação/i);
+    h.releaseBatch(); await pending; await h.tick();
+    assert.ok(h.api.reportData().rows.some(row => row.actual === '2026-10-17'));
+
+    const failed = harness({ batchFailure: Error('Conflito de versão') });
+    failed.api.refresh(failed.state, failed.features); await failed.tick();
+    await failed.el('table').onchange({ target: { dataset: { sprayKey: 'plant-1:post1', sprayCell: 'actual' }, value: '2026-10-18' } });
+    assert.throws(() => failed.api.reportData(), /confirmação/i);
 });
 
 test('map selection clears incompatible table filters, scrolls to the field, and highlights it', async () => {
