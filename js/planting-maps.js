@@ -3,6 +3,8 @@
     const F = root.PlantingForecast;
     const palette = Object.freeze(['#009640', '#005eea', '#f07800', '#8b26d9', '#00a4c4', '#e32a3a', '#d61698', '#007f76', '#b88000', '#4938c7', '#68a500', '#a44918']);
     let groups = [], indexed = new Map(), selectedGroup = null, highlightContext = '';
+    const labelOptions = { dap: false, planting: false, harvest: false };
+    let labelLayer = null, labelState = null, labelTimer = null;
     const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
     const date = value => value ? value.split('-').reverse().join('/') : '—';
     const hectares = value => Number(value || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + ' ha';
@@ -10,11 +12,67 @@
     const harvesting = state => state.currentSubTab === 'data-estimada-colheita';
     const fieldKey = (state, feature) => F.key(feature.properties.Fazenda, feature.properties.Campo, state.currentAno, state.currentCultura);
     function row(state, feature) { return F.project(feature, indexed.get(fieldKey(state, feature)), state.currentCultura); }
+    function daysAfterPlanting(value, today = new Date()) {
+        const planted = F.dateValue(value);
+        const current = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
+        if (planted === null || !Number.isFinite(current) || current < planted) return null;
+        return Math.round((current - planted) / 86400000);
+    }
+    function label(state, feature, today = new Date()) {
+        const value = row(state, feature), lines = [];
+        if (!value.planted) return '';
+        const dap = daysAfterPlanting(value.plantingDate, today);
+        if (labelOptions.dap && dap !== null) lines.push(`<strong>${dap} DAP</strong>`);
+        if (labelOptions.planting && value.plantingDate) lines.push(`Plantio: ${date(value.plantingDate)}`);
+        if (labelOptions.harvest && value.estimatedDate) lines.push(`Colheita: ${date(value.estimatedDate)}`);
+        return lines.map(line => `<div>${line}</div>`).join('');
+    }
+    function clearLabels() {
+        labelLayer?.remove();
+        labelLayer = null;
+    }
+    function refreshLabels(state) {
+        clearLabels();
+        if (state.currentTab !== 'plantio' || !state.map || !state.geojsonLayer || !Object.values(labelOptions).some(Boolean)) return;
+        labelLayer = L.layerGroup().addTo(state.map);
+        const today = new Date();
+        state.geojsonLayer.eachLayer(layer => {
+            if (!layer.feature || (active(state) && selectedGroup !== null && groupKey(state, row(state, layer.feature)) !== selectedGroup)) return;
+            const html = label(state, layer.feature, today);
+            if (!html || !layer.getCenter) return;
+            L.marker(layer.getCenter(), {
+                interactive: false, keyboard: false, pane: 'tooltipPane',
+                icon: L.divIcon({ className: 'planting-field-label', html: `<div class="planting-field-label-content">${html}</div>`, iconSize: [0, 0], iconAnchor: [0, 0] })
+            }).addTo(labelLayer);
+        });
+    }
+    function setLabelOption(state, key, checked) {
+        if (!Object.hasOwn(labelOptions, key)) return;
+        labelOptions[key] = !!checked;
+        refreshLabels(state);
+    }
+    function refreshLabelControls(state) {
+        labelState = state;
+        const controls = document.getElementById('planting-label-controls');
+        controls?.classList.toggle('hidden', state.currentTab !== 'plantio');
+        if (controls) controls.onchange = event => {
+            const key = event.target?.dataset?.plantingLabel;
+            if (key) setLabelOption(state, key, event.target.checked);
+        };
+        // Recalculate DAP even when the map stays open overnight.
+        if (labelTimer === null && root.setInterval) labelTimer = root.setInterval(() => {
+            if (labelState) refreshLabels(labelState);
+        }, 60000);
+    }
     function groupKey(state, value) {
         return harvesting(state) ? value.estimatedDate || ''
             : value.variety ? F.normalize(value.variety).replace(/\s/g, '') : '';
     }
     function refresh(state, features) {
+        clearLabels();
+        refreshLabelControls(state);
+        indexed = new Map(Object.values(state.cloudStore?.getRecords() || {}).filter(record => record.operationType === 'plantio' || record.produto === 'Plantio')
+            .map(record => [F.key(record.fazenda, record.campo, record.ano, record.cultura), record]));
         const summary = document.getElementById('planting-map-summary'), legend = document.getElementById('planting-map-legend');
         const enabled = active(state);
         const context = JSON.stringify([state.currentTab,state.currentSubTab,state.currentAno,state.currentCultura,state.currentGleba,state.currentFazenda]);
@@ -23,8 +81,6 @@
         if (summary) summary.innerHTML = '';
         if (!enabled) return;
         state.map?.closePopup();
-        indexed = new Map(Object.values(state.cloudStore?.getRecords() || {}).filter(record => record.operationType === 'plantio' || record.produto === 'Plantio')
-            .map(record => [F.key(record.fazenda, record.campo, record.ano, record.cultura), record]));
         const rows = features.map(feature => row(state, feature)), totals = F.summarize(rows), collected = new Map();
         for (const value of rows) {
             const key = groupKey(state, value);
@@ -75,6 +131,7 @@
         });
         const reset = document.getElementById('planting-legend-reset');
         if (reset) reset.hidden = selectedGroup === null;
+        refreshLabels(state);
     }
     function style(state, feature) {
         const value = row(state, feature), group = groups.find(item => item.key === groupKey(state, value));
@@ -101,5 +158,5 @@
             (value.reason ? `<div>${escape(value.reason)}</div>` : `<div>Ciclo: ${value.days} dias</div>`) +
             (value.partial ? '<div>Plantio parcial: previsão somente da área realizada.</div>' : '') + '</div>';
     }
-    root.PlantingMaps = Object.freeze({ active, refresh, style, tooltip, palette, selectGroup });
+    root.PlantingMaps = Object.freeze({ active, refresh, style, tooltip, palette, selectGroup, daysAfterPlanting, label, setLabelOption, refreshLabels, clearLabels });
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -16,7 +16,7 @@
     
     <!-- Custom CSS -->
     <link rel="stylesheet" href="style.css?v=savecloud-rate-1">
-    <link rel="stylesheet" href="brand.css?v=22">
+    <link rel="stylesheet" href="brand.css?v=planting-labels-20261102">
 </head>
 <body data-page="portal">
     <div id="auth-loading-overlay" class="loading-overlay"><div class="spinner"></div><p>Validando seu acesso…</p></div>
@@ -319,6 +319,15 @@
             <div id="map-container" class="map-container">
                 <div id="savefarm-legend" class="savefarm-rate-legend" aria-label="Legenda da taxa de aplicação" hidden></div>
                 <div id="map"></div>
+                <details id="planting-label-controls" class="planting-label-controls hidden">
+                    <summary>Rótulos do plantio</summary>
+                    <div class="planting-label-options">
+                        <label><input type="checkbox" data-planting-label="dap"> Dias após plantio (DAP)</label>
+                        <label><input type="checkbox" data-planting-label="planting"> Data do plantio</label>
+                        <label><input type="checkbox" data-planting-label="harvest"> Previsão de colheita</label>
+                        <small>Combine as opções para ver os rótulos nos talhões com dados registrados.</small>
+                    </div>
+                </details>
                 <section id="planting-map-summary" class="planting-map-summary hidden" aria-label="Resumo do plantio realizado" aria-live="polite"></section>
                 <aside id="planting-map-legend" class="planting-map-legend hidden" aria-label="Legenda do mapa de plantio"></aside>
 
@@ -1039,11 +1048,11 @@
     <script src="js/operation-export.js?v=7"></script>
     <script src="js/planting-forecast.js?v=4"></script>
     <script src="js/seed-cycles.js?v=2"></script>
-    <script src="js/planting-maps.js?v=9"></script>
+    <script src="js/planting-maps.js?v=planting-labels-20261102"></script>
     <script src="js/planting-report.js?v=5"></script>
     <script src="js/savefarm-rate.js?v=1"></script>
     <script src="js/savefarm-view.js?v=4"></script>
-    <script src="app.js?v=savecloud-1"></script>
+    <script src="app.js?v=planting-labels-20261102"></script>
     <script src="js/mobile-layout.js?v=3"></script>
 </body>
 </html>

@@ -457,7 +457,10 @@ function getTalhaoRecord(fazenda, campo, ano, cultura, produto, areaTotal = 0) {
 function updateRoleUI() {
     const isViewer = (state.userRole === 'viewer');
     window.OperationExport?.updateAccess?.(state);
-    if (isPlantingAnalysisMode() && state.geojsonData) window.PlantingMaps?.refresh(state, state.geojsonData.features.filter(featureMatchesFilters));
+    if (isPlantingAnalysisMode() && state.geojsonData) {
+        window.PlantingMaps?.refresh(state, state.geojsonData.features.filter(featureMatchesFilters));
+        window.PlantingMaps?.refreshLabels(state);
+    }
     
     const btnEditor = document.getElementById('role-editor-btn');
     const btnViewer = document.getElementById('role-viewer-btn');
@@ -1068,12 +1071,17 @@ function updateMapStylesAndKPIs() {
             const filteredFeatures = state.geojsonData.features.filter(featureMatchesFilters);
             updateDashboardKPIs(filteredFeatures);
         }
+        if (state.currentTab === 'plantio') {
+            window.PlantingMaps?.refresh(state, []);
+            window.PlantingMaps?.refreshLabels(state);
+        }
     } catch (err) {
         console.error('Erro ao atualizar estilos/KPIs:', err);
     }
 }
 
 function renderMap(shouldFitBounds = true) {
+    window.PlantingMaps?.clearLabels();
     window.SaveFarmView?.refresh(state);
     state.selectedFeatures.clear();
     TalhaoSelection.updateUI();
@@ -1084,7 +1092,10 @@ function renderMap(shouldFitBounds = true) {
     }
     
     const activeData = getActiveMapData();
-    if (!activeData) return;
+    if (!activeData) {
+        window.PlantingMaps?.refresh(state, []);
+        return;
+    }
     
     if (state.currentTab === 'colheita') HarvestView.refreshFilters(state);
     const filteredFeatures = activeData.features.filter(featureMatchesFilters);
@@ -1159,6 +1170,7 @@ function renderMap(shouldFitBounds = true) {
         },
         onEachFeature: onEachFeature
     }).addTo(state.map);
+    window.PlantingMaps?.refreshLabels(state);
     if (state.currentTab === 'colheita') HarvestView.showAll(state);
     
     if (shouldFitBounds && filteredFeatures.length > 0 && state.currentTab !== 'colheita') {
