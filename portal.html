@@ -16,7 +16,7 @@
     
     <!-- Custom CSS -->
     <link rel="stylesheet" href="style.css?v=savecloud-rate-1">
-    <link rel="stylesheet" href="brand.css?v=spray-gis-20261102">
+    <link rel="stylesheet" href="brand.css?v=spray-grid-20261102">
 </head>
 <body data-page="portal">
     <div id="auth-loading-overlay" class="loading-overlay"><div class="spinner"></div><p>Validando seu acesso…</p></div>
@@ -327,6 +327,7 @@
                 <div class="spray-operation-filters" aria-label="Filtros das aplicações">
                     <label>Fazenda<select id="spray-op-farm"><option value="">Todas</option></select></label>
                     <label>Talhão<select id="spray-op-field"><option value="">Todos</option></select></label>
+                    <label>Aplicação<select id="spray-op-application"><option value="all">Todas</option></select></label>
                     <label>Status<select id="spray-op-status"><option value="">Todos</option><option value="scheduled">No prazo</option><option value="attention">Próximas</option><option value="overdue">Atrasadas</option><option value="completed">Realizadas</option><option value="deleted">Excluídas</option></select></label>
                     <label>Programada de<input id="spray-op-from" type="date"></label><label>Até<input id="spray-op-to" type="date"></label>
                     <label class="spray-search">Pesquisa rápida<input id="spray-op-search" type="search" placeholder="Talhão, produto, responsável…"></label><button id="spray-op-clear" type="button">Limpar filtros e seleção</button>
@@ -352,13 +353,19 @@
                     <div id="spray-op-preview" class="spray-form-preview" aria-live="polite"></div>
                     <footer><button id="spray-op-submit" type="submit">Salvar aplicação</button><button id="spray-op-cancel" type="button">Cancelar</button></footer>
                 </form>
+                <div class="spray-grid-toolbar">
+                    <div class="spray-grid-modes"><button id="spray-op-grid-mode" type="button" aria-pressed="true">Grade de datas</button><button id="spray-op-list-mode" type="button" aria-pressed="false">Lista editável</button></div>
+                    <div class="spray-grid-bulk editor-control"><label><input id="spray-op-check-visible" type="checkbox"> Selecionar aplicações visíveis</label><label>Campo<select id="spray-op-bulk-field"><option value="actual">Data realizada</option><option value="planned">Data programada</option><option value="responsible">Responsável</option><option value="product">Produto</option><option value="dose">Dose</option><option value="doseUnit">Unidade da dose</option><option value="area">Área (ha)</option><option value="notes">Observações</option></select></label><label>Novo valor (vazio limpa)<input id="spray-op-bulk-value" type="date"></label><button id="spray-op-bulk-apply" type="button">Aplicar aos selecionados</button></div>
+                    <p id="spray-op-batch-message" class="spray-note" role="status" aria-live="polite"></p>
+                    <div class="spray-grid-actions editor-control"><button id="spray-op-batch-save" type="button">Salvar alterações</button><button id="spray-op-batch-discard" type="button">Descartar alterações</button></div>
+                </div>
                 <div id="spray-op-table" class="spray-table-scroll" tabindex="0" aria-label="Tabela de controle de pulverização"></div>
             </section>
 
             <!-- Container do Mapa -->
             <div id="map-container" class="map-container">
                 <div id="savefarm-legend" class="savefarm-rate-legend" aria-label="Legenda da taxa de aplicação" hidden></div>
-                <div id="map"></div><aside id="spray-map-key" class="spray-map-key hidden" aria-label="Legenda da pulverização"><strong>Pulverização</strong><span><i style="background:#169447"></i>Todas as aplicações realizadas</span><span><i style="background:#f5c542"></i>Próximas da data</span><span><i style="background:#df3838"></i>Pendentes / atrasadas</span><span><i style="background:#1673d1"></i>Talhão selecionado</span><span><i style="background:#94a3b8"></i>Sem aplicação neste filtro</span></aside>
+                <div id="map"></div><aside id="spray-map-key" class="spray-map-key hidden" aria-label="Legenda da pulverização"><strong>Mapa de acompanhamento</strong><label>Aplicação no mapa<select id="spray-op-map-application"><option value="all">Todas</option></select></label><small>Filtro independente da aplicação na tabela</small><span><i style="background:#169447"></i>No prazo / realizadas</span><span><i style="background:#f5c542"></i>Próximas da data</span><span><i style="background:#df3838"></i>Pendentes / atrasadas</span><span><i style="background:#1673d1"></i>Talhão selecionado</span><span><i style="background:#94a3b8"></i>Sem aplicação neste filtro</span></aside>
                 <details id="planting-label-controls" class="planting-label-controls hidden">
                     <summary>Rótulos do plantio</summary>
                     <div class="planting-label-options">
@@ -1094,9 +1101,10 @@
     <script src="js/planting-report.js?v=5"></script>
     <script src="js/spray-schedule.js?v=1"></script>
     <script src="js/spray-repository.js?v=1"></script>
-    <script src="js/spray-operations.js?v=1"></script>
-    <script src="js/spray-applications.js?v=1"></script>
-    <script src="js/spray-control.js?v=1"></script>
+    <script src="js/spray-operations.js?v=spray-grid-20261102"></script>
+    <script src="js/spray-applications.js?v=spray-grid-20261102"></script>
+    <script src="js/spray-grid.js?v=1"></script>
+    <script src="js/spray-control.js?v=spray-grid-20261102"></script>
     <script src="js/savefarm-rate.js?v=1"></script>
     <script src="js/savefarm-view.js?v=4"></script>
     <script src="app.js?v=spray-gis-20261102"></script>

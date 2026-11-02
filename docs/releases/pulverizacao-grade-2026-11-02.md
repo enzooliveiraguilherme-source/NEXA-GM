@@ -1,0 +1,13 @@
+# Grade operacional de pulverização
+
+Pulverização abre na Grade de datas: linhas por fazenda/talhão e colunas por aplicação, com datas programadas e realizadas editáveis nas células. Lista editável mantém produto, dose, unidade, área, responsável e observações disponíveis para edição direta. Aplicações com nomes iguais no mesmo talhão continuam individualizadas na célula, sem sobrescrita silenciosa. Detalhes individuais e inclusão permanecem como ações complementares.
+
+Alterações ficam em memória e geram prévia do calendário, resumo e mapa. Seleção de aplicações e Aplicar aos selecionados permitem preencher ou limpar um campo em várias aplicações visíveis. Salvar alterações confirma até 1000 aplicações em uma transação; Descartar alterações restaura os dados confirmados. Filtros e mudança de apresentação preservam rascunhos, e o painel avisa que alterações fora do filtro também serão salvas. A saída da página avisa sobre alterações pendentes. Recarregar e ações individuais não descartam a grade silenciosamente.
+
+O filtro Aplicação da tabela é separado do filtro Aplicação no mapa. Ambos incluem etapas cadastradas, fungicidas, inseticidas, aplicações adicionais e Todas. Não são criadas novas etapas agronômicas ou intervalos a partir dos exemplos de filtros. O mapa usa apenas as aplicações do seu filtro para calcular a cor: verde no prazo/realizadas, amarelo de zero a dois dias e vermelho atrasadas; azul prevalece para o talhão selecionado, e cinza indica ausência de aplicação naquele filtro.
+
+A seleção da tabela destaca o talhão. A seleção do mapa destaca/localiza a linha da grade ou lista; filtros incompatíveis da tabela são ajustados para localizar o talhão, preservando rascunhos. O mapa mantém as geometrias cadastrais das demais operações.
+
+save_spray_application_batch valida o estado final de todas as datas de cada plantio antes de atualizar os metadados. Assim, correções interdependentes e limpeza conjunta são possíveis sem estados intermediários inválidos. Versões da agenda e dos registros são verificadas. Qualquer falha de sequência, permissão, limite, unicidade ou concorrência reverte toda a transação. O cliente exige a confirmação de todos os registros e não repete automaticamente gravações com resposta incerta.
+
+Testes de domínio, repositório, grade, integração GIS e regressões executados por agentes Luna. Testes SQL com identidades/operações sintéticas verificam atomicidade, limpeza conjunta, rollback completo e permissões, sempre em transação revertida. Conferência visual em navegador real ainda pendente devido à indisponibilidade de acesso nesta sessão.

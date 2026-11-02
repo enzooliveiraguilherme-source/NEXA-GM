@@ -5,17 +5,20 @@ const vm = require('node:vm');
 const SpraySchedule = require('../js/spray-schedule.js');
 const PlantingForecast = require('../js/planting-forecast.js');
 const SprayOperations = require('../js/spray-operations.js');
+const SprayGrid = require('../js/spray-grid.js');
 const source = fs.readFileSync(require.resolve('../js/spray-control.js'), 'utf8');
 
-function harness({ role = 'editor', accessRole = 'admin', saveFailure = null, scheduleActuals = { post1: '2026-10-16' } } = {}) {
+function harness({ role = 'editor', accessRole = 'admin', saveFailure = null, batchFailure = null, scheduleActuals = { post1: '2026-10-16' } } = {}) {
     const elements = new Map();
     class Element {
         constructor(id) {
             this.id = id; this.dataset = {}; this.classList = { toggle() {}, add() {}, remove() {} };
             this.value = ''; this.textContent = ''; this.innerHTML = ''; this.hidden = false; this.disabled = false;
             this.checked = false; this.readOnly = false; this.onchange = null; this.oninput = null; this.onclick = null; this.onsubmit = null;
+            this.attributes = {};
         }
         scrollIntoView() {}
+        setAttribute(name, value) { this.attributes[name] = value; }
     }
     const document = { getElementById(id) {
         if (!elements.has(id)) elements.set(id, new Element(id));
@@ -29,7 +32,11 @@ function harness({ role = 'editor', accessRole = 'admin', saveFailure = null, sc
             name: '1ª Pós-Emergente', product: 'Herbicida B', dose: 1.5, doseUnit: 'L/ha', area: 40, planned: '2026-10-18', actual: null,
             responsible: 'Operador', notes: '', deleted: false, version: 1 }
     ];
-    const calls = { list: [], schedules: [], save: [] };
+    const calls = { list: [], schedules: [], save: [], batch: [] };
+    const scheduleRows = [
+        { plantingId: 'plant-1', fourth: false, actuals: { ...scheduleActuals }, version: 4 },
+        { plantingId: 'plant-3', fourth: false, actuals: {}, version: 1 }
+    ];
     const appsRepo = {
         async list(farms, year, culture) {
             calls.list.push({ farms: [...farms], year, culture });
@@ -43,19 +50,33 @@ function harness({ role = 'editor', accessRole = 'admin', saveFailure = null, sc
             if (index >= 0) saved[index] = result;
             else saved.push(result);
             return result;
+        },
+        async saveBatch(rows, fields) {
+            calls.batch.push({ rows: rows.map(row => ({ ...row })), fields: fields.map(field => ({ ...field })) });
+            if (batchFailure) throw batchFailure;
+            const result = rows.map(row => ({ ...row, version: (row.version || 0) + 1 }));
+            for (const row of result) {
+                const index = saved.findIndex(item => item.id === row.id);
+                if (index >= 0) saved[index] = row;
+                else saved.push(row);
+                if (row.plantingId) {
+                    const schedule = scheduleRows.find(item => item.plantingId === row.plantingId);
+                    if (schedule) schedule.actuals[row.stage] = row.actual || '';
+                }
+            }
+            return result;
         }
     };
     const scheduleRepo = {
         async list(ids) {
             calls.schedules.push([...ids]);
-            return [{ plantingId: 'plant-1', fourth: false, actuals: { ...scheduleActuals }, version: 4 },
-                { plantingId: 'plant-3', fourth: false, actuals: {}, version: 1 }].filter(row => ids.includes(row.plantingId));
+            return scheduleRows.filter(row => ids.includes(row.plantingId)).map(row => ({ ...row, actuals: { ...row.actuals } }));
         }
     };
     const window = {
-        SpraySchedule, PlantingForecast, SprayOperations,
+        SpraySchedule, PlantingForecast, SprayOperations, SprayGrid,
         SprayApplications: { create: () => appsRepo }, SprayRepository: { create: () => scheduleRepo },
-        portalAccessRole: accessRole, confirm() { return true; }, setInterval() { return 1; }
+        portalAccessRole: accessRole, confirm() { return true; }, setInterval() { return 1; }, addEventListener() {}
     };
     const context = vm.createContext({ window, document, console, Date, Intl, Map, Set, Object, String, Number, Math, JSON });
     vm.runInContext(source, context);
@@ -67,6 +88,9 @@ function harness({ role = 'editor', accessRole = 'admin', saveFailure = null, sc
     };
     const feature = (field, area, farm = 'FE') => ({ properties: { Fazenda: farm, Campo: field, Area: area } });
     const features = [feature('FE 01', 100), feature('FE 02', 80), feature('FE 03', 60)];
+    const domRows = features.map(item => ({ dataset: { sprayFieldKey: JSON.stringify([item.properties.Fazenda, item.properties.Campo]) },
+        scrollCount: 0, scrollIntoView() { this.scrollCount++; }, classList: { toggle() {} } }));
+    document.querySelectorAll = selector => selector === '#spray-op-table [data-spray-field-key]' ? domRows : [];
     const layers = features.map(item => ({ feature: item, styles: [], setStyle(value) { this.styles.push(value); }, bindPopup(value) { this.popupHtml = value; return this; }, openPopup() { this.opened = true; return this; } }));
     const state = {
         currentTab: 'pulverizacao', currentAno: '2026', currentCultura: 'Soja', currentFazenda: 'ALL', currentGleba: 'ALL', userRole: role,
@@ -75,7 +99,13 @@ function harness({ role = 'editor', accessRole = 'admin', saveFailure = null, sc
     const tick = () => new Promise(resolve => setImmediate(resolve));
     const el = name => document.getElementById('spray-op-' + name);
     el('form').hidden = true;
-    return { api: window.SprayControl, state, features, layers, calls, el, tick, saved };
+    return { api: window.SprayControl, state, features, layers, calls, el, tick, saved, domRows };
+}
+
+function listMode(h) { h.el('list-mode').onclick(); }
+function clickAction(h, action, key) {
+    const button = { dataset: { sprayAction: action, sprayKey: key } };
+    h.el('table').onclick({ target: { closest: selector => selector === '[data-spray-action]' ? button : null } });
 }
 
 test('confirmed load renders generated applications, summary, and a gray field without planting', async () => {
@@ -93,11 +123,11 @@ test('confirmed load renders generated applications, summary, and a gray field w
 });
 
 test('editing preserves the form after rejection and closes then reloads after success', async t => {
-    const editRow = () => ({ dataset: { sprayAction: 'edit', sprayKey: 'plant-1:post1' } });
     await t.test('rejected save keeps form values', async () => {
         const h = harness({ saveFailure: Error('Conflito de versão') });
         h.api.refresh(h.state, h.features); await h.tick();
-        h.el('table').onclick({ target: { closest: selector => selector === '[data-spray-sort]' ? null : editRow() } });
+        listMode(h);
+        clickAction(h, 'edit', 'plant-1:post1');
         assert.equal(h.el('form').hidden, false);
         h.el('input-product').value = 'Alteração local';
         await h.el('form').onsubmit({ preventDefault() {} });
@@ -109,7 +139,8 @@ test('editing preserves the form after rejection and closes then reloads after s
     await t.test('success closes form and reloads confirmed applications', async () => {
         const h = harness();
         h.api.refresh(h.state, h.features); await h.tick();
-        h.el('table').onclick({ target: { closest: selector => selector === '[data-spray-sort]' ? null : editRow() } });
+        listMode(h);
+        clickAction(h, 'edit', 'plant-1:post1');
         const before = h.calls.list.length;
         await h.el('form').onsubmit({ preventDefault() {} });
         await h.tick();
@@ -119,10 +150,97 @@ test('editing preserves the form after rejection and closes then reloads after s
     });
 });
 
+test('two inline cell edits preview cascaded dates without making an RPC', async () => {
+    const h = harness();
+    h.api.refresh(h.state, h.features); await h.tick();
+    h.el('table').onchange({ target: { dataset: { sprayKey: 'plant-1:post1', sprayCell: 'actual' }, value: '2026-10-20' } });
+    h.el('table').onchange({ target: { dataset: { sprayKey: 'plant-3:post1', sprayCell: 'actual' }, value: '2026-10-22' } });
+    assert.match(h.el('table').innerHTML, /data-spray-cell="actual" data-spray-key="plant-1:post1"[^>]*value="2026-10-20"/);
+    assert.match(h.el('table').innerHTML, /data-spray-cell="actual" data-spray-key="plant-3:post1"[^>]*value="2026-10-22"/);
+    assert.match(h.el('table').innerHTML, /data-spray-cell="planned" data-spray-key="plant-1:post2"[^>]*value="2026-10-30"/);
+    assert.match(h.el('table').innerHTML, /data-spray-cell="planned" data-spray-key="plant-3:post2"[^>]*value="2026-11-01"/);
+    assert.match(h.el('batch-message').textContent, /2 aplicações com alterações não salvas/);
+    assert.equal(h.calls.batch.length, 0);
+});
+
+test('batch save retains drafts on failure and clears them only after confirmation', async t => {
+    const editTwo = h => {
+        h.el('table').onchange({ target: { dataset: { sprayKey: 'plant-1:post1', sprayCell: 'product' }, value: 'Herbicida revisado' } });
+        h.el('table').onchange({ target: { dataset: { sprayKey: 'plant-3:post1', sprayCell: 'dose' }, value: '2.25' } });
+    };
+    await t.test('failure preserves both drafts', async () => {
+        const h = harness({ batchFailure: Error('Conflito do lote') });
+        h.api.refresh(h.state, h.features); await h.tick();
+        editTwo(h);
+        await h.el('batch-save').onclick();
+        assert.equal(h.calls.batch.length, 1);
+        assert.equal(h.calls.batch[0].rows.length, 2);
+        assert.match(h.el('message').textContent, /Conflito do lote/);
+        assert.match(h.el('batch-message').textContent, /2 aplicações com alterações não salvas/);
+        assert.match(h.el('table').innerHTML, /spray-cell-draft/);
+    });
+    await t.test('success clears drafts and reloads saved values', async () => {
+        const h = harness();
+        h.api.refresh(h.state, h.features); await h.tick();
+        const before = h.calls.list.length;
+        editTwo(h);
+        await h.el('batch-save').onclick();
+        await h.tick();
+        assert.equal(h.calls.batch.length, 1);
+        assert.equal(h.calls.batch[0].rows.length, 2);
+        assert.match(h.el('message').textContent, /2 aplicações salvas e confirmadas juntas/);
+        assert.match(h.el('batch-message').textContent, /0 aplicações com alterações não salvas/);
+        assert.doesNotMatch(h.el('table').innerHTML, /spray-cell-draft/);
+        assert.ok(h.calls.list.length > before);
+    });
+});
+
+test('selecting visible applications applies a bulk value only to selected rows', async () => {
+    const h = harness();
+    h.api.refresh(h.state, h.features); await h.tick();
+    h.el('check-visible').checked = true; h.el('check-visible').onchange();
+    h.el('bulk-field').value = 'responsible'; h.el('bulk-field').onchange();
+    h.el('bulk-value').value = 'Equipe de pulverização';
+    h.el('bulk-apply').onclick();
+    assert.match(h.el('batch-message').textContent, /10 aplicações com alterações não salvas · 10 selecionadas/);
+    await h.el('batch-save').onclick();
+    assert.equal(h.calls.batch.length, 1);
+    assert.equal(h.calls.batch[0].rows.length, 10);
+    assert.ok(h.calls.batch[0].rows.every(row => row.responsible === 'Equipe de pulverização'));
+});
+
+test('application table filter and independent map filter can show different scopes', async () => {
+    const h = harness();
+    h.api.refresh(h.state, h.features); await h.tick();
+    listMode(h);
+    h.el('application').value = 'post1'; h.el('application').onchange();
+    assert.match(h.el('table').innerHTML, /Herbicida A/);
+    assert.doesNotMatch(h.el('table').innerHTML, /Fungicida/);
+    h.el('map-application').value = 'fungicide'; h.el('map-application').onchange();
+    assert.match(h.el('table').innerHTML, /Herbicida A/);
+    assert.doesNotMatch(h.el('table').innerHTML, /Fungicida/);
+    const popup = h.api.popup(h.features[0]);
+    assert.match(popup, /Fungicida/);
+    assert.doesNotMatch(popup, /Herbicida A/);
+});
+
+test('map selection clears incompatible table filters, scrolls to the field, and highlights it', async () => {
+    const h = harness();
+    h.api.refresh(h.state, h.features); await h.tick();
+    h.el('application').value = 'fungicide'; h.el('application').onchange();
+    h.el('search').value = 'Herbicida B'; h.el('search').oninput();
+    assert.doesNotMatch(h.el('table').innerHTML, /FE 01/);
+    h.api.selectFeature(h.features[0]);
+    assert.match(h.el('message').textContent, /Filtros da tabela ajustados/);
+    assert.match(h.el('table').innerHTML, /FE 01/);
+    assert.equal(h.domRows[0].scrollCount, 1);
+    assert.equal(h.api.style(h.features[0]).fillColor, '#1673d1');
+});
+
 test('linked planting date edit immediately recalculates following dates without saving', async () => {
     const h = harness();
     h.api.refresh(h.state, h.features); await h.tick();
-    h.el('table').onclick({ target: { closest: selector => selector === '[data-spray-sort]' ? null : { dataset: { sprayAction: 'edit', sprayKey: 'plant-1:post1' } } } });
+    clickAction(h, 'edit', 'plant-1:post1');
     h.el('input-actual').value = '2026-10-20';
     h.el('input-actual').onchange();
     assert.match(h.el('preview').innerHTML, /2ª Pós-Emergente: 30\/10\/2026/);
@@ -134,7 +252,7 @@ test('linked planting date edit immediately recalculates following dates without
 test('clearing a prior realization while a later one exists blocks save before request', async () => {
     const h = harness({ scheduleActuals: { post1: '2026-10-16', post2: '2026-10-26' } });
     h.api.refresh(h.state, h.features); await h.tick();
-    h.el('table').onclick({ target: { closest: selector => selector === '[data-spray-sort]' ? null : { dataset: { sprayAction: 'edit', sprayKey: 'plant-1:post1' } } } });
+    clickAction(h, 'edit', 'plant-1:post1');
     h.el('input-actual').value = '';
     h.el('input-actual').onchange();
     assert.match(h.el('form-error').textContent, /registre primeiro a data realizada da aplicação anterior/);
@@ -145,13 +263,13 @@ test('clearing a prior realization while a later one exists blocks save before r
 test('delete and restore preserve reversible CRUD state in the repository', async () => {
     const h = harness();
     h.api.refresh(h.state, h.features); await h.tick();
-    const clickAction = (action, key) => h.el('table').onclick({ target: { closest: selector => selector === '[data-spray-sort]' ? null : { dataset: { sprayAction: action, sprayKey: key } } } });
-    clickAction('delete', 'plant-1:post1'); await h.tick();
+    listMode(h);
+    clickAction(h, 'delete', 'plant-1:post1'); await h.tick();
     assert.equal(h.calls.save.length, 1);
     assert.equal(h.calls.save[0].row.deleted, true);
     h.el('status').value = 'deleted'; h.el('status').onchange();
     assert.match(h.el('table').innerHTML, /Excluída/);
-    clickAction('restore', 'plant-1:post1'); await h.tick();
+    clickAction(h, 'restore', 'plant-1:post1'); await h.tick();
     assert.equal(h.calls.save.length, 2);
     assert.equal(h.calls.save[1].row.deleted, false);
     assert.doesNotMatch(h.el('table').innerHTML, /plant-1:post1/);
@@ -182,6 +300,7 @@ test('adding a manual application sends entered dose, field area, and responsibl
 test('search, status, and sort controls update the visible application table', async () => {
     const h = harness();
     h.api.refresh(h.state, h.features); await h.tick();
+    listMode(h);
     h.el('search').value = 'Herbicida B'; h.el('search').oninput();
     assert.match(h.el('table').innerHTML, /FE 03/);
     assert.doesNotMatch(h.el('table').innerHTML, /FE 01/);
@@ -212,10 +331,17 @@ test('viewer is read only and cannot open or submit the application form', async
     const h = harness({ role: 'viewer' });
     h.api.refresh(h.state, h.features); await h.tick();
     assert.equal(h.el('add').disabled, true);
+    assert.doesNotMatch(h.el('table').innerHTML, /data-spray-cell=|data-spray-check=/);
+    assert.equal(h.el('batch-save').disabled, true);
+    listMode(h);
     assert.match(h.el('table').innerHTML, /data-spray-action="map"/);
     assert.doesNotMatch(h.el('table').innerHTML, /data-spray-action="edit"|data-spray-action="delete"/);
     h.el('add').onclick();
     assert.equal(h.el('form').hidden, true);
     await h.el('form').onsubmit({ preventDefault() {} });
+    h.el('table').onchange({ target: { dataset: { sprayKey: 'plant-1:post1', sprayCell: 'actual' }, value: '2026-10-20' } });
+    await h.el('batch-save').onclick();
+    assert.equal(h.el('batch-save').disabled, true);
     assert.equal(h.calls.save.length, 0);
+    assert.equal(h.calls.batch.length, 0);
 });

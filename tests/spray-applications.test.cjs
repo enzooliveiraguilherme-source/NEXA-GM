@@ -50,6 +50,12 @@ function dbRow(overrides = {}) {
     };
 }
 
+function manualApplication(index, overrides = {}) {
+    return application({ id: `manual-${index}`, plantingId: null, stage: null, autoDate: false,
+        name: 'Aplicação adicional', planned: '2026-10-20', actual: '', dose: '', area: 1,
+        version: null, scheduleVersion: null, ...overrides });
+}
+
 test('list deduplicates farms, chunks by 100, pages short responses, and filters exact year and culture', async () => {
     const farms = Array.from({ length: 205 }, (_, index) => `FE-${index}`);
     const client = fakeClient({ query: call => {
@@ -126,4 +132,80 @@ test('optimistic conflicts and permission failure are surfaced without false con
         const client = fakeClient({ rpc: () => ({ data: null, error: null }) });
         await assert.rejects(create(client).save(application(), field()), /não foi confirmada/);
     });
+});
+
+test('saveBatch sends one RPC with normalized records and both optimistic versions', async () => {
+    const rows = [application(), application({ id: 'application-2', stage: 'post2', version: 5,
+        autoDate: false, planned: '2026-10-26', dose: '', scheduleVersion: 11 })];
+    const client = fakeClient({ rpc: () => ({ data: [
+        dbRow(), dbRow({ id: 'application-2', stage_id: 'post2', planned_date: '2026-10-26', dose: null, version: 6 })
+    ], error: null }) });
+    const saved = await create(client).saveBatch(rows, [field()]);
+    assert.equal(client.calls.length, 1);
+    const call = client.calls[0];
+    assert.equal(call.name, 'save_spray_application_batch');
+    assert.equal(call.payload.p_records.length, 2);
+    assert.deepEqual(call.payload.p_records.map(item => [item.expected_version, item.schedule_version]), [[3, 9], [5, 11]]);
+    assert.equal(call.payload.p_records[0].payload.planned_date, null);
+    assert.equal(call.payload.p_records[0].payload.actual_date, '2026-10-18');
+    assert.equal(call.payload.p_records[0].payload.dose, 2.5);
+    assert.equal(call.payload.p_records[1].payload.planned_date, '2026-10-26');
+    assert.equal(call.payload.p_records[1].payload.dose, null);
+    assert.deepEqual(saved.map(row => row.id), ['application-1', 'application-2']);
+    assert.deepEqual(saved.map(row => row.version), [4, 6]);
+});
+
+test('saveBatch rejects out-of-range, duplicate, or invalid rows before requesting the RPC', async t => {
+    await t.test('empty batch and over 1000 rows', async () => {
+        const client = fakeClient({ rpc: () => { throw Error('unexpected RPC'); } });
+        const repository = create(client);
+        await assert.rejects(repository.saveBatch([], [field()]), /entre 1 e 1000/);
+        await assert.rejects(repository.saveBatch(Array.from({ length: 1001 }, (_, index) => manualApplication(index)), [field()]), /entre 1 e 1000/);
+        assert.equal(client.calls.length, 0);
+    });
+    await t.test('duplicate planting stage', async () => {
+        const client = fakeClient({ rpc: () => { throw Error('unexpected RPC'); } });
+        await assert.rejects(create(client).saveBatch([application(), application({ id: 'duplicate-id' })], [field()]), /mais de uma vez/);
+        assert.equal(client.calls.length, 0);
+    });
+    await t.test('every row validates before request', async () => {
+        const client = fakeClient({ rpc: () => { throw Error('unexpected RPC'); } });
+        await assert.rejects(create(client).saveBatch([manualApplication(1), manualApplication(2, { area: 101 })], [field()]), /não pode ultrapassar/);
+        assert.equal(client.calls.length, 0);
+    });
+});
+
+test('saveBatch accepts exactly 1000 unique rows', async () => {
+    const rows = Array.from({ length: 1000 }, (_, index) => manualApplication(index));
+    const client = fakeClient({ rpc: () => ({ data: rows.map((row, index) => dbRow({
+        id: row.id, fazenda: row.farm, campo: row.field, planting_record_id: null, stage_id: null,
+        application_name: row.name, product: '', dose: null, area: 1, planned_date: row.planned,
+        actual_date: null, responsible: '', notes: '', version: index + 1
+    })), error: null }) });
+    const saved = await create(client).saveBatch(rows, [field()]);
+    assert.equal(saved.length, 1000);
+    assert.equal(client.calls.length, 1);
+    assert.equal(client.calls[0].payload.p_records.length, 1000);
+});
+
+test('saveBatch requires a complete array of uniquely identified confirmed rows', async t => {
+    await t.test('short response', async () => {
+        const client = fakeClient({ rpc: () => ({ data: [dbRow()], error: null }) });
+        await assert.rejects(create(client).saveBatch([application(), application({ id: 'application-2', stage: 'post2' })], [field()]), /não confirmou todo o lote/);
+    });
+    await t.test('duplicate returned IDs', async () => {
+        const client = fakeClient({ rpc: () => ({ data: [dbRow(), dbRow({ version: 6 })], error: null }) });
+        await assert.rejects(create(client).saveBatch([application(), application({ id: 'application-2', stage: 'post2' })], [field()]), /não confirmou todo o lote/);
+    });
+    await t.test('empty response', async () => {
+        const client = fakeClient({ rpc: () => ({ data: [], error: null }) });
+        await assert.rejects(create(client).saveBatch([application()], [field()]), /não confirmou todo o lote/);
+    });
+});
+
+test('saveBatch reports an optimistic conflict without claiming success', async () => {
+    const client = fakeClient({ rpc: () => ({ data: null, error: { code: '40001' } }) });
+    await assert.rejects(create(client).saveBatch([application(), application({ id: 'application-2', stage: 'post2' })], [field()]), /registro mudou/);
+    assert.equal(client.calls.length, 1);
+    assert.equal(client.calls[0].name, 'save_spray_application_batch');
 });

@@ -44,11 +44,39 @@
         return { fields: [...fields.values()], applications };
     }
     const normalize = value => F.normalize(value);
+    function applicationKey(row) { return row.stage || 'manual:' + normalize(row.name); }
+    function matchesApplication(row, value) {
+        if (!value || value === 'all') return true;
+        if (value === 'fungicide') return /^fung/.test(row.stage || '') || /FUNGIC/.test(normalize(row.name));
+        if (value === 'insecticide') return /INSETIC|INSECTIC/.test(normalize(row.name));
+        return applicationKey(row) === value;
+    }
+    function applicationOptions(rows) {
+        const unique = new Map();
+        for (const row of rows) unique.set(applicationKey(row), row.name);
+        return [{ key:'all', label:'Todas' }, { key:'fungicide', label:'Fungicidas' }, { key:'insecticide', label:'Inseticidas' },
+            ...[...unique].sort(([a], [b]) => {
+                const ai=S.steps.findIndex(step=>step.id===a),bi=S.steps.findIndex(step=>step.id===b);
+                return (ai<0?99:ai)-(bi<0?99:bi)||a.localeCompare(b,'pt-BR');
+            }).map(([key,label])=>({key,label}))];
+    }
+    function matrix(rows) {
+        const columns=applicationOptions(rows).filter(option=>!['all','fungicide','insecticide'].includes(option.key));
+        const fields=new Map();
+        for(const row of rows){
+            if(!fields.has(row.fieldKey))fields.set(row.fieldKey,{key:row.fieldKey,farm:row.farm,field:row.field,cells:new Map()});
+            const cells=fields.get(row.fieldKey).cells,key=applicationKey(row);
+            if(!cells.has(key))cells.set(key,[]);
+            cells.get(key).push(row);
+        }
+        return {columns,rows:[...fields.values()]};
+    }
     function filter(rows, filters = {}) {
         const query = normalize(filters.search);
         return rows.filter(row => (filters.deleted ? row.deleted : !row.deleted) &&
             (!filters.farm || row.farm === filters.farm) && (!filters.field || row.fieldKey === filters.field) &&
             (!filters.status || row.status === filters.status) && (!filters.from || row.planned >= filters.from) &&
+            matchesApplication(row, filters.application) &&
             (!filters.to || row.planned <= filters.to) && (!query || normalize([row.farm, row.field, row.culture, row.name, row.product, row.responsible, row.notes].join(' ')).includes(query)));
     }
     function sort(rows, column = 'planned', direction = 1) {
@@ -70,7 +98,7 @@
         if (!apps.length) return 'empty';
         if (apps.some(row => row.status === 'overdue')) return 'pending';
         if (apps.some(row => row.status === 'attention')) return 'attention';
-        return apps.every(row => row.actual) ? 'completed' : 'pending';
+        return 'completed';
     }
     function validate(row, field, current = S.today()) {
         if (!field || row.farm !== field.farm || row.field !== field.field) throw Error('Escolha um talhão cadastrado.');
@@ -78,11 +106,12 @@
         if (S.time(row.planned) === null) throw Error('Informe uma data programada válida.');
         if (row.actual && (S.time(row.actual) === null || row.actual > current)) throw Error('A data realizada deve ser válida e não pode estar no futuro.');
         if (!Number.isFinite(Number(row.area)) || Number(row.area) <= 0 || Number(row.area) > field.area) throw Error('A área deve ser maior que zero e não pode ultrapassar o talhão.');
-        if (row.dose !== null && row.dose !== '' && (!Number.isFinite(Number(row.dose)) || Number(row.dose) < 0)) throw Error('Informe uma dose válida, maior ou igual a zero.');
+        if (row.dose !== null && row.dose !== '' && row.dose !== undefined && (!Number.isFinite(Number(row.dose)) || Number(row.dose) < 0 || Number(row.dose)>1000000)) throw Error('Informe uma dose válida entre zero e 1.000.000.');
+        if(row.doseUnit===''||String(row.doseUnit||'L/ha').length>30)throw Error('Informe uma unidade de dose com até 30 caracteres.');
         if (String(row.product || '').length > 150 || String(row.responsible || '').length > 150 || String(row.notes || '').length > 2000) throw Error('Confira o tamanho dos textos informados.');
         return true;
     }
-    const api = Object.freeze({ fieldKey, rowKey, status, build, filter, sort, summarize, mapStatus, validate });
+    const api = Object.freeze({ fieldKey, rowKey, status, build, filter, sort, summarize, mapStatus, validate, applicationKey, matchesApplication, applicationOptions, matrix });
     root.SprayOperations = api;
     if (typeof module !== 'undefined') module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -114,7 +114,7 @@ test('summarize exclui removidas e soma área planejada e aplicada por aplicaç�
     assert.deepEqual(Spray.summarize(rows),{total:4,completed:1,pending:3,overdue:1,attention:1,scheduled:1,plannedArea:100,appliedArea:25});
 });
 
-test('mapStatus aplica precedência seleção, atraso, atenção, conclusão, pendência e sem aplicação',()=>{
+test('mapStatus aplica seleção, atraso, atenção, verde para concluídas e também no prazo, e sem aplicação',()=>{
     const rows=[
         {fieldKey:'late',status:'overdue',actual:null},
         {fieldKey:'late',status:'attention',actual:null},
@@ -127,9 +127,74 @@ test('mapStatus aplica precedência seleção, atraso, atenção, conclusão, pe
     assert.equal(Spray.mapStatus(rows,'late',null),'pending');
     assert.equal(Spray.mapStatus(rows,'attn',null),'attention');
     assert.equal(Spray.mapStatus(rows,'done',null),'completed');
-    assert.equal(Spray.mapStatus(rows,'pending',null),'pending');
+    assert.equal(Spray.mapStatus(rows,'pending',null),'completed');
     assert.equal(Spray.mapStatus(rows,'empty',null),'empty');
     assert.equal(Spray.mapStatus(rows,'late','late'),'selected');
+});
+
+test('applicationKey e matchesApplication agrupam etapas e tipos manuais sem acentos',()=>{
+    assert.equal(Spray.applicationKey({stage:'fung2',name:'Fungicida'}),'fung2');
+    assert.equal(Spray.applicationKey({name:'  Aplicação   Manual  '}),'manual:APLICACAO MANUAL');
+    assert.equal(Spray.matchesApplication({stage:'post1',name:'Pós-Emergente'},'post1'),true);
+    assert.equal(Spray.matchesApplication({stage:'fung4',name:'4ª Aplicação'},'fungicide'),true);
+    assert.equal(Spray.matchesApplication({stage:'manual',name:'Fungicida foliar'},'fungicide'),true);
+    assert.equal(Spray.matchesApplication({stage:'manual',name:'Inseticida para soja'},'insecticide'),true);
+    assert.equal(Spray.matchesApplication({stage:'manual',name:'Insecticide mix'},'insecticide'),true);
+    assert.equal(Spray.matchesApplication({stage:'manual',name:'Aplicação adicional'},'fungicide'),false);
+    assert.equal(Spray.matchesApplication({stage:'fung1',name:'Fungicida'},'all'),true);
+    assert.equal(Spray.matchesApplication({stage:'fung1',name:'Fungicida'},''),true);
+});
+
+test('applicationOptions gera filtros dinâmicos únicos e mantém aplicações excluídas disponíveis para restauração',()=>{
+    const rows=[
+        {stage:'post1',name:'1ª Pós-Emergente',deleted:false},
+        {stage:'fung1',name:'1º Fungicida',deleted:false},
+        {stage:'fung1',name:'Outro rótulo da mesma etapa',deleted:false},
+        {name:'Inseticida',deleted:false},
+        {name:'Fungicida foliar',deleted:false},
+        {name:'Inseticida removido',deleted:true}
+    ];
+    const options=Spray.applicationOptions(rows);
+    assert.deepEqual(options.slice(0,3),[
+        {key:'all',label:'Todas'},{key:'fungicide',label:'Fungicidas'},{key:'insecticide',label:'Inseticidas'}
+    ]);
+    assert.equal(options.filter(option=>option.key==='fung1').length,1);
+    assert.equal(options.some(option=>option.key==='manual:INSETICIDA REMOVIDO'),true);
+    assert.ok(options.some(option=>option.key==='post1'&&option.label==='1ª Pós-Emergente'));
+    assert.ok(options.some(option=>option.key==='manual:FUNGICIDA FOLIAR'));
+});
+
+test('matrix mantém aplicações duplicadas do mesmo tipo no mesmo talhão e remove filtros genéricos das colunas',()=>{
+    const rows=[
+        {key:'p1:post1',fieldKey:'FE01',farm:'FE',field:'FE 01',stage:'post1',name:'1ª Pós-Emergente'},
+        {key:'manual:a',fieldKey:'FE01',farm:'FE',field:'FE 01',name:'Fungicida foliar'},
+        {key:'manual:b',fieldKey:'FE01',farm:'FE',field:'FE 01',name:'Fungicida foliar'},
+        {key:'p2:fung1',fieldKey:'FE02',farm:'FE',field:'FE 02',stage:'fung1',name:'1º Fungicida'}
+    ];
+    const result=Spray.matrix(rows);
+    assert.equal(result.columns.some(column=>['all','fungicide','insecticide'].includes(column.key)),false);
+    assert.ok(result.columns.some(column=>column.key==='post1'));
+    assert.ok(result.columns.some(column=>column.key==='manual:FUNGICIDA FOLIAR'));
+    const fe01=result.rows.find(row=>row.key==='FE01');
+    assert.equal(fe01.cells.get('manual:FUNGICIDA FOLIAR').length,2);
+    assert.deepEqual(fe01.cells.get('manual:FUNGICIDA FOLIAR').map(row=>row.key),['manual:a','manual:b']);
+    assert.equal(result.rows.find(row=>row.key==='FE02').cells.get('fung1').length,1);
+});
+
+test('filter combina funções fungicida/inseticida, etapas e aplicação manual definida pelo nome',()=>{
+    const rows=[
+        {key:'p1:post1',stage:'post1',field:'FE 01',farm:'FE',fieldKey:'FE01',name:'1ª Pós-Emergente',planned:'2026-11-10',status:'scheduled'},
+        {key:'p1:fung1',stage:'fung1',field:'FE 01',farm:'FE',fieldKey:'FE01',name:'1º Fungicida',planned:'2026-11-20',status:'attention'},
+        {key:'m1',field:'FE 01',farm:'FE',fieldKey:'FE01',name:'Inseticida foliar',planned:'2026-11-15',status:'scheduled'},
+        {key:'m2',field:'FE 02',farm:'FE',fieldKey:'FE02',name:'Fungicida de resgate',planned:'2026-11-15',status:'overdue'},
+        {key:'deleted',stage:'fung2',field:'FE 01',farm:'FE',fieldKey:'FE01',name:'2º Fungicida',planned:'2026-11-25',status:'scheduled',deleted:true}
+    ];
+    assert.deepEqual(Spray.filter(rows,{application:'fungicide'}).map(row=>row.key),['p1:fung1','m2']);
+    assert.deepEqual(Spray.filter(rows,{application:'insecticide'}).map(row=>row.key),['m1']);
+    assert.deepEqual(Spray.filter(rows,{application:'post1'}).map(row=>row.key),['p1:post1']);
+    assert.deepEqual(Spray.filter(rows,{application:'manual:INSETICIDA FOLIAR'}).map(row=>row.key),['m1']);
+    assert.deepEqual(Spray.filter(rows,{application:'fungicide',deleted:true}).map(row=>row.key),['deleted']);
+    assert.deepEqual(Spray.filter(rows,{application:'fungicide',field:'FE01',from:'2026-11-15',to:'2026-11-20'}).map(row=>row.key),['p1:fung1']);
 });
 
 test('validate confere talhão, aplicação, datas, área, dose e limites dos metadados',()=>{

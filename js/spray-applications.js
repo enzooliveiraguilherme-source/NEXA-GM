@@ -17,7 +17,25 @@
         throw Error('Não foi possível confirmar a operação. Nenhuma alteração foi confirmada. Recarregue e tente novamente.');
     }
     function create(client) {
+        function payload(row){
+            return { id: row.id || null, fazenda: row.farm, campo: row.field, ano: row.year, cultura: row.culture,
+                planting_record_id: row.plantingId || null, stage_id: row.stage || null, application_name: row.name,
+                product: row.product || '', dose: row.dose === '' || row.dose == null ? null : Number(row.dose),
+                dose_unit: row.doseUnit || 'L/ha', area: Number(row.area), planned_date: row.plantingId && row.autoDate ? null : row.planned,
+                actual_date: row.actual || null, responsible: row.responsible || '', notes: row.notes || '', deleted: !!row.deleted };
+        }
         return {
+            async saveBatch(rows,fields){
+                if(!Array.isArray(rows)||!rows.length||rows.length>1000)throw Error('Altere entre 1 e 1000 aplicações por lote.');
+                const unique=new Set();
+                for(const row of rows){
+                    root.SprayOperations.validate(row,fields.find(field=>field.farm===row.farm&&field.field===row.field));
+                    const key=root.SprayOperations.rowKey(row);if(unique.has(key))throw Error('A mesma aplicação aparece mais de uma vez no lote.');unique.add(key);
+                }
+                const result=check(await client.rpc('save_spray_application_batch',{p_records:rows.map(row=>({payload:payload(row),expected_version:row.version??null,schedule_version:row.scheduleVersion??null}))}));
+                if(!Array.isArray(result)||result.length!==rows.length||result.some(row=>!row.id)||new Set(result.map(row=>row.id)).size!==rows.length)throw Error('O banco não confirmou todo o lote. Recarregue os dados antes de tentar novamente.');
+                return result.map(fromRow);
+            },
             async list(farms, year, culture) {
                 const all = [], unique = [...new Set(farms)];
                 for (let start = 0; start < unique.length; start += 100) {
@@ -36,12 +54,7 @@
             },
             async save(row, field) {
                 root.SprayOperations.validate(row, field);
-                const payload = { id: row.id || null, fazenda: row.farm, campo: row.field, ano: row.year, cultura: row.culture,
-                    planting_record_id: row.plantingId || null, stage_id: row.stage || null, application_name: row.name,
-                    product: row.product || '', dose: row.dose === '' || row.dose == null ? null : Number(row.dose),
-                    dose_unit: row.doseUnit || 'L/ha', area: Number(row.area), planned_date: row.plantingId && row.autoDate ? null : row.planned,
-                    actual_date: row.actual || null, responsible: row.responsible || '', notes: row.notes || '', deleted: !!row.deleted };
-                const result = check(await client.rpc('save_spray_application', { p_payload: payload,
+                const result = check(await client.rpc('save_spray_application', { p_payload: payload(row),
                     p_expected_version: row.version ?? null, p_schedule_version: row.scheduleVersion ?? null }));
                 const saved = Array.isArray(result) ? result[0] : result;
                 if (!saved?.id) throw Error('A gravação não foi confirmada. Recarregue os dados.');
