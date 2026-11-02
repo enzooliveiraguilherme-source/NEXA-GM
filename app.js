@@ -113,6 +113,13 @@ function initMap() {
         blank: L.layerGroup()
     };
 
+    // Sobreposição de 1 px evita frestas entre imagens em escalas fracionárias
+    // do navegador, sem alterar a posição dos blocos ou as geometrias GIS.
+    state.basemapLayers.esri.on('tileloadstart', function ({ tile }) {
+        const size = this.getTileSize();
+        tile.style.width = `${size.x + 1}px`;
+        tile.style.height = `${size.y + 1}px`;
+    });
     state.basemapLayers.esri.addTo(state.map);
 }
 

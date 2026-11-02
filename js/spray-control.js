@@ -30,7 +30,7 @@
     function style(feature) {
         const p = feature.properties || {}, status = O.mapStatus(loading || error ? [] : mapRows, O.fieldKey(p.Fazenda,p.Campo));
         return { color:'#283b50', weight:.9,
-            fillColor:colors[status], fillOpacity:status === 'empty' ? .18 : .7, opacity:1 };
+            fillColor:colors[status], fillOpacity:status === 'empty' ? .18 : .95, opacity:1 };
     }
     function selectFeature(feature) {
         const p = feature.properties || {};
