@@ -151,7 +151,7 @@ function summary(rows) {
         savedLiters: comparable && Number.isFinite(reference) && reference > 0 && totals.ltsTotal !== null ? Math.max(0, reference - totals.ltsTotal) : null };
 }
 
-export function makeSavecloudHandler({ env, userClient, fetchImpl = fetch, now = () => new Date() }) {
+export function makeSavecloudHandler({ env, userClient, connectionStore, fetchImpl = fetch, now = () => new Date() }) {
     return async request => {
         const origin = request.headers.get('origin') || '';
         const origins = ['https://nexa-gm.vercel.app', ...(env('SAVECLOUD_ALLOWED_ORIGINS') || '').split(',').map(value => value.trim()).filter(Boolean)];
@@ -196,11 +196,18 @@ export function makeSavecloudHandler({ env, userClient, fetchImpl = fetch, now =
                 }
                 const { value } = await readJson(response, 65536);
                 if (typeof value?.token !== 'string' || !/^[a-f0-9]{40}$/i.test(value.token)) throw new Failure(502, 'A SaveCloud não retornou um token reconhecido.');
-                return reply(200, { connectionToken: value.token, message: 'Token gerado. Salve-o no segredo SAVECLOUD_TOKEN do Supabase.' });
+                try {
+                    if (!connectionStore) throw new Error('storage unavailable');
+                    await connectionStore.set(value.token);
+                } catch { throw new Failure(503, 'Não foi possível salvar a conexão. Tente conectar novamente.'); }
+                return reply(200, { connected: true, message: 'Conta conectada. O acesso foi salvo para as próximas consultas.' });
             }
             if (Object.keys(body).some(key => !['action', 'farm', 'polygon', 'machine', 'from', 'to', 'mode'].includes(key))) throw new Failure(400, 'Consulta inválida.');
             const directory = bindings(env('SAVECLOUD_BINDINGS'), accessible.data);
-            const token = env('SAVECLOUD_TOKEN')?.trim().replace(/^Token\s+/i, '');
+            let stored;
+            try { stored = connectionStore ? await connectionStore.get() : null; }
+            catch { throw new Failure(503, 'Não foi possível carregar a conexão salva. Tente novamente.'); }
+            const token = stored?.token || env('SAVECLOUD_TOKEN')?.trim().replace(/^Token\s+/i, '');
             const timezone = env('SAVECLOUD_TIME_ZONE');
             let validZone = false;
             try { if (timezone) { new Intl.DateTimeFormat('pt-BR', { timeZone: timezone }); validZone = true; } } catch { /* falha fechada */ }
@@ -215,10 +222,14 @@ export function makeSavecloudHandler({ env, userClient, fetchImpl = fetch, now =
                     redirect: 'error', cache: 'no-store', signal: deadline });
                 if (!response.ok) {
                     await response.body?.cancel();
+                    if (response.status === 401) {
+                        const failure = new Failure(409, 'A conexão SaveCloud foi revogada ou expirou. Use Conectar conta para restabelecer o acesso.');
+                        failure.code = 'SAVECLOUD_RECONNECT_REQUIRED';
+                        throw failure;
+                    }
                     const retry = response.headers.get('retry-after');
                     throw new Failure(response.status === 429 ? 429 : 502,
                         response.status === 429 ? 'Limite SaveCloud atingido. Aguarde antes de atualizar.'
-                            : response.status === 401 ? 'A SaveCloud recusou o token configurado (401). Gere um token real em POST /api/auth e confira o segredo SAVECLOUD_TOKEN.'
                             : response.status === 403 ? 'A SaveCloud recusou a permissão da conexão (403). Confira o acesso da conta às máquinas.'
                             : `Não foi possível consultar a SaveCloud (HTTP ${response.status}). Tente mais tarde.`,
                         retry && /^\d{1,6}$/.test(retry) ? retry : undefined);
@@ -259,7 +270,7 @@ export function makeSavecloudHandler({ env, userClient, fetchImpl = fetch, now =
                 if (accountMode && configured) farms.push({ code: '__savecloud__', name: 'Máquinas da conta SaveCloud',
                     polygons: [{ id: '__machine__', label: 'Sem vínculo de talhão' }], machines: await machines() });
                 return reply(200, { configured: configured && farms.some(farm => farm.machines.length), phase: 'admin-validation', timezone: validZone ? timezone : null,
-                    message: configured ? 'Conexão configurada. Dados sujeitos à validação com a SaveCloud.' : 'Aguardando acesso à SaveCloud e configuração da conexão.', farms });
+                    message: configured ? 'Conexão ativa. Selecione a máquina e o período para consultar.' : 'Conecte sua conta SaveCloud para começar.', farms });
             }
             if (!['map', 'statistics', 'boundaries'].includes(body.action)) throw new Failure(400, 'Consulta inválida.');
             if (!configured) throw new Failure(503, 'A conexão SaveCloud ainda não foi configurada.');
@@ -303,7 +314,7 @@ export function makeSavecloudHandler({ env, userClient, fetchImpl = fetch, now =
             return reply(200, { source: 'SaveCloud', scope, queriedAt, timezone, summary: summary(rows),
                 warning: 'Indicadores preliminares: unidades, intervalos e agregações aguardam validação com a SaveCloud.' });
         } catch (error) {
-            if (error instanceof Failure) return reply(error.status, { error: error.message }, error.retryAfter ? { 'Retry-After': error.retryAfter } : {});
+            if (error instanceof Failure) return reply(error.status, { error: error.message, ...(error.code ? { code: error.code } : {}) }, error.retryAfter ? { 'Retry-After': error.retryAfter } : {});
             if (error?.name === 'TimeoutError' || error?.name === 'AbortError') return reply(504, { error: 'A SaveCloud demorou para responder. Reduza o período ou tente mais tarde.' });
             return reply(502, { error: 'Não foi possível concluir a consulta. Tente novamente mais tarde.' });
         }

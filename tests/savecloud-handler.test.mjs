@@ -10,8 +10,8 @@ const binding = {
 
 function setup({ token = 'test-token', bindings = [binding], farms = [{ code: 'farm-1', name: 'Fazenda 1' }], accountMode = false,
   admin = true, auth = true, timezone = 'America/Sao_Paulo', fetchImpl = async () => { throw new Error('upstream inesperado'); },
-  now = () => new Date('2026-10-30T12:00:00.000Z') } = {}) {
-  const calls = { user: [], rpc: [], fetch: [] };
+  now = () => new Date('2026-10-30T12:00:00.000Z'), connectionStore = null } = {}) {
+  const calls = { user: [], rpc: [], fetch: [], store: [] };
   const envValues = {
     SAVECLOUD_TOKEN: token,
     SAVECLOUD_BINDINGS: JSON.stringify(bindings),
@@ -31,13 +31,14 @@ function setup({ token = 'test-token', bindings = [binding], farms = [{ code: 'f
     };
   };
   const wrappedFetch = async (...args) => { calls.fetch.push(args); return fetchImpl(...args); };
-  const handler = makeSavecloudHandler({ env, userClient, fetchImpl: wrappedFetch, now });
+  const makeHandler = () => makeSavecloudHandler({ env, userClient, fetchImpl: wrappedFetch, now, connectionStore });
+  const handler = makeHandler();
   const request = (body = {}, options = {}) => new Request('https://nexa.test/functions/v1/savecloud', {
     method: options.method || 'POST',
     headers: { authorization: options.authorization ?? 'Bearer session-test', ...(options.origin ? { origin: options.origin } : {}), ...(options.headers || {}) },
     body: ['GET', 'HEAD', 'OPTIONS'].includes(options.method) ? undefined : JSON.stringify(body),
   });
-  return { handler, request, calls, envValues };
+  return { handler, makeHandler, request, calls, envValues, connectionStore };
 }
 
 async function json(response) { return response.json(); }
@@ -361,9 +362,8 @@ test('trims an optional Token prefix from the configured SaveCloud secret', asyn
   assert.equal((await response.text()).includes('secret-test-token'), false);
 });
 
-test('maps upstream 401, 403 and other HTTP errors to safe, distinct messages', async () => {
+test('maps revoked SaveCloud sessions, 403 and other HTTP errors to safe, distinct responses', async () => {
   const expectedHints = new Map([
-    [401, 'recusou o token configurado (401)'],
     [403, 'recusou a permissão da conexão (403)'],
     [500, 'SaveCloud (HTTP 500)'],
   ]);
@@ -376,12 +376,21 @@ test('maps upstream 401, 403 and other HTTP errors to safe, distinct messages', 
     assert.equal(text.includes('UPSTREAM_PRIVATE_RAW_BODY'), false);
     assert.equal(text.includes('test-token'), false);
   }
+  const revoked = setup({ fetchImpl: async () => new Response('UPSTREAM_PRIVATE_RAW_BODY', { status: 401 }) });
+  const response = await revoked.handler(revoked.request(query('map', { machine: 'machine-1', ...dateRange, mode: 1 })));
+  assert.equal(response.status, 409);
+  assert.equal((await json(response)).code, 'SAVECLOUD_RECONNECT_REQUIRED');
 });
 
-test('authenticate returns only the fictitious token for successful SaveCloud responses', async () => {
+test('authenticate persists the connection and returns no token or password', async () => {
   const fakeToken = 'a'.repeat(40);
+  const values = { token: null };
+  const connectionStore = {
+    get() { return values.token ? { token: values.token } : null; },
+    set(token) { values.token = token; },
+  };
   for (const upstreamStatus of [200, 201]) {
-    const ctx = setup({ token: 'invalid-configured-token', fetchImpl: async (url, options) => {
+    const ctx = setup({ token: 'invalid-configured-token', connectionStore, fetchImpl: async (url, options) => {
       assert.equal(url, 'https://savecloud.savefarm.com.br/api/auth');
       assert.equal(options.method, 'POST');
       assert.equal(options.redirect, 'error');
@@ -396,13 +405,66 @@ test('authenticate returns only the fictitious token for successful SaveCloud re
     const response = await ctx.handler(ctx.request({ action: 'authenticate', username: ' operator@example.test ', password: 'fictional-password' }));
     assert.equal(response.status, 200);
     const text = await response.text();
-    assert.deepEqual(Object.keys(JSON.parse(text)).sort(), ['connectionToken', 'message']);
-    assert.equal(JSON.parse(text).connectionToken, fakeToken);
+    assert.deepEqual(Object.keys(JSON.parse(text)).sort(), ['connected', 'message']);
+    assert.equal(JSON.parse(text).connected, true);
+    assert.equal(values.token, fakeToken);
+    assert.equal(text.includes(fakeToken), false);
     assert.equal(text.includes('fictional-password'), false);
     assert.equal(text.includes('upstream-secret'), false);
     assert.equal(text.includes('invalid-configured-token'), false);
     assert.equal(ctx.calls.fetch.length, 1);
   }
+});
+
+test('persistent connection is used by a new handler and overrides only the legacy environment token', async () => {
+  const token = 'b'.repeat(40), values = { token: null }, connectionStore = { get() { return values.token ? { token: values.token } : null; }, set(value) { values.token = value; } };
+  let authorization;
+  const ctx = setup({ token: 'legacy-env-token', connectionStore, fetchImpl: async (url, options) => {
+    if (url.endsWith('/auth')) return Response.json({ token });
+    authorization = options.headers.Authorization;
+    return Response.json({ type: 'Feature', geometry: { type: 'Point', coordinates: [1, 2] } });
+  } });
+  const connected = await ctx.handler(ctx.request({ action: 'authenticate', username: 'operator', password: 'fictional-password' }));
+  assert.equal(connected.status, 200);
+  assert.equal(values.token, token);
+  const nextHandler = ctx.makeHandler();
+  assert.equal((await nextHandler(ctx.request(query('map', { machine: 'machine-1', ...dateRange, mode: 1 })))).status, 200);
+  assert.equal(authorization, `Token ${token}`);
+  assert.equal((await ctx.handler(ctx.request(query('map', { machine: 'machine-1', ...dateRange, mode: 1 })))).status, 200);
+  assert.equal(authorization, `Token ${token}`);
+
+  const legacy = setup({ token: 'legacy-env-token', fetchImpl: async (_url, options) => {
+    authorization = options.headers.Authorization;
+    return Response.json({ type: 'Feature', geometry: { type: 'Point', coordinates: [1, 2] } });
+  } });
+  assert.equal((await legacy.handler(legacy.request(query('map', { machine: 'machine-1', ...dateRange, mode: 1 })))).status, 200);
+  assert.equal(authorization, 'Token legacy-env-token');
+});
+
+test('connection store failures return 503 without claiming success or exposing secrets', async () => {
+  const fakeToken = 'c'.repeat(40);
+  const setFailure = setup({ connectionStore: { get() { return null; }, set() { throw new Error(`store ${fakeToken}`); } },
+    fetchImpl: async () => Response.json({ token: fakeToken }) });
+  const setResponse = await setFailure.handler(setFailure.request({ action: 'authenticate', username: 'operator', password: 'fictional-password' }));
+  assert.equal(setResponse.status, 503);
+  const setText = await setResponse.text();
+  assert.equal(setText.includes(fakeToken), false);
+  assert.equal(setText.includes('fictional-password'), false);
+
+  const getFailure = setup({ connectionStore: { get() { throw new Error(`store ${fakeToken}`); }, set() {} } });
+  const getResponse = await getFailure.handler(getFailure.request(query('map', { machine: 'machine-1', ...dateRange, mode: 1 })));
+  assert.equal(getResponse.status, 503);
+  assert.equal((await getResponse.text()).includes(fakeToken), false);
+});
+
+test('non-admin authentication is rejected before accessing the persistent connection store', async () => {
+  const storeCalls = [];
+  const connectionStore = { get() { storeCalls.push('get'); return null; }, set() { storeCalls.push('set'); } };
+  const ctx = setup({ admin: false, connectionStore });
+  const response = await ctx.handler(ctx.request({ action: 'authenticate', username: 'operator', password: 'fictional-password' }));
+  assert.equal(response.status, 403);
+  assert.deepEqual(storeCalls, []);
+  assert.equal(ctx.calls.fetch.length, 0);
 });
 
 test('authenticate remains admin-only and rejects malformed credentials without upstream calls', async () => {

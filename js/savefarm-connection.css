@@ -1,0 +1,15 @@
+.savefarm-panel header { padding-bottom:12px;border-bottom:1px solid #e5ece8; }
+#savefarm-connection-status { display:inline-flex;align-items:center;gap:7px;font-size:12px; }
+#savefarm-connection-status::before { content:'';width:8px;height:8px;border-radius:50%;background:#94a3b8;flex-shrink:0; }
+#savefarm-connection-status[data-connected="true"] { color:#087b5a; }
+#savefarm-connection-status[data-connected="true"]::before { background:#0baf6c; }
+#savefarm-connect { border-radius:12px;padding:14px 16px;background:#f5faf7; }
+#savefarm-connect summary { color:#17543d;min-height:24px; }
+#savefarm-connect-form { max-width:760px;margin-top:14px; }
+#savefarm-connect-form label { flex-basis:220px; }
+#savefarm-connect-form button { padding:10px 20px; }
+@media(max-width:600px) {
+    #savefarm-connect { padding:12px; }
+    #savefarm-connect-form label { flex-basis:100%; }
+    #savefarm-connect-form button { width:100%; }
+}

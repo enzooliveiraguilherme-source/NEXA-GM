@@ -11,5 +11,5 @@ for (const file of ['index.html','portal.html','admin.html','projetista.html','v
 }
 fs.mkdirSync(path.join(output,'apoio'));
 fs.copyFileSync(path.join(root,'apoio','GP Michels.jpg'),path.join(output,'apoio','GP Michels.jpg'));
-fs.cpSync(path.join(root,'js'),path.join(output,'js'),{recursive:true,filter:source=>fs.statSync(source).isDirectory() || source.endsWith('.js')});
+fs.cpSync(path.join(root,'js'),path.join(output,'js'),{recursive:true,filter:source=>fs.statSync(source).isDirectory() || source.endsWith('.js') || source.endsWith('.css')});
 console.log('Site preparado: fontes de dados e arquivos de desenvolvimento excluídos da publicação.');

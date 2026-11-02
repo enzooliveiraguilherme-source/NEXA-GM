@@ -1,10 +1,20 @@
-# SaveCloud no NEXA: primeira etapa
+# SaveCloud no NEXA
+
+## Conexão persistente (02/11/2026)
+
+O administrador usa **Conectar conta** no NEXA. A função autentica na SaveCloud e salva somente o token criptografado no Supabase Vault, no segredo fixo `nexa_savecloud_connection`. A senha é transitória e o token nunca volta ao navegador. O catálogo é carregado automaticamente após conectar e nas próximas visitas. O token salvo tem precedência sobre o antigo segredo de ambiente `SAVECLOUD_TOKEN`, que continua funcionando como alternativa enquanto não houver uma conexão salva.
+
+A migração `20261102200237_savecloud_persistent_connection.sql` cria funções privadas com nome fixo e duas entradas públicas invoker. Somente `service_role` pode executá-las, e as funções privadas verificam esse papel novamente. A chave privilegiada é usada apenas no servidor, após o handler validar o usuário confirmado e seu cargo de administrador com o JWT pessoal. Fazendas e consultas mantêm as verificações existentes. Nenhum mapa, aplicação ou senha é armazenado.
+
+Quando a SaveCloud retorna 401, a função responde 409 com `SAVECLOUD_RECONNECT_REQUIRED`. A interface descarta os resultados, bloqueia novas consultas e abre Conectar conta. Erros temporários de rede e limite de consultas não apagam a credencial. Uma troca de conta substitui a conexão compartilhada entre administradores. Não se promete renovação automática de credenciais revogadas pelo fornecedor.
+
+Publicar a migração antes de `index.ts`/`handler.mjs`, depois publicar o frontend. O runtime utiliza `SUPABASE_SERVICE_ROLE_KEY` apenas para os RPCs do cofre. Não imprimir resultados de `savecloud_connection_read` em logs ou ferramentas de depuração.
 
 Fluxo: navegador NEXA autenticado -> função `savecloud` no Supabase -> API SaveCloud -> função -> camada Leaflet e indicadores em memória.
 
 ## Retenção
 
-Não há tabela, bucket, arquivo ou rotina de importação para aplicações/geometrias SaveCloud. A função não realiza escrita no banco nem no Storage, usa cache HTTP `private, no-store` e impõe prazo de 25 segundos e teto de 6 MiB para respostas externas por consulta. Não registra payloads ou credenciais em logs da aplicação.
+Não há tabela, bucket, arquivo ou rotina de importação para aplicações/geometrias SaveCloud. A única escrita é a credencial no cofre; mapas e estatísticas usam cache HTTP `private, no-store`, prazo de 25 segundos e teto de 6 MiB para respostas externas por consulta. Não registra payloads ou credenciais em logs da aplicação.
 
 No navegador, trocar filtros, usar Limpar mapa, sair da aba Save Farm, sair da conta ou fechar a página aborta solicitações e libera as referências de camadas e indicadores. A coleta física da memória é gerenciada pelo navegador/runtime; não se promete apagamento seguro de RAM. Logs operacionais da plataforma ainda podem registrar metadados da requisição, sem a aplicação enviar geometrias ou tokens aos logs.
 
@@ -24,11 +34,11 @@ Cadastrar no painel Supabase, Edge Functions -> Secrets:
 
 O fuso informado é apresentado na tela. Ele documenta a interpretação esperada; a função recebe horários sem offset e não os converte silenciosamente. Confirmar fuso e inclusão dos limites do intervalo com a Save Farm antes de interpretar totais diários como definitivos.
 
-Se a documentação Swagger não enviar o formulário de autenticação, o administrador pode abrir **Configurar acesso SaveCloud** no NEXA. O formulário envia usuário e senha uma única vez à função autenticada do Supabase, que faz POST no endpoint fixo `/api/auth` da SaveCloud. Não grava senha, não registra o corpo em logs e limpa o campo após a solicitação. O token retornado fica em um campo mascarado, somente nesta sessão, para ser transferido ao segredo protegido `SAVECLOUD_TOKEN`. Esse fluxo não salva o segredo automaticamente nem dá acesso a outros perfis.
+O formulário **Conectar ou trocar conta SaveCloud** envia usuário e senha à função autenticada, que usa o endpoint fixo `/api/auth`. O acesso é salvo automaticamente no cofre; não é necessário abrir o painel Supabase nem copiar tokens. Esse fluxo continua exclusivo de administradores.
 
-A ação `authenticate` tem a mesma exigência de administrador, entrada limitada e resposta externa limitada a 64 KiB. O token de 40 caracteres hexadecimais é aceito no retorno; mensagens de erro não repetem senha, token ou corpo bruto do fornecedor. Sair da aba ou da conta limpa senha e token do formulário. Trate o envio desse formulário como geração de uma credencial: o administrador deve saber que sua senha passa pelo Supabase até a SaveCloud e autorizar a ação.
+A ação `authenticate` mantém entrada limitada e resposta externa limitada a 64 KiB. O token de 40 caracteres hexadecimais é validado no servidor e somente uma confirmação de sucesso é devolvida ao navegador. Mensagens de erro não repetem senha, token ou corpo bruto do fornecedor. Sair da aba ou da conta limpa os campos do formulário.
 
-Use **Copiar token** no formulário e cole diretamente no painel protegido do Supabase. Não extraia o valor do campo mascarado por uma ferramenta de navegação: ela pode substituir o conteúdo por `<redacted>`, invalidando a configuração. A cópia ocorre dentro da própria página, por ação explícita, sem exibir a credencial no chat.
+O segredo de ambiente `SAVECLOUD_TOKEN` é compatibilidade com a configuração anterior; novas conexões devem usar o formulário do NEXA.
 
 Exemplo fictício de vínculos (IDs externos devem ser strings):
 
@@ -49,7 +59,7 @@ Os vínculos não contêm geometrias. Sem token/configuração, catálogo inform
 
 - JWT do usuário obrigatório, `verify_jwt=true` na implantação e `getUser` no handler.
 - Cargo de administrador conferido no banco via `is_admin`, em cada chamada.
-- Fazendas vinculadas conferidas por `list_accessible_farms_by_gleba`, usando o JWT do próprio usuário e RLS. Não usa service_role.
+- Fazendas vinculadas conferidas por `list_accessible_farms_by_gleba`, usando o JWT do próprio usuário e RLS. O cliente privilegiado serve exclusivamente ao cofre, após essa autorização.
 - Consulta por máquina habilitada separadamente por segredo e somente para administrador. Não habilitar esse modo para outros perfis sem implementar isolamento validado.
 - Host externo fixo, redirecionamentos desativados e paginação verificada/restringida ao endpoint e filtros originais.
 - Lista de ações/argumentos e períodos limitada; não aceita URL externa do navegador.

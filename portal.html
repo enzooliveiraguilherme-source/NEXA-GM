@@ -17,6 +17,7 @@
     <!-- Custom CSS -->
     <link rel="stylesheet" href="style.css?v=savecloud-rate-1">
     <link rel="stylesheet" href="brand.css?v=spray-dashboard-20261102">
+    <link rel="stylesheet" href="js/savefarm-connection.css?v=20261102">
 </head>
 <body data-page="portal">
     <div id="auth-loading-overlay" class="loading-overlay"><div class="spinner"></div><p>Validando seu acesso…</p></div>
@@ -180,16 +181,15 @@
                 <button type="button" id="btn-account-menu" class="account-menu-trigger"><i class="fa-solid fa-gear" aria-hidden="true"></i> Opções</button>
             </header>
             <section id="savefarm-panel" class="savefarm-panel" aria-label="Consulta Save Farm" hidden>
-                <header><div><strong>Save Farm</strong><span>Aplicações consultadas na SaveCloud</span></div><button id="savefarm-reload" type="button">Verificar conexão</button></header>
+                <header><div><strong>Save Farm</strong><span id="savefarm-connection-status" role="status">Aguardando conexão</span></div><button id="savefarm-reload" type="button">Atualizar conexão</button></header>
                 <details id="savefarm-connect" hidden>
-                    <summary>Configurar acesso SaveCloud</summary>
-                    <p>Seu acesso será enviado pelo Supabase à SaveCloud para gerar o token. A senha é usada apenas nesta solicitação e não é salva.</p>
+                    <summary>Conectar ou trocar conta SaveCloud</summary>
+                    <p>Conecte uma vez para usar nas próximas visitas. O acesso da integração fica salvo de forma protegida para os administradores do NEXA. Sua senha não é armazenada.</p>
                     <form id="savefarm-connect-form" autocomplete="off">
                         <label>Usuário SaveCloud<input id="savefarm-username" type="text" autocomplete="off" maxlength="150" required></label>
                         <label>Senha SaveCloud<input id="savefarm-password" type="password" autocomplete="off" maxlength="1000" required></label>
-                        <button id="savefarm-connect-submit" type="submit">Gerar token</button>
+                        <button id="savefarm-connect-submit" type="submit">Conectar conta</button>
                     </form>
-                    <div id="savefarm-token-row" hidden><label>Token para configurar no Supabase<input id="savefarm-token" type="password" readonly autocomplete="off"></label><button id="savefarm-copy-token" type="button">Copiar token</button><small>O token aparece somente nesta sessão. Ele deve ser salvo em SAVECLOUD_TOKEN no painel protegido do Supabase.</small></div>
                 </details>
                 <form id="savefarm-form">
                     <label>Fazenda<select id="savefarm-farm" required disabled><option value="">Aguardando conexão</option></select></label>
@@ -1125,7 +1125,7 @@
     <script src="js/spray-control.js?v=spray-dashboard-20261102"></script>
     <script src="js/spray-report.js?v=spray-area-pdf-20261102"></script>
     <script src="js/savefarm-rate.js?v=1"></script>
-    <script src="js/savefarm-view.js?v=4"></script>
+    <script src="js/savefarm-view.js?v=connection-20261102"></script>
     <script src="app.js?v=spray-dashboard-20261102"></script>
     <script src="js/mobile-layout.js?v=3"></script>
 </body>

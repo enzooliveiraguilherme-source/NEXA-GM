@@ -14,7 +14,11 @@
             });
             let result;
             try { result = await response.json(); } catch { throw new Error('Não foi possível consultar a conexão SaveCloud.'); }
-            if (!response.ok) throw new Error(result.error || 'Não foi possível consultar a conexão SaveCloud.');
+            if (!response.ok) {
+                const failure = new Error(result.error || 'Não foi possível consultar a conexão SaveCloud.');
+                failure.code = result.code;
+                throw failure;
+            }
             return result;
         };
     }
@@ -23,6 +27,18 @@
         const el = name => document.getElementById('savefarm-' + name);
         let state, active = false, initialized = false, catalog = null, layer = null, controller = null, version = 0;
         const message = text => { el('status').textContent = text; };
+        function connectionStatus(text, connected = false) {
+            el('connection-status').textContent = text;
+            el('connection-status').dataset.connected = String(connected);
+        }
+        function reconnect(error) {
+            if (error?.code !== 'SAVECLOUD_RECONNECT_REQUIRED') return false;
+            catalog = null; clearResults(); locked(true);
+            el('connect').open = true;
+            connectionStatus('Reconectar conta');
+            message(error.message);
+            return true;
+        }
         function cancel() { version++; controller?.abort(); controller = null; }
         function clearResults() {
             if (layer) { layer.clearLayers(); state?.map?.removeLayer(layer); layer = null; }
@@ -63,16 +79,21 @@
             if (role() !== 'admin') { message('Integração em validação, disponível inicialmente para administradores.'); return; }
             const current = version; controller = new AbortController();
             message('Conferindo conexão com a SaveCloud…');
+            connectionStatus('Verificando conexão…');
             try {
                 const result = await request({ action: 'catalog' }, controller.signal);
                 if (!active || current !== version) return;
                 catalog = result;
+                connectionStatus(result.configured ? 'Conectado' : 'Aguardando conexão', !!result.configured);
+                el('connect').open = !result.configured;
                 options(el('farm'), result.farms.map(farm => ({ id: farm.code, label: farm.name })), 'Aguardando vinculação');
                 farmOptions(); defaults(result.timezone);
                 el('timezone').textContent = result.timezone ? `Horários de referência: ${result.timezone} (fuso a confirmar). Período máximo: sete dias.` : 'O fuso horário será definido ao configurar a conexão.';
                 message(result.message); locked(!result.configured);
             } catch (error) {
-                if (current === version && active && error.name !== 'AbortError') message(error.message);
+                if (current === version && active && error.name !== 'AbortError' && !reconnect(error)) {
+                    connectionStatus('Conexão indisponível'); message(error.message);
+                }
             }
         }
         async function authenticate(event) {
@@ -80,18 +101,21 @@
             if (!active || role() !== 'admin') return;
             cancel(); clearResults(); locked(true);
             const current = version; controller = new AbortController();
-            el('token').value = ''; el('token-row').hidden = true;
             el('connect-submit').disabled = true;
-            message('Solicitando token à SaveCloud…');
+            connectionStatus('Conectando…');
+            message('Conectando sua conta SaveCloud…');
             try {
                 const result = await request({ action: 'authenticate', username: el('username').value,
                     password: el('password').value }, controller.signal);
                 if (!active || current !== version) return;
-                el('token').value = result.connectionToken;
-                el('token-row').hidden = false;
-                message('Token gerado pela SaveCloud. Salve-o no campo protegido SAVECLOUD_TOKEN do Supabase e depois verifique a conexão.');
+                if (result.connected !== true) throw new Error('A conexão não foi confirmada. Tente novamente.');
+                el('username').value = ''; el('password').value = '';
+                el('connect').open = false;
+                await loadCatalog();
             } catch (error) {
-                if (active && current === version && error.name !== 'AbortError') message(error.message);
+                if (active && current === version && error.name !== 'AbortError') {
+                    connectionStatus('Não foi possível conectar'); message(error.message);
+                }
             } finally {
                 el('password').value = '';
                 el('connect-submit').disabled = false;
@@ -141,6 +165,8 @@
             if (mode !== 'boundaries') requests.push(request({ ...body, action: 'statistics' }, signal));
             const results = await Promise.allSettled(requests);
             if (!active || current !== version) return;
+            const rejected = results.find(result => result.status === 'rejected' && result.reason?.code === 'SAVECLOUD_RECONNECT_REQUIRED');
+            if (rejected && reconnect(rejected.reason)) return;
             locked(false);
             const map = results[0], stats = results[1];
             let text;
@@ -182,13 +208,6 @@
             initialized = true;
             el('form').addEventListener('submit', query);
             el('connect-form').addEventListener('submit', authenticate);
-            el('copy-token').addEventListener('click', async () => {
-                if (!active || role() !== 'admin' || !el('token').value) return;
-                try {
-                    await root.navigator.clipboard.writeText(el('token').value);
-                    message('Token copiado. Cole no segredo SAVECLOUD_TOKEN do Supabase.');
-                } catch { message('Não foi possível copiar o token. Confira a permissão de cópia do navegador.'); }
-            });
             el('reload').addEventListener('click', loadCatalog);
             el('clear').addEventListener('click', () => { clearQuery(); message('Mapa e indicadores descartados.'); });
             for (const name of ['farm', 'polygon', 'machine', 'mode', 'from', 'to']) el(name).addEventListener('change', () => {
@@ -200,7 +219,8 @@
             cancel(); clearResults(); catalog = null; active = false;
             if (initialized) {
                 el('panel').hidden = true;
-                el('password').value = ''; el('token').value = ''; el('token-row').hidden = true;
+                el('username').value = ''; el('password').value = '';
+                connectionStatus('Aguardando conexão');
                 el('connect').hidden = true;
                 for (const name of ['farm', 'polygon', 'machine']) options(el(name), [], 'Aguardando conexão');
                 locked(true);

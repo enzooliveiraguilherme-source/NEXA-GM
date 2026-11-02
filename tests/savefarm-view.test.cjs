@@ -11,7 +11,7 @@ function harness({ role = 'admin', request = async () => ({}) } = {}) {
         constructor(id = '') {
             this.id = id; this.children = []; this.listeners = new Map(); this.value = '';
             this.textContent = ''; this.hidden = false; this.disabled = false; this.selected = false;
-            this.style = {}; this.className = '';
+            this.style = {}; this.className = ''; this.dataset = {}; this.open = false;
         }
         append(...items) {
             this.children.push(...items);
@@ -30,7 +30,7 @@ function harness({ role = 'admin', request = async () => ({}) } = {}) {
         },
         createElement: tag => new Element(tag)
     };
-    for (const name of ['farm', 'polygon', 'machine', 'from', 'to', 'mode', 'submit', 'connect', 'connect-form', 'connect-submit', 'copy-token', 'username', 'password', 'token', 'token-row', 'legend']) document.getElementById(name === 'submit' ? 'savefarm-submit' : 'savefarm-' + name);
+    for (const name of ['farm', 'polygon', 'machine', 'from', 'to', 'mode', 'submit', 'connect', 'connect-form', 'connect-submit', 'username', 'password', 'connection-status', 'legend']) document.getElementById(name === 'submit' ? 'savefarm-submit' : 'savefarm-' + name);
     const nativeReplaceChildren = Element.prototype.replaceChildren;
     Element.prototype.replaceChildren = function (...items) {
         nativeReplaceChildren.call(this, ...items);
@@ -112,6 +112,17 @@ test('cliente exige JWT de sessão e consulta somente a função Supabase sem ca
     assert.equal(call[1].headers.apikey, 'anon-key');
     assert.deepEqual(JSON.parse(call[1].body), { action: 'catalog' });
     assert.equal(Object.hasOwn(call[1], 'localStorage'), false);
+
+    const reconnect = createClient({
+        client: { auth: { getSession: async () => ({ data: { session: { access_token: 'session-jwt' } } }) } },
+        config: { supabaseUrl: 'https://project.supabase.co', supabaseAnonKey: 'anon-key' },
+        fetchImpl: async () => ({ ok: false, json: async () => ({ code: 'SAVECLOUD_RECONNECT_REQUIRED', error: 'Reconecte.' }) })
+    });
+    await assert.rejects(reconnect({ action: 'catalog' }), error => {
+        assert.equal(error.code, 'SAVECLOUD_RECONNECT_REQUIRED');
+        assert.equal(error.message, 'Reconecte.');
+        return true;
+    });
 });
 
 test('perfil não administrador mantém a visão sem chamar o catálogo', async () => {
@@ -130,12 +141,14 @@ test('perfil não administrador mantém a visão sem chamar o catálogo', async 
     assert.equal(calls, 0);
 });
 
-test('admin gera token de conexão na sessão e limpa a senha após sucesso', async () => {
+test('admin salva conexão no backend, limpa credenciais e recarrega catálogo ao confirmar', async () => {
     const requests = [];
+    let catalogCalls = 0;
     const h = harness({ request: async body => {
         requests.push(body);
-        if (body.action === 'catalog') return { ...catalog, configured: false, farms: [] };
-        if (body.action === 'authenticate') return { connectionToken: 'token-ficticio-da-sessao' };
+        if (body.action === 'catalog' && ++catalogCalls === 1) return { ...catalog, configured: false, farms: [] };
+        if (body.action === 'authenticate') return { connected: true, message: 'Conexão protegida.' };
+        if (body.action === 'catalog') return catalog;
         throw new Error('Ação inesperada');
     } });
     h.api.refresh(h.state); await tick();
@@ -145,47 +158,21 @@ test('admin gera token de conexão na sessão e limpa a senha após sucesso', as
     await h.el('connect-form').dispatch('submit');
     assert.deepEqual(requests[1], { action: 'authenticate', username: 'usuario-ficticio', password: 'senha-ficticia' });
     assert.equal(h.el('password').value, '');
-    assert.equal(h.el('token').value, 'token-ficticio-da-sessao');
-    assert.equal(h.el('token-row').hidden, false);
-    assert.match(h.el('status').textContent, /Token gerado pela SaveCloud/);
+    assert.equal(h.el('username').value, '');
+    assert.equal(h.el('connect').open, false);
+    assert.equal(h.el('connection-status').dataset.connected, 'true');
+    assert.deepEqual(requests.map(item => item.action), ['catalog', 'authenticate', 'catalog']);
+    assert.equal(h.el('farm').children[0].textContent, 'Fazenda simulada');
+    assert.equal(h.el('status').textContent, 'Conexão pronta.');
+    assert.equal('savefarm-token' in h.elements, false);
     assert.equal(Object.hasOwn(h.elements, 'localStorage'), false);
 });
 
-test('copiar token usa clipboard só para admin ativo com token, sem inspecionar o conteúdo', async () => {
-    const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
-    let writes = 0;
-    Object.defineProperty(globalThis, 'navigator', {
-        configurable: true, writable: true,
-        value: { clipboard: { async writeText() { writes++; } } }
-    });
-    try {
-        const admin = harness({ request: async body => body.action === 'catalog'
-            ? { ...catalog, configured: false, farms: [] }
-            : { connectionToken: 'token-ficticio-para-mock' } });
-        admin.api.refresh(admin.state); await tick();
-        admin.el('username').value = 'usuario-ficticio'; admin.el('password').value = 'senha-ficticia';
-        await admin.el('connect-form').dispatch('submit');
-        await admin.el('copy-token').dispatch('click');
-        assert.equal(writes, 1);
-        assert.match(admin.el('status').textContent, /Token copiado/);
-
-        const empty = harness({ request: async body => body.action === 'catalog'
-            ? { ...catalog, configured: false, farms: [] }
-            : { connectionToken: 'token-ficticio-para-mock' } });
-        empty.api.refresh(empty.state); await tick();
-        await empty.el('copy-token').dispatch('click');
-        assert.equal(writes, 1);
-
-        let nonAdminRequests = 0;
-        const nonAdmin = harness({ role: 'operator', request: async () => { nonAdminRequests++; } });
-        nonAdmin.api.refresh(nonAdmin.state); await tick();
-        await nonAdmin.el('copy-token').dispatch('click');
-        assert.equal(nonAdminRequests, 0);
-        assert.equal(writes, 1);
-    } finally {
-        if (descriptor) Object.defineProperty(globalThis, 'navigator', descriptor);
-        else delete globalThis.navigator;
-    }
+test('interface não cria campo de token nem ação de copiar', async () => {
+    const h = harness();
+    assert.equal('savefarm-token' in h.elements, false);
+    assert.equal('savefarm-token-row' in h.elements, false);
+    assert.equal('savefarm-copy-token' in h.elements, false);
 });
 
 test('erro ao autenticar limpa a senha e não exibe token', async () => {
@@ -198,17 +185,16 @@ test('erro ao autenticar limpa a senha e não exibe token', async () => {
     h.el('username').value = 'usuario-ficticio'; h.el('password').value = 'senha-ficticia';
     await h.el('connect-form').dispatch('submit');
     assert.equal(h.el('password').value, '');
-    assert.equal(h.el('token').value, '');
-    assert.equal(h.el('token-row').hidden, true);
     assert.match(h.el('status').textContent, /Credenciais rejeitadas/);
 });
 
-test('sair da aba e logout limpam senha, token e detalhes; resposta atrasada não restaura token', async () => {
+test('sair da aba e logout limpam credenciais e detalhes; resposta atrasada não reativa conexão', async () => {
     let finishAuthentication, authenticationCalls = 0;
     const h = harness({ request: body => {
         if (body.action === 'catalog') return Promise.resolve({ ...catalog, configured: false, farms: [] });
         if (body.action === 'authenticate' && ++authenticationCalls === 1) return new Promise(resolve => { finishAuthentication = resolve; });
-        if (body.action === 'authenticate') return Promise.resolve({ connectionToken: 'outro-token-ficticio' });
+        if (body.action === 'authenticate') return Promise.resolve({ connected: true });
+        if (body.action === 'catalog') return Promise.resolve(catalog);
     } });
     h.api.refresh(h.state); await tick();
     h.el('username').value = 'usuario-ficticio'; h.el('password').value = 'senha-ficticia';
@@ -216,21 +202,17 @@ test('sair da aba e logout limpam senha, token e detalhes; resposta atrasada nã
     await tick();
     h.state.currentTab = 'mapa'; h.api.refresh(h.state);
     assert.equal(h.el('password').value, '');
-    assert.equal(h.el('token').value, '');
-    assert.equal(h.el('token-row').hidden, true);
     assert.equal(h.el('connect').hidden, true);
-    finishAuthentication({ connectionToken: 'token-atrasado-ficticio' });
+    finishAuthentication({ connected: true });
     await pending;
-    assert.equal(h.el('token').value, '');
+    assert.equal(h.el('connection-status').dataset.connected, 'false');
 
     h.state.currentTab = 'savefarm'; h.api.refresh(h.state); await tick();
     h.el('username').value = 'usuario-ficticio'; h.el('password').value = 'senha-ficticia';
     await h.el('connect-form').dispatch('submit');
-    assert.equal(h.el('token').value, 'outro-token-ficticio');
+    assert.equal(h.el('username').value, '');
     h.logout();
     assert.equal(h.el('password').value, '');
-    assert.equal(h.el('token').value, '');
-    assert.equal(h.el('token-row').hidden, true);
     assert.equal(h.el('connect').hidden, true);
 });
 
@@ -422,4 +404,48 @@ test('falha parcial preserva mapa quando estatísticas falham e mostra cartões 
     assert.equal(h.mapCalls.added.length, 1);
     assert.equal(h.el('results').children.length, 4);
     assert.match(h.el('status').textContent, /Mapa indisponível/);
+});
+
+test('reauth required em qualquer consulta limpa resultados, bloqueia filtros e abre reconexão', async () => {
+    let requireReconnect = false;
+    const h = harness({ request: async body => {
+        if (body.action === 'catalog') return catalog;
+        if (body.action === 'map' && requireReconnect) {
+            const error = new Error('A conexão SaveCloud expirou.'); error.code = 'SAVECLOUD_RECONNECT_REQUIRED'; throw error;
+        }
+        if (body.action === 'map') return simulatedMap;
+        return simulatedStats;
+    } });
+    h.api.refresh(h.state); await tick();
+    await h.el('form').dispatch('submit');
+    assert.equal(h.el('results').children.length, 4);
+    const priorLayer = h.mapCalls.added[0];
+
+    requireReconnect = true;
+    await h.el('form').dispatch('submit');
+    assert.equal(priorLayer.cleared, true);
+    assert.equal(h.mapCalls.removed.at(-1), priorLayer);
+    assert.equal(h.el('results').children.length, 0);
+    assert.equal(h.el('farm').disabled, true);
+    assert.equal(h.el('connect').open, true);
+    assert.equal(h.el('connection-status').textContent, 'Reconectar conta');
+    assert.match(h.el('status').textContent, /expirou/);
+    assert.equal(h.mapCalls.added.length, 1);
+});
+
+test('falha de rede ou limite de taxa não abre reconexão nem bloqueia filtros', async () => {
+    for (const failure of [new Error('Sem rede'), Object.assign(new Error('Muitas solicitações'), { code: 'RATE_LIMITED' })]) {
+        const h = harness({ request: async body => {
+            if (body.action === 'catalog') return catalog;
+            if (body.action === 'map') throw failure;
+            return simulatedStats;
+        } });
+        h.api.refresh(h.state); await tick();
+        await h.el('form').dispatch('submit');
+        assert.equal(h.el('connect').open, false);
+        assert.equal(h.el('farm').disabled, false);
+        assert.equal(h.el('connection-status').textContent, 'Conectado');
+        assert.equal(h.el('results').children.length, 4);
+        assert.match(h.el('status').textContent, new RegExp(failure.message));
+    }
 });
