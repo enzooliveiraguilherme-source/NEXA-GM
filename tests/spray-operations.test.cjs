@@ -1,0 +1,153 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const SpraySchedule = require('../js/spray-schedule.js');
+const PlantingForecast = require('../js/planting-forecast.js');
+const Spray = require('../js/spray-operations.js');
+
+function feature(farm, field, area) { return { properties: { Fazenda:farm, Campo:field, Area:area } }; }
+function planting(id, farm, field, year='2026', culture='Soja', extra={}) {
+    return { id, operationType:'plantio', produto:'Plantio', fazenda:farm, campo:field, ano:year, cultura:culture,
+        status:'em_andamento', areaRealizada:60, variedadeSemente:'Olimpo', dataPlantio:'2026-11-01', ...extra };
+}
+
+test('build inclui talhões sem execução, deduplica geometrias e gera aplicações automáticas pelo contexto',()=>{
+    const features=[feature('FE','FE 01',100),feature('FE','FE 01',90),feature('FE','FE 02',80),feature('FE','FE 03',50)];
+    const records=[planting('p1','FE','FE 01'),planting('p2','FE','FE 02','2026','Soja',{dataPlantio:'',status:'concluido'}),
+        planting('old','FE','FE 03','2025','Soja')];
+    const result=Spray.build(features,records,[{plantingId:'p1',version:4,fourth:false,actuals:{post1:'2026-11-18'}}],[],
+        {year:'2026',culture:'Soja'},'2026-11-01');
+    assert.equal(result.fields.length,3);
+    assert.deepEqual(result.fields.map(field=>[field.field,field.plantingId,field.plantedArea]),[['FE 01','p1',60],['FE 02','p2',60],['FE 03',null,0]]);
+    assert.equal(result.applications.length,5);
+    assert.deepEqual(result.applications.map(row=>row.stage),['post1','post2','fung1','fung2','fung3']);
+    assert.equal(result.applications[0].planned,'2026-11-16');
+    assert.equal(result.applications[0].actual,'2026-11-18');
+    assert.equal(result.applications[0].status,'completed');
+    assert.equal(result.applications[1].planned,'2026-11-28');
+    assert.equal(result.applications[2].planned,'2026-12-08');
+    assert.equal(result.applications[2].provisional,true);
+    assert.ok(result.applications.every(row=>row.field==='FE 01'&&row.area===60));
+});
+
+test('build aplica metadados manuais e override de data, área, produto e dose sem ignorar a realização anterior',()=>{
+    const features=[feature('FE','FE 01',100)];
+    const records=[planting('p1','FE','FE 01')];
+    const schedules=[{plantingId:'p1',version:7,fourth:false,actuals:{post1:'2026-11-18'}}];
+    const saved=[
+        {plantingId:'p1',stage:'post1',planned:'2026-11-20',area:25,product:'Herbicida A',dose:1.5,doseUnit:'L/ha',responsible:'Ana',notes:'Ajuste manual'},
+        {plantingId:'p1',stage:'fung1',planned:'2026-12-20',product:'Fungicida B',dose:0.8,doseUnit:'kg/ha'},
+        {id:'manual-1',farm:'FE',field:'FE 01',year:'2026',culture:'Soja',stage:'manual',name:'Dessecação',planned:'2026-11-10',area:100,actual:null,product:'Produto C',dose:2,doseUnit:'L/ha'}
+    ];
+    const result=Spray.build(features,records,schedules,saved,{year:'2026',culture:'Soja'},'2026-11-01');
+    const post1=result.applications.find(row=>row.stage==='post1');
+    const post2=result.applications.find(row=>row.stage==='post2');
+    const fung1=result.applications.find(row=>row.stage==='fung1');
+    const manual=result.applications.find(row=>row.id==='manual-1');
+    assert.equal(post1.planned,'2026-11-20');assert.equal(post1.actual,'2026-11-18');assert.equal(post1.autoDate,false);
+    assert.equal(post1.area,25);assert.equal(post1.product,'Herbicida A');assert.equal(post1.dose,1.5);
+    assert.equal(post1.doseUnit,'L/ha');assert.equal(post1.responsible,'Ana');assert.equal(post1.notes,'Ajuste manual');
+    assert.equal(post1.scheduleVersion,7);
+    assert.equal(post2.planned,'2026-11-28');assert.equal(post2.autoDate,true);
+    assert.equal(fung1.planned,'2026-12-20');assert.equal(fung1.autoDate,false);assert.equal(fung1.provisional,true);
+    assert.equal(fung1.product,'Fungicida B');assert.equal(fung1.doseUnit,'kg/ha');
+    assert.equal(manual.key,'manual-1');assert.equal(manual.status,'scheduled');assert.equal(manual.fieldKey,JSON.stringify(['FE','FE 01']));
+});
+
+test('build inclui a quarta aplicação por schedule ou metadado salvo e restringe cultura e safra',()=>{
+    const features=[feature('FE','FE 01',100),feature('FE','FE 02',80)];
+    const records=[planting('p1','FE','FE 01'),planting('p2','FE','FE 02','2026','Soja')];
+    const schedules=[{plantingId:'p1',fourth:true,actuals:{}},{plantingId:'p2',fourth:false,actuals:{}}];
+    const saved=[{plantingId:'p2',stage:'fung4',planned:'2027-02-01',product:'Fungicida D'}];
+    const result=Spray.build(features,records,schedules,saved,{year:'2026',culture:'Soja'},'2026-11-01');
+    assert.equal(result.applications.filter(row=>row.plantingId==='p1').length,6);
+    assert.equal(result.applications.filter(row=>row.plantingId==='p2').length,6);
+    assert.equal(result.applications.find(row=>row.plantingId==='p2'&&row.stage==='fung4').planned,'2027-02-01');
+    const wrongContext=Spray.build(features,records,schedules,saved,{year:'2027',culture:'Milho'},'2026-11-01');
+    assert.equal(wrongContext.fields.length,2);assert.equal(wrongContext.fields.every(field=>!field.plantingId),true);
+    assert.equal(wrongContext.applications.length,0);
+});
+
+test('build considera aplicações manuais apenas dentro do contexto e nos talhões presentes',()=>{
+    const features=[feature('FE','FE 01',100)];
+    const saved=[
+        {id:'m1',farm:'FE',field:'FE 01',year:'2026',culture:'Soja',name:'Aplicação livre',planned:'2026-11-20',area:40},
+        {id:'m2',farm:'FE',field:'FE 01',year:'2025',culture:'Soja',name:'Safra antiga',planned:'2026-11-20',area:40},
+        {id:'m3',farm:'FE',field:'FE 02',year:'2026',culture:'Soja',name:'Talhão fora',planned:'2026-11-20',area:40}
+    ];
+    const result=Spray.build(features,[],[],saved,{year:'2026',culture:'Soja'},'2026-11-01');
+    assert.deepEqual(result.applications.map(row=>row.id),['m1']);
+});
+
+test('filter pesquisa sem acentos em fazenda, talhão e metadados, com filtros exatos e período inclusivo',()=>{
+    const rows=[
+        {farm:'São José',field:'Talhão 2',fieldKey:'f2',culture:'Soja',name:'Pós-emergente',product:'Herbicida Ágil',responsible:'José',notes:'Área norte',planned:'2026-11-10',status:'attention'},
+        {farm:'São José',field:'Talhão 10',fieldKey:'f10',culture:'Milho',name:'Fungicida',product:'Produto B',responsible:'Ana',notes:'Sul',planned:'2026-11-20',status:'overdue'},
+        {farm:'Outra',field:'Talhão 1',fieldKey:'o1',culture:'Soja',name:'Pós-emergente',product:'Produto C',responsible:'João',notes:'Leste',planned:'2026-12-01',status:'scheduled'},
+        {farm:'FE',field:'Excluído',fieldKey:'del',culture:'Soja',name:'Pós',product:'X',responsible:'X',notes:'',planned:'2026-11-10',status:'completed',deleted:true}
+    ];
+    assert.deepEqual(Spray.filter(rows,{search:'jose'}).map(row=>row.field),['Talhão 2','Talhão 10']);
+    assert.deepEqual(Spray.filter(rows,{search:'agil'}).map(row=>row.field),['Talhão 2']);
+    assert.deepEqual(Spray.filter(rows,{farm:'São José',field:'f2',status:'attention',from:'2026-11-10',to:'2026-11-10'}).map(row=>row.field),['Talhão 2']);
+    assert.deepEqual(Spray.filter(rows,{status:'overdue',from:'2026-11-20',to:'2026-11-20'}).map(row=>row.field),['Talhão 10']);
+    assert.deepEqual(Spray.filter(rows,{deleted:true}).map(row=>row.field),['Excluído']);
+    assert.equal(Spray.filter(rows).some(row=>row.deleted),false);
+});
+
+test('sort ordena datas, números e desempates sem alterar a lista de origem',()=>{
+    const rows=[{key:'c',planned:'2026-11-02',area:5,dose:2,field:'FE 10'},{key:'b',planned:'2026-11-01',area:15,dose:1,field:'FE 2'},
+        {key:'a',planned:'2026-11-01',area:8,dose:3,field:'FE 1'}];
+    const original=[...rows];
+    assert.deepEqual(Spray.sort(rows,'planned').map(row=>row.key),['a','b','c']);
+    assert.deepEqual(Spray.sort(rows,'area',-1).map(row=>row.key),['b','a','c']);
+    assert.deepEqual(Spray.sort(rows,'field').map(row=>row.field),['FE 1','FE 2','FE 10']);
+    assert.deepEqual(rows,original);
+});
+
+test('summarize exclui removidas e soma área planejada e aplicada por aplicação',()=>{
+    const rows=[
+        {area:25,actual:'2026-11-18',status:'completed'},
+        {area:25,actual:null,status:'overdue'},
+        {area:40,actual:null,status:'attention'},
+        {area:10,actual:null,status:'scheduled'},
+        {area:100,actual:'2026-11-18',status:'completed',deleted:true}
+    ];
+    assert.deepEqual(Spray.summarize(rows),{total:4,completed:1,pending:3,overdue:1,attention:1,scheduled:1,plannedArea:100,appliedArea:25});
+});
+
+test('mapStatus aplica precedência seleção, atraso, atenção, conclusão, pendência e sem aplicação',()=>{
+    const rows=[
+        {fieldKey:'late',status:'overdue',actual:null},
+        {fieldKey:'late',status:'attention',actual:null},
+        {fieldKey:'attn',status:'attention',actual:null},
+        {fieldKey:'attn',status:'completed',actual:'2026-11-10'},
+        {fieldKey:'done',status:'completed',actual:'2026-11-10'},
+        {fieldKey:'pending',status:'scheduled',actual:null},
+        {fieldKey:'empty',status:'overdue',actual:null,deleted:true}
+    ];
+    assert.equal(Spray.mapStatus(rows,'late',null),'pending');
+    assert.equal(Spray.mapStatus(rows,'attn',null),'attention');
+    assert.equal(Spray.mapStatus(rows,'done',null),'completed');
+    assert.equal(Spray.mapStatus(rows,'pending',null),'pending');
+    assert.equal(Spray.mapStatus(rows,'empty',null),'empty');
+    assert.equal(Spray.mapStatus(rows,'late','late'),'selected');
+});
+
+test('validate confere talhão, aplicação, datas, área, dose e limites dos metadados',()=>{
+    const field={farm:'FE',field:'FE 01',area:100};
+    const base={farm:'FE',field:'FE 01',name:'Pós-emergente',planned:'2026-11-20',actual:null,area:60,dose:0,product:'Herbicida',responsible:'Ana',notes:'OK'};
+    assert.equal(Spray.validate(base,field,'2026-11-19'),true);
+    assert.throws(()=>Spray.validate(base,null,'2026-11-19'),/talhão cadastrado/);
+    assert.throws(()=>Spray.validate({...base,field:'FE 02'},field,'2026-11-19'),/talhão cadastrado/);
+    assert.throws(()=>Spray.validate({...base,name:' '},field,'2026-11-19'),/Informe a aplicação/);
+    assert.throws(()=>Spray.validate({...base,planned:'2026-02-30'},field,'2026-11-19'),/data programada válida/);
+    assert.throws(()=>Spray.validate({...base,actual:'2026-02-30'},field,'2026-11-19'),/data realizada deve ser válida/);
+    assert.throws(()=>Spray.validate({...base,actual:'2026-11-20'},field,'2026-11-19'),/não pode estar no futuro/);
+    assert.throws(()=>Spray.validate({...base,area:0},field,'2026-11-19'),/área deve ser maior que zero/);
+    assert.throws(()=>Spray.validate({...base,area:101},field,'2026-11-19'),/ultrapassar o talhão/);
+    assert.throws(()=>Spray.validate({...base,area:NaN},field,'2026-11-19'),/área deve ser maior que zero/);
+    assert.throws(()=>Spray.validate({...base,dose:-0.1},field,'2026-11-19'),/dose válida/);
+    assert.throws(()=>Spray.validate({...base,dose:'abc'},field,'2026-11-19'),/dose válida/);
+    assert.throws(()=>Spray.validate({...base,product:'x'.repeat(151)},field,'2026-11-19'),/tamanho dos textos/);
+    assert.throws(()=>Spray.validate({...base,responsible:'x'.repeat(151)},field,'2026-11-19'),/tamanho dos textos/);
+    assert.throws(()=>Spray.validate({...base,notes:'x'.repeat(2001)},field,'2026-11-19'),/tamanho dos textos/);
+});

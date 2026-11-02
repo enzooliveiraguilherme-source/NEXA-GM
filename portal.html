@@ -16,7 +16,7 @@
     
     <!-- Custom CSS -->
     <link rel="stylesheet" href="style.css?v=savecloud-rate-1">
-    <link rel="stylesheet" href="brand.css?v=spray-20261102">
+    <link rel="stylesheet" href="brand.css?v=spray-gis-20261102">
 </head>
 <body data-page="portal">
     <div id="auth-loading-overlay" class="loading-overlay"><div class="spinner"></div><p>Validando seu acesso…</p></div>
@@ -315,29 +315,50 @@
                 </div>
             </div>
 
-            <section id="spray-panel" class="spray-panel" aria-label="Cronograma de pulverização" hidden>
-                <header class="spray-heading"><div><span class="spray-eyebrow">ACOMPANHAMENTO DAS APLICAÇÕES</span><h2>Cronograma de pulverização</h2><p>Do plantio à última aplicação, com previsões recalculadas pelas datas realizadas.</p></div><button type="button" id="spray-reload">Recarregar dados</button></header>
-                <p id="spray-status" class="spray-message" role="status" aria-live="polite"></p>
-                <div id="spray-summary" class="spray-summary" aria-label="Resumo das aplicações"></div>
-                <div id="spray-next" class="spray-next"></div>
-                <p id="spray-scope" class="spray-scope"></p>
-                <div class="spray-color-key"><span class="spray-status scheduled">No prazo: mais de 2 dias</span><span class="spray-status attention">Atenção: hoje, 1 ou 2 dias</span><span class="spray-status overdue">Atrasada: data ultrapassada</span><span class="spray-status completed">✓ Concluída: realização registrada</span></div>
-                <div class="spray-field-picker"><label for="spray-field">Editar cronograma do talhão</label><select id="spray-field"></select></div>
-                <section id="spray-editor" class="spray-editor" hidden>
-                    <header><div><h3 id="spray-detail-title" tabindex="-1"></h3><p id="spray-detail-meta"></p></div><label class="spray-fourth"><input type="checkbox" id="spray-fourth"> Incluir 4º fungicida</label></header>
-                    <p id="spray-permission"></p>
-                    <div class="spray-table-scroll" tabindex="0" aria-label="Datas previstas e realizadas"><table class="spray-detail"><caption>Aplicações do talhão selecionado</caption><thead><tr><th scope="col">Aplicação</th><th scope="col">Data prevista</th><th scope="col">Data realizada</th><th scope="col">Dias para vencimento</th><th scope="col">Status</th></tr></thead><tbody id="spray-rows"></tbody></table></div>
-                    <p class="spray-note">Sem realização anterior, a previsão é provisória e segue a data prevista anterior. Ao registrar ou corrigir uma realização, as próximas previsões são recalculadas. Datas realizadas são preservadas.</p>
-                    <p id="spray-validation" class="spray-validation" role="alert"></p>
-                    <footer><button type="button" id="spray-save">Salvar aplicações do talhão</button><button type="button" id="spray-discard">Descartar alterações</button></footer>
-                </section>
-                <h3 class="spray-overview-title">Panorama dos talhões</h3>
-                <div id="spray-overview" class="spray-table-scroll" tabindex="0" aria-label="Panorama de pulverização por talhão"></div>
+            <div id="operation-workspace" class="operation-workspace">
+            <section id="spray-panel" class="spray-panel spray-control-panel" aria-label="Controle de pulverização" hidden>
+                <header class="spray-heading"><div><span class="spray-eyebrow">OPERAÇÕES AGRÍCOLAS</span><h2>Pulverização</h2><p>Controle das aplicações e acompanhamento espacial dos talhões.</p></div><div class="spray-control-actions"><button id="spray-op-add" type="button">Adicionar aplicação</button><button id="spray-op-reload" type="button">Recarregar</button><button id="spray-op-map-jump" class="spray-mobile-map" type="button">Ver mapa</button></div></header>
+                <p id="spray-op-message" class="spray-message" role="status" aria-live="polite"></p>
+                <div id="spray-op-summary" class="spray-summary" aria-label="Resumo das aplicações"></div>
+                <p class="spray-note">As áreas são somadas por aplicação. Um talhão pode entrar mais de uma vez no total de hectares.</p>
+                <div id="spray-op-counts" class="spray-color-key" aria-live="polite"></div>
+                <p id="spray-op-next" class="spray-note"></p>
+                <p id="spray-op-permission" class="spray-note"></p>
+                <div class="spray-operation-filters" aria-label="Filtros das aplicações">
+                    <label>Fazenda<select id="spray-op-farm"><option value="">Todas</option></select></label>
+                    <label>Talhão<select id="spray-op-field"><option value="">Todos</option></select></label>
+                    <label>Status<select id="spray-op-status"><option value="">Todos</option><option value="scheduled">No prazo</option><option value="attention">Próximas</option><option value="overdue">Atrasadas</option><option value="completed">Realizadas</option><option value="deleted">Excluídas</option></select></label>
+                    <label>Programada de<input id="spray-op-from" type="date"></label><label>Até<input id="spray-op-to" type="date"></label>
+                    <label class="spray-search">Pesquisa rápida<input id="spray-op-search" type="search" placeholder="Talhão, produto, responsável…"></label><button id="spray-op-clear" type="button">Limpar filtros e seleção</button>
+                </div>
+                <form id="spray-op-form" class="spray-editor" hidden>
+                    <h3 id="spray-op-form-title">Aplicação</h3>
+                    <fieldset id="spray-op-inputs" class="spray-form-fields">
+                        <label>Fazenda / Talhão<select id="spray-op-input-field" required></select></label>
+                        <label id="spray-op-type-label">Tipo<select id="spray-op-input-type"><option value="manual">Aplicação adicional</option><option value="fung4">4º Fungicida do cronograma</option></select></label>
+                        <label>Aplicação<input id="spray-op-input-name" maxlength="150" required></label>
+                        <label>Produto<input id="spray-op-input-product" maxlength="150" placeholder="Nome do produto"></label>
+                        <label>Dose<input id="spray-op-input-dose" type="number" min="0" max="1000000" step="any" placeholder="Ex.: 0,3"></label>
+                        <label>Unidade da dose<input id="spray-op-input-unit" maxlength="30" value="L/ha" required></label>
+                        <label>Área (ha)<input id="spray-op-input-area" type="number" min="0.0001" step="any" required></label>
+                        <label>Data programada<input id="spray-op-input-planned" type="date" required></label>
+                        <label>Data realizada<input id="spray-op-input-actual" type="date"></label>
+                        <label>Responsável<input id="spray-op-input-responsible" maxlength="150"></label>
+                        <label id="spray-op-auto-label" class="spray-auto-date"><input id="spray-op-input-auto" type="checkbox"> Usar data automática do plantio</label>
+                        <label class="spray-form-notes">Observações<textarea id="spray-op-input-notes" maxlength="2000" rows="2"></textarea></label>
+                    </fieldset>
+                    <p class="spray-note">As etapas do plantio mantêm a sequência já cadastrada. Quando a realização anterior ainda não foi informada, a data automática é provisória. A data realizada recalcula as próximas etapas ao salvar.</p>
+                    <p id="spray-op-form-error" class="spray-validation" role="alert"></p>
+                    <div id="spray-op-preview" class="spray-form-preview" aria-live="polite"></div>
+                    <footer><button id="spray-op-submit" type="submit">Salvar aplicação</button><button id="spray-op-cancel" type="button">Cancelar</button></footer>
+                </form>
+                <div id="spray-op-table" class="spray-table-scroll" tabindex="0" aria-label="Tabela de controle de pulverização"></div>
             </section>
+
             <!-- Container do Mapa -->
             <div id="map-container" class="map-container">
                 <div id="savefarm-legend" class="savefarm-rate-legend" aria-label="Legenda da taxa de aplicação" hidden></div>
-                <div id="map"></div>
+                <div id="map"></div><aside id="spray-map-key" class="spray-map-key hidden" aria-label="Legenda da pulverização"><strong>Pulverização</strong><span><i style="background:#169447"></i>Todas as aplicações realizadas</span><span><i style="background:#f5c542"></i>Próximas da data</span><span><i style="background:#df3838"></i>Pendentes / atrasadas</span><span><i style="background:#1673d1"></i>Talhão selecionado</span><span><i style="background:#94a3b8"></i>Sem aplicação neste filtro</span></aside>
                 <details id="planting-label-controls" class="planting-label-controls hidden">
                     <summary>Rótulos do plantio</summary>
                     <div class="planting-label-options">
@@ -503,6 +524,8 @@
                         </div>
                     </div>
                 </div>
+            </div>
+
             </div>
 
             <!-- ============================================== -->
@@ -1071,11 +1094,12 @@
     <script src="js/planting-report.js?v=5"></script>
     <script src="js/spray-schedule.js?v=1"></script>
     <script src="js/spray-repository.js?v=1"></script>
-    <script src="js/spray-view.js?v=1"></script>
+    <script src="js/spray-operations.js?v=1"></script>
+    <script src="js/spray-applications.js?v=1"></script>
+    <script src="js/spray-control.js?v=1"></script>
     <script src="js/savefarm-rate.js?v=1"></script>
     <script src="js/savefarm-view.js?v=4"></script>
-    <script src="app.js?v=spray-20261102"></script>
+    <script src="app.js?v=spray-gis-20261102"></script>
     <script src="js/mobile-layout.js?v=3"></script>
 </body>
 </html>
-

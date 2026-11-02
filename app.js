@@ -457,7 +457,7 @@ function getTalhaoRecord(fazenda, campo, ano, cultura, produto, areaTotal = 0) {
 function updateRoleUI() {
     const isViewer = (state.userRole === 'viewer');
     window.OperationExport?.updateAccess?.(state);
-    if (state.currentTab === 'pulverizacao' && state.geojsonData) window.SprayView?.refresh(state, state.geojsonData.features.filter(featureMatchesFilters));
+    if (state.currentTab === 'pulverizacao' && state.geojsonData) window.SprayControl?.refresh(state, state.geojsonData.features.filter(featureMatchesFilters));
     if (isPlantingAnalysisMode() && state.geojsonData) {
         window.PlantingMaps?.refresh(state, state.geojsonData.features.filter(featureMatchesFilters));
         window.PlantingMaps?.refreshLabels(state);
@@ -734,7 +734,8 @@ function updateOperationUI() {
     const operational = isOperationalMapMode();
     const spraying = state.currentTab === 'pulverizacao';
     document.body.classList.toggle('spraying', spraying);
-    document.getElementById('map-container')?.classList.toggle('hidden', spraying);
+    document.getElementById('map-container')?.classList.remove('hidden');
+    document.getElementById('spray-map-key')?.classList.toggle('hidden', !spraying);
     const sprayPanel = document.getElementById('spray-panel');
     if (sprayPanel) sprayPanel.hidden = !spraying;
     const operation = OPERACOES_CONFIG[state.currentTab];
@@ -786,6 +787,7 @@ function updateOperationUI() {
 }
 
 function getFeatureStyle(feature) {
+    if (state.currentTab === 'pulverizacao' && window.SprayControl) return window.SprayControl.style(feature);
     if (isPlantingAnalysisMode()) return window.PlantingMaps.style(state, feature);
     if (state.currentTab === 'colheita') {
         const selected = state.harvestSelected === HarvestView.fieldKey(feature);
@@ -956,10 +958,10 @@ function onEachFeature(feature, layer) {
     bindTalhaoTooltip(layer, feature);
 
     layer.on('popupopen', function() {
-        if (isPlantingAnalysisMode()) layer.unbindTooltip();
+        if (isPlantingAnalysisMode() || state.currentTab === 'pulverizacao') layer.unbindTooltip();
     });
     layer.on('popupclose', function() {
-        if (isPlantingAnalysisMode()) bindTalhaoTooltip(layer, feature);
+        if (isPlantingAnalysisMode() || state.currentTab === 'pulverizacao') bindTalhaoTooltip(layer, feature);
     });
 
     layer.on('contextmenu', function(event) {
@@ -978,7 +980,7 @@ function onEachFeature(feature, layer) {
     });
 
     layer.on('mouseover', function() {
-        if (!isCalcarioMode() && !isPlantingAnalysisMode()) {
+        if (!isCalcarioMode() && !isPlantingAnalysisMode() && state.currentTab !== 'pulverizacao') {
             layer.setStyle({
                 weight: 1.8,
                 color: '#000000',
@@ -1002,6 +1004,12 @@ function onEachFeature(feature, layer) {
             try { state.map.closeTooltip(); } catch(err){}
         }
 
+        if (state.currentTab === 'pulverizacao' && window.SprayControl) {
+            window.SprayControl.selectFeature(feature);
+            layer.closeTooltip();
+            layer.bindPopup(window.SprayControl.popup(feature)).openPopup();
+            return;
+        }
         if (isPlantingAnalysisMode()) {
             layer.closeTooltip();
             layer.bindPopup(window.PlantingMaps.tooltip(state, feature)).openPopup();
@@ -1107,7 +1115,7 @@ function renderMap(shouldFitBounds = true) {
     if (state.currentTab === 'colheita') HarvestView.refreshFilters(state);
     const filteredFeatures = activeData.features.filter(featureMatchesFilters);
     window.PlantingMaps?.refresh(state, filteredFeatures);
-    window.SprayView?.refresh(state, filteredFeatures);
+    window.SprayControl?.refresh(state, filteredFeatures);
     if (state.currentTab === 'pulverizacao') {
         document.getElementById('calcario-filter-bar')?.classList.remove('hidden');
         document.getElementById('calcario-dashboard')?.classList.add('hidden');
@@ -1115,7 +1123,6 @@ function renderMap(shouldFitBounds = true) {
         document.getElementById('planning-banner-bar')?.classList.add('hidden');
         const count = document.getElementById('stats-count');
         if (count) count.textContent = filteredFeatures.length;
-        return;
     }
     
     const filteredData = {
@@ -1142,12 +1149,12 @@ function renderMap(shouldFitBounds = true) {
         updateDashboardKPIs(filteredFeatures);
         updatePlanningBannerUI();
     } else {
-        if (calcarioFilterBar) calcarioFilterBar.classList.add('hidden');
+        if (calcarioFilterBar) calcarioFilterBar.classList.toggle('hidden', state.currentTab !== 'pulverizacao');
         if (calcarioDashboard) calcarioDashboard.classList.add('hidden');
         if (planningBanner) planningBanner.classList.add('hidden');
         
         if (genericOpBar) {
-            genericOpBar.classList.toggle('hidden', state.currentTab === 'colheita' || state.currentTab === 'savefarm');
+            genericOpBar.classList.toggle('hidden', state.currentTab === 'colheita' || state.currentTab === 'savefarm' || state.currentTab === 'pulverizacao');
             const opCfg = OPERACOES_CONFIG[state.currentTab] || OPERACOES_CONFIG.colheita;
             const opIcon = document.getElementById('generic-op-icon');
             const opName = document.getElementById('generic-op-name');
@@ -1190,7 +1197,7 @@ function renderMap(shouldFitBounds = true) {
     window.PlantingMaps?.refreshLabels(state);
     if (state.currentTab === 'colheita') HarvestView.showAll(state);
     
-    if (shouldFitBounds && filteredFeatures.length > 0 && state.currentTab !== 'colheita') {
+    if ((shouldFitBounds || state.currentTab === 'pulverizacao') && filteredFeatures.length > 0 && state.currentTab !== 'colheita') {
         try {
             state.map.fitBounds(state.geojsonLayer.getBounds(), { padding: [50, 50] });
         } catch (e) {
@@ -2512,4 +2519,3 @@ function setupEventListeners() {
         });
     });
 }
-

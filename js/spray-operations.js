@@ -1,0 +1,88 @@
+(function (root) {
+    'use strict';
+    const S = root.SpraySchedule, F = root.PlantingForecast;
+    const fieldKey = (farm, field) => JSON.stringify([farm, field]);
+    const rowKey = row => row.plantingId ? `${row.plantingId}:${row.stage}` : row.id;
+    const status = (planned, actual, current = S.today()) => actual ? 'completed' :
+        planned < current ? 'overdue' : (S.time(planned) - S.time(current)) / 86400000 <= 2 ? 'attention' : 'scheduled';
+    function build(features, plantingRecords, schedules, saved, context, current = S.today()) {
+        const planting = new Map(plantingRecords.filter(row => row.operationType === 'plantio' || row.produto === 'Plantio')
+            .map(row => [F.key(row.fazenda, row.campo, row.ano, row.cultura), row]));
+        const scheduleIndex = new Map(schedules.map(row => [row.plantingId, row]));
+        const metadata = new Map(saved.filter(row => row.plantingId).map(row => [rowKey(row), row]));
+        const fields = new Map(), applications = [];
+        for (const feature of features) {
+            const p = feature.properties || {}, key = fieldKey(p.Fazenda, p.Campo);
+            if (fields.has(key)) continue;
+            const record = planting.get(F.key(p.Fazenda, p.Campo, context.year, context.culture));
+            const projected = F.project(feature, record, context.culture);
+            const field = { key, farm: p.Fazenda, field: p.Campo, area: Number(p.Area) || 0,
+                culture: context.culture, year: context.year, plantingId: record?.id || null,
+                plantingDate: projected.plantingDate, plantedArea: projected.plantedArea };
+            fields.set(key, field);
+            if (!record?.id || !projected.planted || !projected.plantingDate) continue;
+            const schedule = scheduleIndex.get(record.id) || { actuals: {}, fourth: false };
+            let base = projected.plantingDate, provisional = false;
+            const fourth = schedule.fourth || metadata.has(`${record.id}:fung4`);
+            for (const step of S.steps.slice(0, fourth ? 6 : 5)) {
+                const extra = metadata.get(`${record.id}:${step.id}`) || {};
+                const planned = extra.planned || S.addDays(base, step.days), actual = schedule.actuals[step.id] || null;
+                applications.push({ ...extra, key: `${record.id}:${step.id}`, plantingId: record.id, stage: step.id,
+                    farm: field.farm, field: field.field, fieldKey: key, culture: context.culture, year: context.year,
+                    name: step.name, area: extra.area ?? projected.plantedArea, planned, actual,
+                    autoDate: !extra.planned, provisional: !actual && provisional,
+                    scheduleVersion: schedule.version ?? null, plantingDate: projected.plantingDate,
+                    product: extra.product || '', dose: extra.dose ?? null, doseUnit: extra.doseUnit || 'L/ha',
+                    responsible: extra.responsible || '', notes: extra.notes || '', status: status(planned, actual, current) });
+                base = actual || planned; provisional = !actual;
+            }
+        }
+        for (const row of saved.filter(row => !row.plantingId)) {
+            if (row.year !== context.year || row.culture !== context.culture || !fields.has(fieldKey(row.farm, row.field))) continue;
+            applications.push({ ...row, key: row.id, fieldKey: fieldKey(row.farm, row.field), status: status(row.planned, row.actual, current) });
+        }
+        return { fields: [...fields.values()], applications };
+    }
+    const normalize = value => F.normalize(value);
+    function filter(rows, filters = {}) {
+        const query = normalize(filters.search);
+        return rows.filter(row => (filters.deleted ? row.deleted : !row.deleted) &&
+            (!filters.farm || row.farm === filters.farm) && (!filters.field || row.fieldKey === filters.field) &&
+            (!filters.status || row.status === filters.status) && (!filters.from || row.planned >= filters.from) &&
+            (!filters.to || row.planned <= filters.to) && (!query || normalize([row.farm, row.field, row.culture, row.name, row.product, row.responsible, row.notes].join(' ')).includes(query)));
+    }
+    function sort(rows, column = 'planned', direction = 1) {
+        return [...rows].sort((a, b) => direction * (['area', 'dose'].includes(column) ? Number(a[column] || 0) - Number(b[column] || 0) :
+            String(a[column] || '').localeCompare(String(b[column] || ''), 'pt-BR', { numeric: true })) || a.key.localeCompare(b.key));
+    }
+    function summarize(rows) {
+        const active = rows.filter(row => !row.deleted);
+        return { total: active.length, completed: active.filter(row => row.actual).length,
+            pending: active.filter(row => !row.actual).length, overdue: active.filter(row => row.status === 'overdue').length,
+            attention: active.filter(row => row.status === 'attention').length,
+            scheduled: active.filter(row => row.status === 'scheduled').length,
+            plannedArea: active.reduce((total, row) => total + Number(row.area), 0),
+            appliedArea: active.reduce((total, row) => total + (row.actual ? Number(row.area) : 0), 0) };
+    }
+    function mapStatus(rows, key, selected) {
+        if (key === selected) return 'selected';
+        const apps = rows.filter(row => row.fieldKey === key && !row.deleted);
+        if (!apps.length) return 'empty';
+        if (apps.some(row => row.status === 'overdue')) return 'pending';
+        if (apps.some(row => row.status === 'attention')) return 'attention';
+        return apps.every(row => row.actual) ? 'completed' : 'pending';
+    }
+    function validate(row, field, current = S.today()) {
+        if (!field || row.farm !== field.farm || row.field !== field.field) throw Error('Escolha um talhão cadastrado.');
+        if (!String(row.name || '').trim()) throw Error('Informe a aplicação.');
+        if (S.time(row.planned) === null) throw Error('Informe uma data programada válida.');
+        if (row.actual && (S.time(row.actual) === null || row.actual > current)) throw Error('A data realizada deve ser válida e não pode estar no futuro.');
+        if (!Number.isFinite(Number(row.area)) || Number(row.area) <= 0 || Number(row.area) > field.area) throw Error('A área deve ser maior que zero e não pode ultrapassar o talhão.');
+        if (row.dose !== null && row.dose !== '' && (!Number.isFinite(Number(row.dose)) || Number(row.dose) < 0)) throw Error('Informe uma dose válida, maior ou igual a zero.');
+        if (String(row.product || '').length > 150 || String(row.responsible || '').length > 150 || String(row.notes || '').length > 2000) throw Error('Confira o tamanho dos textos informados.');
+        return true;
+    }
+    const api = Object.freeze({ fieldKey, rowKey, status, build, filter, sort, summarize, mapStatus, validate });
+    root.SprayOperations = api;
+    if (typeof module !== 'undefined') module.exports = api;
+})(typeof window !== 'undefined' ? window : globalThis);
