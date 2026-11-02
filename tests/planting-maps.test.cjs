@@ -289,3 +289,76 @@ test('camada de rótulos é separada do tooltip, removida ao trocar de aba e res
     assert.equal(h.labelLayers.at(-1).items[0].center[0],1);
     h.maps.clearLabels();assert.equal(h.labelLayers.at(-1).removed,true);
 });
+
+test('seleção múltipla de datas soma hectares, desmarca individualmente e limpa destaque e rótulos',()=>{
+    const h=harness(), second={properties:{Fazenda:'FE',Campo:'FE 02',Area:100}};
+    for(const key of ['dap','planting','harvest']) h.maps.setLabelOption(h.state,key,false);
+    h.maps.setLabelOption(h.state,'planting',true);
+    h.setRecords({a:{produto:'Plantio',fazenda:'FE',campo:'FE 01',ano:'2026',cultura:'Soja',status:'em_andamento',areaRealizada:40,variedadeSemente:'Olimpo',dataPlantio:'2026-10-15'},
+        b:{produto:'Plantio',fazenda:'FE',campo:'FE 02',ano:'2026',cultura:'Soja',status:'em_andamento',areaRealizada:60,variedadeSemente:'Olimpo',dataPlantio:'2026-10-16'}});
+    const layers=[feature,second].map(value=>({feature:value,getCenter(){return value===feature?[1,2]:[3,4];},setStyle(){},closeTooltip(){},bringToFront(){}}));
+    h.state.map={closePopup(){}};h.state.geojsonLayer={eachLayer(fn){layers.forEach(fn);}};
+    h.maps.refresh(h.state,[feature,second]);
+    const legend=h.elements.get('planting-map-legend').innerHTML;
+    assert.match(legend,/data-planting-group="2027-02-06"[^>]*aria-pressed="false"/);
+    assert.match(legend,/data-planting-group="2027-02-07"[^>]*aria-pressed="false"/);
+    h.maps.selectGroup(h.state,'2027-02-06');h.maps.selectGroup(h.state,'2027-02-07');
+    assert.match(h.elements.get('planting-legend-selection').innerHTML,/100 ha/);
+    assert.match(h.elements.get('planting-legend-selection').innerHTML,/2 itens selecionados/);
+    assert.equal(h.maps.style(h.state,feature).fillOpacity,1);assert.equal(h.maps.style(h.state,second).fillOpacity,1);
+    assert.equal(h.labelLayers.at(-1).items.length,2);
+    h.maps.selectGroup(h.state,'2027-02-06');
+    assert.match(h.elements.get('planting-legend-selection').innerHTML,/60 ha/);
+    assert.match(h.elements.get('planting-legend-selection').innerHTML,/1 item selecionado/);
+    assert.equal(h.maps.style(h.state,feature).fillOpacity,.07);assert.equal(h.maps.style(h.state,second).fillOpacity,1);
+    assert.equal(h.labelLayers.at(-1).items.length,1);
+    h.maps.selectGroup(h.state,null);
+    assert.equal(h.elements.get('planting-legend-selection').hidden,true);
+    assert.equal(h.elements.get('planting-legend-selection').innerHTML,'');
+    assert.equal(h.maps.style(h.state,feature).fillOpacity,.88);assert.equal(h.labelLayers.at(-1).items.length,2);
+    for(const key of ['dap','planting','harvest']) h.maps.setLabelOption(h.state,key,false);
+});
+
+test('seleção múltipla de variedades respeita área parcial e grupo sem variedade',()=>{
+    const h=harness(), second={properties:{Fazenda:'FE',Campo:'FE 02',Area:100}}, ungrouped={properties:{Fazenda:'FE',Campo:'FE 03',Area:100}}, empty={properties:{Fazenda:'FE',Campo:'FE 04',Area:100}};
+    h.state.currentSubTab='variedades-plantadas';
+    h.setRecords({a:{produto:'Plantio',fazenda:'FE',campo:'FE 01',ano:'2026',cultura:'Soja',status:'em_andamento',areaRealizada:35,variedadeSemente:'Olimpo',dataPlantio:'2026-10-15'},
+        b:{produto:'Plantio',fazenda:'FE',campo:'FE 02',ano:'2026',cultura:'Soja',status:'em_andamento',areaRealizada:25,variedadeSemente:'NEO790',dataPlantio:'2026-10-16'},
+        c:{produto:'Plantio',fazenda:'FE',campo:'FE 03',ano:'2026',cultura:'Soja',status:'em_andamento',areaRealizada:10,dataPlantio:'2026-10-17'}});
+    h.maps.refresh(h.state,[feature,second,ungrouped,empty]);
+    const legend=h.elements.get('planting-map-legend').innerHTML;
+    assert.match(legend,/data-planting-group="OLIMPO"[^>]*aria-pressed="false"/);
+    assert.match(legend,/data-planting-group="NEO790"[^>]*aria-pressed="false"/);
+    assert.match(legend,/data-planting-group=""[^>]*><i[^>]*><\/i><span>Sem variedade \/ sem plantio<\/span><b>10 ha<\/b>/);
+    h.maps.selectGroup(h.state,'OLIMPO');h.maps.selectGroup(h.state,'NEO790');
+    assert.match(h.elements.get('planting-legend-selection').innerHTML,/60 ha/);
+    assert.equal(h.maps.style(h.state,feature).fillOpacity,1);assert.equal(h.maps.style(h.state,second).fillOpacity,1);
+    assert.equal(h.maps.style(h.state,ungrouped).fillOpacity,.07);assert.equal(h.maps.style(h.state,empty).fillOpacity,.07);
+    h.maps.selectGroup(h.state,'');
+    assert.match(h.elements.get('planting-legend-selection').innerHTML,/70 ha/);
+    assert.match(h.elements.get('planting-legend-selection').innerHTML,/3 itens selecionados/);
+    h.maps.selectGroup(h.state,'OLIMPO');
+    assert.match(h.elements.get('planting-legend-selection').innerHTML,/35 ha/);
+    assert.equal(h.maps.style(h.state,feature).fillOpacity,.07);assert.equal(h.maps.style(h.state,second).fillOpacity,1);assert.equal(h.maps.style(h.state,ungrouped).fillOpacity,1);
+    h.maps.selectGroup(h.state,null);
+    assert.equal(h.elements.get('planting-legend-selection').hidden,true);
+});
+
+test('grupos selecionados sobrevivem ao refresh igual, podam-se os removidos e limpam com filtros ou aba',()=>{
+    const h=harness(), second={properties:{Fazenda:'FE',Campo:'FE 02',Area:100}};
+    const makeRecords=()=>({a:{produto:'Plantio',fazenda:'FE',campo:'FE 01',ano:'2026',cultura:'Soja',status:'concluido',areaRealizada:40,variedadeSemente:'Olimpo',dataPlantio:'2026-10-15'},
+        b:{produto:'Plantio',fazenda:'FE',campo:'FE 02',ano:'2026',cultura:'Soja',status:'concluido',areaRealizada:60,variedadeSemente:'Olimpo',dataPlantio:'2026-10-16'}});
+    h.setRecords(makeRecords());h.maps.refresh(h.state,[feature,second]);
+    h.maps.selectGroup(h.state,'2027-02-06');h.maps.selectGroup(h.state,'2027-02-07');
+    h.setRecords(makeRecords());h.maps.refresh(h.state,[feature,second]);
+    assert.match(h.elements.get('planting-legend-selection').innerHTML,/100 ha/);
+    assert.match(h.elements.get('planting-map-legend').innerHTML,/data-planting-group="2027-02-06"[^>]*aria-pressed="true"/);
+    h.maps.refresh(h.state,[feature]);
+    assert.match(h.elements.get('planting-legend-selection').innerHTML,/40 ha/);
+    assert.match(h.elements.get('planting-legend-selection').innerHTML,/1 item selecionado/);
+    h.state.currentAno='2027';h.maps.refresh(h.state,[feature,second]);
+    assert.equal(h.elements.get('planting-legend-selection').hidden,true);
+    h.state.currentAno='2026';h.maps.refresh(h.state,[feature,second]);h.maps.selectGroup(h.state,'2027-02-06');
+    h.state.currentSubTab='variedades-plantadas';h.maps.refresh(h.state,[feature,second]);
+    assert.equal(h.elements.get('planting-legend-selection').hidden,true);
+});

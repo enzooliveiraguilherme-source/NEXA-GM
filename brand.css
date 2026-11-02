@@ -336,6 +336,10 @@ body[data-page="login"] { margin: 0; min-height: 100vh; background: #f5f7fa; col
 .planting-map-legend button:focus-visible { outline:2px solid #005eea; outline-offset:2px; }
 .planting-legend-reset { width:100%; margin-top:7px; padding:9px; min-height:38px; border:1px solid #b8cadd; border-radius:7px; background:#edf3fa; color:#102c4d; font:inherit; cursor:pointer; }
 .planting-map-legend .planting-legend-hint { margin:6px 0; }
+.planting-legend-selection { display:grid; gap:4px; margin:10px 0; padding:12px; border:1px solid #b8cadd; border-radius:8px; background:#edf3fa; color:#102c4d; }
+.planting-legend-selection[hidden] { display:none; }
+.planting-legend-selection span,.planting-legend-selection small { font-size:11px; }
+.planting-legend-selection strong { font-size:19px; font-variant-numeric:tabular-nums; }
 .planting-legend-window { display:flex; flex-direction:column; gap:4px; margin-bottom:12px; padding-bottom:10px; border-bottom:1px solid #dce6df; }
 .planting-label-controls { position:absolute; top:12px; left:12px; z-index:660; max-width:calc(100% - 76px); border:1px solid #dce6df; border-radius:9px; background:rgba(255,255,255,.97); box-shadow:0 3px 14px #142c1b18; color:#244638; font-size:12px; }
 .planting-label-controls summary { min-height:44px; padding:12px 14px; cursor:pointer; font-weight:600; }

@@ -2,7 +2,8 @@
     'use strict';
     const F = root.PlantingForecast;
     const palette = Object.freeze(['#009640', '#005eea', '#f07800', '#8b26d9', '#00a4c4', '#e32a3a', '#d61698', '#007f76', '#b88000', '#4938c7', '#68a500', '#a44918']);
-    let groups = [], indexed = new Map(), selectedGroup = null, highlightContext = '';
+    let groups = [], indexed = new Map(), highlightContext = '', ungroupedArea = 0;
+    const selectedGroups = new Set();
     const labelOptions = { dap: false, planting: false, harvest: false };
     let labelLayer = null, labelState = null, labelTimer = null;
     const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
@@ -37,7 +38,7 @@
         labelLayer = L.layerGroup().addTo(state.map);
         const today = new Date();
         state.geojsonLayer.eachLayer(layer => {
-            if (!layer.feature || (active(state) && selectedGroup !== null && groupKey(state, row(state, layer.feature)) !== selectedGroup)) return;
+            if (!layer.feature || (active(state) && selectedGroups.size && !selectedGroups.has(groupKey(state, row(state, layer.feature))))) return;
             const html = label(state, layer.feature, today);
             if (!html || !layer.getCenter) return;
             L.marker(layer.getCenter(), {
@@ -76,14 +77,16 @@
         const summary = document.getElementById('planting-map-summary'), legend = document.getElementById('planting-map-legend');
         const enabled = active(state);
         const context = JSON.stringify([state.currentTab,state.currentSubTab,state.currentAno,state.currentCultura,state.currentGleba,state.currentFazenda]);
-        if (context !== highlightContext || !enabled) { selectedGroup = null; highlightContext = context; }
+        if (context !== highlightContext || !enabled) { selectedGroups.clear(); highlightContext = context; }
         summary?.classList.toggle('hidden', true); legend?.classList.toggle('hidden', !enabled);
         if (summary) summary.innerHTML = '';
         if (!enabled) return;
         state.map?.closePopup();
         const rows = features.map(feature => row(state, feature)), totals = F.summarize(rows), collected = new Map();
+        ungroupedArea = 0;
         for (const value of rows) {
             const key = groupKey(state, value);
+            if (value.planted && !key) ungroupedArea += value.plantedArea;
             if (!value.planted || !key) continue;
             const label = harvesting(state) ? date(key) : value.variety;
             const current = collected.get(key) || { key, label, area: 0 };
@@ -91,13 +94,16 @@
         }
         groups = [...collected.values()].sort((a, b) => a.key.localeCompare(b.key)).map((value, index, all) => ({ ...value,
             color: palette[index % palette.length] }));
-        if (selectedGroup !== null && selectedGroup !== '' && !groups.some(group => group.key === selectedGroup)) selectedGroup = null;
+        for (const key of selectedGroups) {
+            if (key !== '' && !groups.some(group => group.key === key)) selectedGroups.delete(key);
+        }
         const without = Math.max(0, totals.plantedArea - totals.estimatedArea);
         if (legend) legend.innerHTML = `<h3>${harvesting(state) ? 'Dia estimado de colheita' : 'Variedade · área plantada'}</h3>` +
-            `<p class="planting-legend-hint">Clique ${harvesting(state) ? 'em uma data' : 'em uma variedade'} para destacar as áreas.</p>` +
-            `<button type="button" class="planting-legend-reset" id="planting-legend-reset"${selectedGroup === null ? ' hidden' : ''}>Mostrar todas as áreas</button>` +
-            groups.map(value => `<button type="button" class="planting-map-legend-row" data-planting-group="${escape(value.key)}" aria-pressed="${selectedGroup === value.key}"><i style="background:${value.color}"></i><span>${escape(value.label)}</span><b>${hectares(value.area)}</b></button>`).join('') +
-            `<button type="button" class="planting-map-legend-row" data-planting-group="" aria-pressed="${selectedGroup === ''}"><i style="background:#94a3b8"></i><span>${harvesting(state) ? 'Sem previsão / sem plantio' : 'Sem variedade / sem plantio'}</span></button>` +
+            `<p class="planting-legend-hint">Selecione uma ou mais ${harvesting(state) ? 'datas' : 'variedades'} para destacar e somar as áreas. Toque novamente para desmarcar.</p>` +
+            '<div id="planting-legend-selection" class="planting-legend-selection" role="status" aria-live="polite" hidden></div>' +
+            `<button type="button" class="planting-legend-reset" id="planting-legend-reset"${selectedGroups.size ? '' : ' hidden'}>Limpar seleção · mostrar todas</button>` +
+            groups.map(value => `<button type="button" class="planting-map-legend-row" data-planting-group="${escape(value.key)}" aria-pressed="${selectedGroups.has(value.key)}"><i style="background:${value.color}"></i><span>${escape(value.label)}</span><b>${hectares(value.area)}</b></button>`).join('') +
+            `<button type="button" class="planting-map-legend-row" data-planting-group="" aria-pressed="${selectedGroups.has('')}"><i style="background:#94a3b8"></i><span>${harvesting(state) ? 'Sem previsão / sem plantio' : 'Sem variedade / sem plantio'}</span><b>${hectares(ungroupedArea)}</b></button>` +
             '<p>Contorno tracejado: plantio parcial.<br>O cálculo considera apenas os hectares realizados.</p>' +
             (harvesting(state) ? '<p>' + (root.SeedCycleCatalog && !root.SeedCycleCatalog.available ? 'Catálogo de ciclos indisponível. Recarregue para consultar as previsões.' : 'Ciclos definidos pelo administrador em Variedades e ciclos. Previsão de referência; confirme a maturação no campo.') + '</p>' : '');
         const report = ['admin', 'projetista'].includes(root.portalAccessRole) && state.userRole === 'editor' ? '<button type="button" class="operation-export-trigger" id="planting-report-button">Exportar relatório PDF</button><span id="planting-report-status" role="status"></span>' : '';
@@ -113,32 +119,43 @@
         };
         const reset = document.getElementById('planting-legend-reset');
         if (reset) reset.onclick = () => selectGroup(state, null);
+        refreshSelectionSummary();
+    }
+    function refreshSelectionSummary() {
+        const summary = document.getElementById('planting-legend-selection');
+        if (!summary) return;
+        const area = groups.reduce((total, group) => total + (selectedGroups.has(group.key) ? group.area : 0), selectedGroups.has('') ? ungroupedArea : 0);
+        summary.hidden = selectedGroups.size === 0;
+        summary.innerHTML = selectedGroups.size ? `<span>Área plantada selecionada</span><strong>${hectares(area)}</strong><small>${selectedGroups.size} ${selectedGroups.size === 1 ? 'item selecionado' : 'itens selecionados'}</small>` : '';
     }
     function selectGroup(state, key) {
         if (!active(state)) return;
         if (key !== null && key !== '' && !groups.some(group => group.key === key)) return;
-        selectedGroup = key === selectedGroup ? null : key;
+        if (key === null) selectedGroups.clear();
+        else if (selectedGroups.has(key)) selectedGroups.delete(key);
+        else selectedGroups.add(key);
         state.map?.closePopup();
         state.geojsonLayer?.eachLayer(layer => {
             layer.closeTooltip?.();
             if (layer.feature) layer.setStyle(style(state, layer.feature));
         });
-        if (selectedGroup !== null) state.geojsonLayer?.eachLayer(layer => {
-            if (layer.feature && groupKey(state, row(state, layer.feature)) === selectedGroup) layer.bringToFront?.();
+        if (selectedGroups.size) state.geojsonLayer?.eachLayer(layer => {
+            if (layer.feature && selectedGroups.has(groupKey(state, row(state, layer.feature)))) layer.bringToFront?.();
         });
         document.querySelectorAll('#planting-map-legend [data-planting-group]').forEach(button => {
-            button.setAttribute('aria-pressed', String(button.dataset.plantingGroup === selectedGroup));
+            button.setAttribute('aria-pressed', String(selectedGroups.has(button.dataset.plantingGroup)));
         });
         const reset = document.getElementById('planting-legend-reset');
-        if (reset) reset.hidden = selectedGroup === null;
+        if (reset) reset.hidden = selectedGroups.size === 0;
+        refreshSelectionSummary();
         refreshLabels(state);
     }
     function style(state, feature) {
         const value = row(state, feature), group = groups.find(item => item.key === groupKey(state, value));
-        if (selectedGroup !== null && groupKey(state, value) !== selectedGroup) return {
+        if (selectedGroups.size && !selectedGroups.has(groupKey(state, value))) return {
             color: '#64748b', weight: .7, opacity: .25, fillColor: '#94a3b8', fillOpacity: .07, dashArray: value.partial ? '5 4' : null
         };
-        if (selectedGroup !== null) return {
+        if (selectedGroups.size) return {
             color: '#0f172a', weight: 3, opacity: 1, fillColor: group?.color || '#94a3b8', fillOpacity: 1, dashArray: value.partial ? '5 4' : null
         };
         return { color: '#1e293b', weight: value.partial ? 1.5 : .8, opacity: 1, fillColor: group?.color || '#94a3b8',
