@@ -3,14 +3,11 @@
     const O=root.SprayOperations,W=1240,H=1754,left=64,width=W-128;
     const ink='#102c4d',muted='#607086';
     const num=value=>Number(value||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+    const ha=value=>num(value)+' ha';
     const canExport=state=>['admin','projetista'].includes(root.portalAccessRole)&&state?.userRole==='editor';
     const slug=value=>String(value).normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9]+/g,'-').replace(/^-|-$/g,'').toLowerCase();
     function title(application,label){
-        if(application==='all')return 'Andamento da pulverização';
-        if(application==='fungicide')return 'Andamento dos fungicidas';
-        if(application==='insecticide')return 'Andamento dos inseticidas';
-        const feminine=application==='desiccation'||/^\d+ª/.test(label);
-        return `Andamento ${feminine?'da':'do'} ${label}`;
+        return `Resumo de aplicação - ${application==='all'?'Pulverização':application==='fungicide'?'Fungicidas':application==='insecticide'?'Inseticidas':label}`;
     }
     function snapshot(state){
         if(!canExport(state))throw Error('Somente Projetistas e Administradores no modo Editor podem exportar este relatório.');
@@ -30,7 +27,7 @@
         const now=new Date(),parts=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(now);
         const part=type=>parts.find(p=>p.type===type).value;
         const scopeName=root.portalFarms?.find(f=>f.code===scope)?.name||scope;
-        return {rows,farms,groups,scopeName,satellite:!document.querySelector?.('input[name="basemap"][value="blank"]')?.checked,totals:O.summarize(rows),title:title(source.application,source.applicationLabel),application:source.application,
+        return {rows,farms,groups,scopeName,satellite:!document.querySelector?.('input[name="basemap"][value="blank"]')?.checked,totals:O.areaSummary(rows),title:title(source.application,source.applicationLabel),application:source.application,
             applicationLabel:source.applicationLabel,filterLabels:[...source.filterLabels],scope,year:String(state.currentAno),culture:state.currentCultura,
             issued:now.toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo',hour12:false}),isoDate:`${part('year')}-${part('month')}-${part('day')}`};
     }
@@ -53,17 +50,31 @@
             img.onload=()=>{clearTimeout(timer);resolve(img);};img.onerror=()=>{clearTimeout(timer);reject(Error('Logo indisponível'));};img.src='apoio/GP Michels.jpg';});}catch{}
         if(logo)ctx.drawImage(logo,logo.naturalWidth*.07,logo.naturalHeight*.27,logo.naturalWidth*.89,logo.naturalHeight*.46,52,42,202,104);
         ctx.textAlign='center';text(ctx,data.title,630,65,29,muted,true,690);text(ctx,data.scopeName||data.scope,630,122,40,ink,true,690);ctx.textAlign='left';
-        text(ctx,`${data.culture} | Safra ${data.year}`,left,218,22,muted,false,700);
+        text(ctx,`Cultura: ${data.culture}`,left,218,20,muted,false,300);
+        ctx.textAlign='center';text(ctx,`Ano / Safra: ${data.year}`,630,218,23,ink,true,350);
+        ctx.textAlign='right';text(ctx,`Atualizado em ${data.isoDate.split('-').reverse().join('/')}`,W-left,218,18,muted);ctx.textAlign='left';
         const palette=root.SprayControl.mapColors;
-        const groups=[['Realizadas',data.totals.completed,palette.completed],['Próximas da data',data.totals.attention,palette.attention],['Pendentes',Math.max(0,data.totals.pending-data.totals.attention),palette.pending]];
-        groups.forEach(([label,value,color],i)=>{const x=left+i*379;rect(ctx,x,260,354,150,'white');rect(ctx,x,260,354,6,color,0);
-            text(ctx,label,x+22,303,22,ink,true,310);text(ctx,String(value),x+22,370,46,ink,true,310);});
+        const t=data.totals,progress=Math.max(0,Math.min(100,t.progress));
+        const cards=[['ÁREA PROGRAMADA',ha(t.plannedArea),'Área total programada','#347c99'],
+            ['ÁREA APLICADA',ha(t.appliedArea),'Realizado até o momento',palette.completed],
+            ['PROGRESSO',progress.toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+'%',`${ha(Math.max(0,t.plannedArea-t.appliedArea))} restantes`,'#b68135']];
+        cards.forEach(([label,value,sub,color],i)=>{const x=left+i*379;rect(ctx,x,260,354,164,'white');rect(ctx,x,260,354,6,color,0);
+            text(ctx,label,x+22,300,20,color,true,310);text(ctx,value,x+22,356,38,ink,true,310);text(ctx,sub,x+22,394,18,muted,false,310);});
+        const legend=[['Realizadas',t.appliedArea,t.completed,palette.completed],['No prazo',Math.max(0,t.onTimeArea-t.attentionArea),t.scheduled,palette.scheduled],
+            ['Próximas da data',t.attentionArea,t.attention,palette.attention],['Atrasadas',t.overdueArea,t.overdue,palette.pending]];
+        rect(ctx,left,445,width,12,'#e2e8f0',6);
+        ctx.save();ctx.beginPath();ctx.roundRect(left,445,width,12,6);ctx.clip();let segmentX=left;
+        for(const [,area,,color]of legend){const segmentWidth=t.plannedArea?width*area/t.plannedArea:0;ctx.fillStyle=color;ctx.fillRect(segmentX,445,segmentWidth,12);segmentX+=segmentWidth;}ctx.restore();
         const fields=data.farms.flatMap(farm=>farm.features.map(feature=>{const p=feature.properties||{},status=O.mapStatus(data.rows,O.fieldKey(p.Fazenda,p.Campo));
-            return {feature,color:status==='completed'?palette.completed:status==='attention'?palette.attention:status==='empty'?palette.empty:palette.pending};}));
-        const missing=await root.OperationExport.drawMap(ctx,{fields,satellite:data.satellite},{x:left,y:450,w:width,h:1070});
-        groups.forEach(([label,,color],i)=>{const x=left+i*379;rect(ctx,x,1560,18,18,color,3);text(ctx,label,x+30,1578,22,ink,false,320);});
-        text(ctx,'Cinza: sem registro da aplicação neste filtro.',left,1633,18,muted,false,width);
-        if(missing)text(ctx,'Parte do satélite não carregou; talhões e status preservados.',left,1665,17,muted,false,width);
+            return {feature,color:palette[status]};}));
+        const missing=await root.OperationExport.drawMap(ctx,{fields,satellite:data.satellite},{x:left,y:483,w:width,h:900});
+        const gap=14,cardWidth=(width-3*gap)/4;
+        legend.forEach(([label,area,count,color],i)=>{const x=left+i*(cardWidth+gap);rect(ctx,x,1407,cardWidth,116,'white');rect(ctx,x+16,1426,17,17,color,3);
+            text(ctx,label,x+42,1442,19,ink,true,cardWidth-54);text(ctx,ha(area),x+16,1476,23,ink,true,cardWidth-32);text(ctx,`${count} aplicações`,x+16,1504,17,muted,false,cardWidth-32);});
+        text(ctx,'Área aplicada: hectares das aplicações realizadas, inclusive confirmações sem data.',left,1565,17,muted,false,width);
+        if(['all','fungicide','insecticide'].includes(data.application))text(ctx,'Áreas somadas por aplicação; um talhão pode participar de várias etapas.',left,1595,17,muted,false,width);
+        text(ctx,'Cinza: sem registro da aplicação neste filtro.',left,1633,17,muted,false,width);
+        if(missing)text(ctx,'Parte do satélite não carregou; talhões e totais preservados.',left,1665,17,muted,false,width);
         text(ctx,`NEXA | Emitido em ${data.issued}`,left,1710,18,muted,false,1000);
         const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',.92));
         if(!blob)throw Error('Não foi possível preparar o PDF.');
