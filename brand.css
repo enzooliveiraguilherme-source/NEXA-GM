@@ -19,6 +19,10 @@
     --brand-shadow: 0 8px 28px rgb(16 45 80 / 8%);
 }
 body { font-family: var(--font-brand); }
+/* Leaflet 1.9.4 usa plus-lighter nos tiles. Com a sobreposição de 1 px
+   para cobrir frestas, esse modo soma o brilho e desenha uma grade clara no satélite.
+   Compor normalmente mantém a sobreposição sem iluminar as bordas. */
+#map.leaflet-container img.leaflet-tile { mix-blend-mode: normal; }
 button, input, select, textarea { font-family: inherit; }
 button { transition: background-color .18s, border-color .18s, box-shadow .18s; }
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible,

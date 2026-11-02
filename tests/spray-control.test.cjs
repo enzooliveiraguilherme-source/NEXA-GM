@@ -397,12 +397,26 @@ test('map selection is only a visual focus and keeps confirmed application color
     h.api.refresh(h.state, h.features); await h.tick();
     h.el('map-application').value = 'post1'; h.el('map-application').onchange();
     assert.equal(h.api.style(h.features[0]).fillColor, '#1673d1');
+    assert.equal(h.api.style(h.features[0]).fillOpacity, .95);
     assert.equal(h.api.style(h.features[2]).fillColor, '#169447');
+    assert.equal(h.api.style(h.features[2]).fillOpacity, .95);
     h.api.selectFeature(h.features[0]);
     h.api.selectFeature(h.features[0]);
     assert.equal(h.api.style(h.features[0]).fillColor, '#1673d1');
+    assert.equal(h.api.style(h.features[0]).fillOpacity, .95);
     assert.equal(h.api.style(h.features[2]).fillColor, '#169447');
+    assert.equal(h.api.style(h.features[2]).fillOpacity, .95);
     assert.doesNotMatch(h.el('table').innerHTML, /class="selected"/);
+});
+
+test('attention and overdue application colors keep the stronger map opacity', async () => {
+    for (const [planned,color] of [['2026-11-03','#f5c542'],['2026-10-18','#df3838']]) {
+        const h = harness({ secondPlanned: planned });
+        h.api.refresh(h.state, h.features); await h.tick();
+        h.el('map-application').value = 'post1'; h.el('map-application').onchange();
+        assert.equal(h.api.style(h.features[2]).fillColor,color);
+        assert.equal(h.api.style(h.features[2]).fillOpacity,.95);
+    }
 });
 
 test('failed draft does not recolor the map from an unconfirmed realization', async () => {

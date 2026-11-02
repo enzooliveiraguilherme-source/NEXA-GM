@@ -3,7 +3,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
 
-function harness(){
+function harness({tileSize=256}={}){
     const elements=new Map(),geoJSONCalls=[],refreshCalls=[],addedLayers=[],removedLayers=[];
     function classList(){const names=new Set();return{add(name){names.add(name);},remove(name){names.delete(name);},contains(name){return names.has(name);},toggle(name,force){if(force??!names.has(name))names.add(name);else names.delete(name);return names.has(name);}};}
     const sprayNavButtons=['tabela-pulverizacao','mapa-pulverizacao'].map(view=>({dataset:{sprayView:view},classList:classList()}));
@@ -21,7 +21,12 @@ function harness(){
     };
     const window={SprayControl:sprayControl,PlantingMaps:{clearLabels(){},refresh(){},refreshLabels(){}},setInterval(){return 1;}};
     let api;
-    const L={DomEvent:{stopPropagation(){},preventDefault(){}},geoJSON(data,options){
+    const basemapTiles=[];
+    const L={DomEvent:{stopPropagation(){},preventDefault(){}},map(){return{setView(coords,zoom){this.view={coords,zoom};return this;}};},
+        control:{zoom(options){return{addTo(map){return{options,map};}};}},tileLayer(url,options){
+            const handlers={};const layer={url,options,handlers,on(name,handler){handlers[name]=handler;return this;},
+                getTileSize(){return{x:tileSize,y:tileSize};},addTo(map){this.map=map;return this;}};basemapTiles.push(layer);return layer;
+        },layerGroup(){return{addTo(map){this.map=map;return this;}};},geoJSON(data,options){
         const layer={data,options,children:[],added:false,eachLayer(fn){this.children.forEach(fn);},getBounds(){return{};},addTo(map){this.map=map;this.added=true;addedLayers.push(this);
             for(const feature of data.features){const child={feature,style:options.style(feature),handlers:{},tooltip:null,popup:null,
                 on(name,fn){this.handlers[name]=fn;},getTooltip(){return this.tooltip;},bindTooltip(html){this.tooltip=html;return this;},setTooltipContent(html){this.tooltip=html;},unbindTooltip(){this.tooltip=null;},closeTooltip(){this.tooltip=null;},
@@ -36,7 +41,7 @@ function harness(){
     const context=vm.createContext({window,document,console,Date,L,HarvestImport:{displayNumber(value){return String(value??'—');}},
         HarvestView:{clear(){},refreshFilters(){},select(){},fieldKey(){},scopeLabel(){return'';},showAll(){}},setTimeout(){return 1;}});
     vm.runInContext(fs.readFileSync(require.resolve('../app.js'),'utf8'),context);
-    api=vm.runInContext('({state,renderMap,onEachFeature,getFeatureStyle,AdubacaoModal,updateOperationUI})',context);
+    api=vm.runInContext('({state,renderMap,onEachFeature,getFeatureStyle,AdubacaoModal,updateOperationUI,initMap})',context);
     api.state.currentTab='pulverizacao';api.state.currentSubTab='mapa-pulverizacao';api.state.currentFazenda='FE';api.state.currentGleba='A';api.state.userRole='editor';api.state.operationalMode='aplicacao';
     api.state.map={closeTooltip(){},removeLayer(layer){removedLayers.push(layer);},invalidateSize(){},closePopup(){},fitBounds(bounds,options){this.bounds={bounds,options};}};
     const features=[
@@ -47,8 +52,24 @@ function harness(){
     ];
     api.state.geojsonData={type:'FeatureCollection',features};
     api.state.cloudStore={getRecords(){return{};},getPlanning(){return{};}};
-    return{...api,window,document,elements,features,geoJSONCalls,refreshCalls,addedLayers,removedLayers,sprayCalls,sprayNavButtons,sprayHeaderButtons};
+    return{...api,window,document,elements,features,geoJSONCalls,refreshCalls,addedLayers,removedLayers,sprayCalls,sprayNavButtons,sprayHeaderButtons,basemapTiles};
 }
+
+test('tileloadstart adds one pixel to 256 and 512 tiles without changing coordinates or accumulating size',()=>{
+    for(const size of [256,512]){
+        const h=harness({tileSize:size});h.initMap();
+        const layer=h.state.basemapLayers.esri,handler=layer.handlers.tileloadstart;
+        const tile={style:{width:`${size}px`,height:`${size}px`,left:'17px',top:'29px'},coords:{x:12,y:7,z:5}};
+        handler.call(layer,{tile});
+        assert.equal(tile.style.width,`${size+1}px`);assert.equal(tile.style.height,`${size+1}px`);
+        assert.equal(tile.style.left,'17px');assert.equal(tile.style.top,'29px');
+        assert.deepEqual(tile.coords,{x:12,y:7,z:5});
+        handler.call(layer,{tile});
+        assert.equal(tile.style.width,`${size+1}px`);assert.equal(tile.style.height,`${size+1}px`);
+        assert.equal(tile.style.left,'17px');assert.equal(tile.style.top,'29px');
+        assert.deepEqual(tile.coords,{x:12,y:7,z:5});
+    }
+});
 
 test('estilo GIS e clique usam SprayControl, abrem popup e não abrem edição legada',()=>{
     const h=harness(),feature=h.features[0];
@@ -133,6 +154,14 @@ test('updateOperationUI mostra exclusivamente tabela ou mapa e marca todos os bo
 test('HTML agrupa o painel e mapa da pulverização sem incluir o painel de plantio; CSS adapta desktop e mobile',()=>{
     const html=fs.readFileSync(require.resolve('../portal.html'),'utf8');
     const css=fs.readFileSync(require.resolve('../brand.css'),'utf8');
+    const leafletCssIndex=html.indexOf('href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css');
+    const brandCssIndex=html.indexOf('href="brand.css');
+    assert.ok(leafletCssIndex>=0&&brandCssIndex>leafletCssIndex,'brand.css loads after Leaflet CSS');
+    const tileRule=css.match(/#map\.leaflet-container img\.leaflet-tile\s*\{([^}]*)\}/);
+    assert.ok(tileRule,'raster-tile blending override is scoped to images inside #map');
+    assert.match(tileRule[1],/mix-blend-mode:\s*normal\s*;/);
+    assert.doesNotMatch(tileRule[1],/width|height|transform/i,'the compositing override does not alter tile geometry');
+    assert.doesNotMatch(css,/(^|,\s*)img\.leaflet-tile\s*\{/m,'no unscoped raster tile override');
     const start=html.indexOf('<div id="operation-workspace"');
     assert.notEqual(start,-1,'operation-workspace existe');
     const tags=[...html.slice(start).matchAll(/<div\b[^>]*>|<\/div>/g)];
