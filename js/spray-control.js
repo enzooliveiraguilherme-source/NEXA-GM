@@ -8,7 +8,7 @@
     const names = { completed:'Realizada', scheduled:'No prazo', attention:'Atenção', overdue:'Atrasada', optional:'Opcional', unplanned:'Sem data' };
     const colors = { completed:'#1673d1', scheduled:'#169447', attention:'#f5c542', pending:'#df3838', empty:'#94a3b8' };
     const grid=root.SprayGrid.create(),checked=new Set();
-    let mode='grid',mapApplication='all',mapRows=[];
+    let mode='grid',mapApplication='all',mapRows=[],mapDashboardCollapsed=false;
     let autoError='',focusAfterSave=null;
     let state, features = [], schedules = [], saved = [], fields = [], all = [], visible = [], selectedField = '', selectedRow = '',
         loadedKey = '', scope = '', request = 0, loading = false, busy = false, error = '', message = '', editing = null, order = 'planned', direction = 1;
@@ -22,7 +22,7 @@
         fields = built.fields; all = built.applications;
         visible = O.sort(O.filter(all, filters), order, direction);
         const confirmed=grid.size?O.build(features,Object.values(state.cloudStore?.getRecords()||{}),schedules,saved,{year:state.currentAno,culture:state.currentCultura}).applications:all;
-        mapRows=O.filter(confirmed,{...filters,application:mapApplication,deleted:false});
+        mapRows=O.filter(confirmed,{application:mapApplication,deleted:false});
     }
     function updateMap() {
         state?.geojsonLayer?.eachLayer(layer => { if (layer.feature) layer.setStyle(style(layer.feature)); });
@@ -123,6 +123,29 @@
         el('grid-mode').setAttribute?.('aria-pressed',String(mode==='grid'));
         el('list-mode').setAttribute?.('aria-pressed',String(mode==='list'));
     }
+    function renderMapDashboard() {
+        const dashboard=document.getElementById('spray-map-dashboard');
+        if(!dashboard||!state)return;
+        dashboard.classList.toggle('hidden',state.currentTab!=='pulverizacao'||state.currentSubTab!=='mapa-pulverizacao');
+        dashboard.classList.toggle('collapsed',mapDashboardCollapsed);
+        el('map-toggle').setAttribute?.('aria-expanded',String(!mapDashboardCollapsed));
+        el('map-toggle').setAttribute?.('aria-label',mapDashboardCollapsed?'Expandir acompanhamento':'Recolher acompanhamento');
+        const application=O.applicationOptions(all).find(option=>option.key===mapApplication)?.label||'Todas';
+        el('map-title').textContent=mapApplication==='all'?'Acompanhamento da Pulverização':`Acompanhamento · ${application}`;
+        el('map-scope').textContent=`${state.currentFazenda==='ALL'?'Fazendas: Todas':`Fazenda: ${state.currentFazenda}`} · ${state.currentGleba==='ALL'?'Todas as glebas':`Gleba ${state.currentGleba}`}`;
+        if(loading||error){el('map-content').innerHTML=`<p class="spray-map-message" role="status">${escape(error||'Carregando aplicações…')}</p>`;return;}
+        const total=O.areaSummary(mapRows),pct=value=>`${Number(value).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})}%`;
+        const percent=area=>total.plannedArea?100*area/total.plannedArea:0;
+        const categories=[['realized','Realizadas',total.appliedArea,total.completed,colors.completed],
+            ['overdue','Atrasadas',total.overdueArea,total.overdue,colors.pending],['ontime','Em dia',total.onTimeArea,total.onTimeCount,colors.scheduled]];
+        const cards=[['planejada','calendar-check','ÁREA PROGRAMADA',ha(total.plannedArea),'Área total das aplicações'],
+            ['realizada','circle-check','ÁREA REALIZADA',ha(total.appliedArea),'Aplicado até o momento'],
+            ['progresso','bars-progress','PROGRESSO GERAL',pct(total.progress),`${ha(total.appliedArea)} de ${ha(total.plannedArea)}`]];
+        el('map-content').innerHTML=`<div class="kpi-cards-grid">${cards.map(([key,icon,label,value,sub])=>`<div class="kpi-card card-${key}"><div class="kpi-icon-wrapper icon-${key==='planejada'?'blue':key==='realizada'?'green':'orange'}"><i class="fa-solid fa-${icon}" aria-hidden="true"></i></div><div class="kpi-data"><span class="kpi-title">${label}</span><strong class="kpi-value">${value}</strong><span class="kpi-subtitle">${sub}</span></div></div>`).join('')}</div>`+
+            `<div class="progress-bar-section"><div class="progress-bar-label-row"><span class="progress-bar-title">Andamento das aplicações</span><strong>${pct(total.progress)} realizado</strong></div><div class="segmented-progress-track" role="progressbar" aria-label="Área realizada" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${total.progress.toFixed(2)}">${categories.map(([,label,area,,color])=>`<div class="progress-segment" style="width:${percent(area)}%;background:${color}" title="${label}: ${ha(area)}"></div>`).join('')}</div></div>`+
+            `<div class="status-summary-grid">${categories.map(([key,label,area,count,color])=>`<div class="status-pill spray-map-status" style="--spray-status-color:${color}"><div class="status-pill-header"><span class="status-dot" style="background:${color}"></span><strong>${label}</strong></div><div class="status-pill-numbers"><span class="status-ha" data-spray-map-area="${key}">${ha(area)}</span><span class="status-pct">(${pct(percent(area))})</span></div><span class="status-count">${count} aplicações</span>${key==='ontime'?`<span class="spray-map-attention">Próximas da data: ${ha(total.attentionArea)}</span>`:''}</div>`).join('')}</div>`+
+            `<p class="spray-map-note">${['all','fungicide','insecticide'].includes(mapApplication)?'Áreas somadas por aplicação. ':''}Amarelo: vence hoje ou em até 2 dias. Cinza: sem aplicação neste filtro.</p>`;
+    }
     function render() {
         if (!state || state.currentTab !== 'pulverizacao' || !el('table')) return;
         prepare();
@@ -133,6 +156,10 @@
         el('save-status').title=error||autoError||'';
         const report=document.getElementById('spray-report-button');
         if(report){report.hidden=!canEdit();report.disabled=loading||busy||!!error||!!grid.size||!!root.SprayReport?.busy;}
+        const exportHost=document.getElementById(state.currentSubTab==='mapa-pulverizacao'?'spray-map-export-actions':'spray-table-export-actions');
+        const exportActions=document.getElementById('spray-report-actions');
+        if(exportActions){exportActions.hidden=!canEdit();if(exportHost&&exportActions.parentElement!==exportHost)exportHost.appendChild?.(exportActions);}
+        renderMapDashboard();
         el('add').disabled = !canEdit() || loading || busy || !!error || !fields.length || !!grid.size;
         el('inputs').disabled = busy || !canEdit();
         el('reload').disabled = loading || busy;
@@ -237,6 +264,7 @@
         if(el('table').dataset.initialized)return;el('table').dataset.initialized='true';
         const report=document.getElementById('spray-report-button');
         if(report)report.onclick=()=>root.SprayReport?.download(state);
+        el('map-toggle').onclick=()=>{mapDashboardCollapsed=!mapDashboardCollapsed;renderMapDashboard();};
         el('add').onclick=()=>openForm(null);
         el('map-jump').onclick=()=>{root.dispatchEvent?.(new root.CustomEvent('geoportal:spray-view',{detail:{view:'mapa-pulverizacao'}}));state.map?.invalidateSize?.();};
         el('reload').onclick=()=>{if(busy)return;if(grid.size){message='Suas alterações da grade foram mantidas. Salve ou descarte antes de recarregar.';render();return;}el('form').hidden=true;editing=null;loadedKey='';load();};
@@ -327,13 +355,14 @@
         if(busy||grid.size||autoError)throw Error('Aguarde a confirmação das alterações antes de exportar.');
         const application=state.currentSubTab==='mapa-pulverizacao'?mapApplication:filters.application;
         const applicationLabel=O.applicationOptions(all).find(item=>item.key===application)?.label||'Todas';
-        const reportRows=wholeFarm?O.filter(all,{farm:filters.farm,application,deleted:false}):(state.currentSubTab==='mapa-pulverizacao'?mapRows:visible);
+        const reportFarm=state.currentSubTab==='mapa-pulverizacao'?'':filters.farm;
+        const reportRows=wholeFarm?O.filter(all,{farm:reportFarm,application,deleted:false}):(state.currentSubTab==='mapa-pulverizacao'?mapRows:visible);
         const rows=reportRows.filter(row=>!row.deleted&&!row.optional&&!row.unplanned).map(row=>({...row}));
         const statusLabel=names[filters.status]||'';
         const filterLabels=[filters.farm&&`Fazenda: ${filters.farm}`,filters.field&&`Talhão: ${fields.find(f=>f.key===filters.field)?.field||''}`,
             statusLabel&&`Status: ${statusLabel}`,filters.from&&`De ${date(filters.from)}`,filters.to&&`Até ${date(filters.to)}`,filters.search&&`Pesquisa: ${filters.search}`].filter(Boolean);
-        return {rows,features:[...features],application,applicationLabel,farm:filters.farm,
-            filterLabels:wholeFarm?(filters.farm?[`Fazenda: ${filters.farm}`]:[]):filterLabels};
+        return {rows,features:[...features],application,applicationLabel,farm:reportFarm,
+            filterLabels:wholeFarm?(reportFarm?[`Fazenda: ${reportFarm}`]:[]):state.currentSubTab==='mapa-pulverizacao'?[]:filterLabels};
     }
     root.SprayControl=Object.freeze({refresh,style,popup,selectFeature,reportData,mapColors:Object.freeze({...colors})});
 })(typeof window !== 'undefined'?window:globalThis);

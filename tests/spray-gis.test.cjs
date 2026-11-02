@@ -7,7 +7,7 @@ function harness({tileSize=256}={}){
     const elements=new Map(),geoJSONCalls=[],refreshCalls=[],addedLayers=[],removedLayers=[];
     function classList(){const names=new Set();return{add(name){names.add(name);},remove(name){names.delete(name);},contains(name){return names.has(name);},toggle(name,force){if(force??!names.has(name))names.add(name);else names.delete(name);return names.has(name);}};}
     const sprayNavButtons=['tabela-pulverizacao','mapa-pulverizacao'].map(view=>({dataset:{sprayView:view},classList:classList()}));
-    const sprayHeaderButtons=['tabela-pulverizacao','mapa-pulverizacao'].map(view=>({dataset:{sprayView:view},classList:classList()}));
+    const sprayHeaderButtons=[];
     const document={body:{classList:classList()},addEventListener(){},querySelector(){return null;},querySelectorAll(selector){return selector==='[data-spray-view]'?[...sprayNavButtons,...sprayHeaderButtons]:[];},getElementById(id){
         if(!elements.has(id)) elements.set(id,{id,hidden:false,textContent:'',innerHTML:'',disabled:false,style:{},closest(){return{classList:classList()};},classList:classList()});
         return elements.get(id);
@@ -132,20 +132,21 @@ test('subaba Tabela atualiza o controle sem criar camada GIS e a subaba Mapa cri
 
 test('updateOperationUI mostra exclusivamente tabela ou mapa e marca todos os botões da subaba ativa',()=>{
     const h=harness();h.state.currentSubTab='tabela-pulverizacao';h.updateOperationUI();
-    const map=h.elements.get('map-container'),panel=h.elements.get('spray-panel'),viewSwitch=h.elements.get('spray-view-switch'),mapKey=h.elements.get('spray-map-key');
+    const map=h.elements.get('map-container'),panel=h.elements.get('spray-panel'),mapFilter=h.elements.get('spray-map-filter-group'),dashboard=h.elements.get('spray-map-dashboard');
     assert.equal(panel.hidden,false);assert.equal(map.classList.contains('hidden'),true);
     assert.equal(h.document.body.classList.contains('spray-table-view'),true);
     assert.equal(h.document.body.classList.contains('spray-map-view'),false);
-    assert.equal(viewSwitch.classList.contains('hidden'),false);assert.equal(mapKey.classList.contains('hidden'),false);
-    for(const button of [...h.sprayNavButtons,...h.sprayHeaderButtons])assert.equal(button.classList.contains('active'),button.dataset.sprayView==='tabela-pulverizacao');
+    assert.equal(mapFilter.classList.contains('hidden'),true);assert.equal(dashboard.classList.contains('hidden'),true);
+    for(const button of h.sprayNavButtons)assert.equal(button.classList.contains('active'),button.dataset.sprayView==='tabela-pulverizacao');
     h.state.currentSubTab='mapa-pulverizacao';h.updateOperationUI();
     assert.equal(panel.hidden,true);assert.equal(map.classList.contains('hidden'),false);
     assert.equal(h.document.body.classList.contains('spray-table-view'),false);
     assert.equal(h.document.body.classList.contains('spray-map-view'),true);
-    for(const button of [...h.sprayNavButtons,...h.sprayHeaderButtons])assert.equal(button.classList.contains('active'),button.dataset.sprayView==='mapa-pulverizacao');
+    assert.equal(mapFilter.classList.contains('hidden'),false);assert.equal(dashboard.classList.contains('hidden'),false);
+    for(const button of h.sprayNavButtons)assert.equal(button.classList.contains('active'),button.dataset.sprayView==='mapa-pulverizacao');
     h.state.currentTab='adubacao';h.state.currentSubTab='calcario';h.updateOperationUI();
     assert.equal(panel.hidden,true);assert.equal(map.classList.contains('hidden'),false);
-    assert.equal(viewSwitch.classList.contains('hidden'),true);assert.equal(mapKey.classList.contains('hidden'),true);
+    assert.equal(mapFilter.classList.contains('hidden'),true);assert.equal(dashboard.classList.contains('hidden'),true);
     assert.equal(h.document.body.classList.contains('spraying'),false);
     assert.equal(h.document.body.classList.contains('spray-table-view'),false);
     assert.equal(h.document.body.classList.contains('spray-map-view'),false);
@@ -174,9 +175,15 @@ test('HTML agrupa o painel e mapa da pulverização sem incluir o painel de plan
     assert.doesNotMatch(contents,/plantio-panel/);
     const sidebar=html.match(/<div class="nav-group" id="nav-pulverizacao-group">([\s\S]*?)<\/div>\s*<\/div>/)?.[1]||'';
     assert.match(sidebar,/data-spray-view="tabela-pulverizacao"/);assert.match(sidebar,/data-spray-view="mapa-pulverizacao"/);
-    const header=html.match(/<nav id="spray-view-switch"[\s\S]*?<\/nav>/)?.[0]||'';
-    assert.match(header,/data-spray-view="tabela-pulverizacao"/);assert.match(header,/data-spray-view="mapa-pulverizacao"/);
-    assert.match(header,/id="spray-op-save-status"[^>]*role="status"/);
+    assert.doesNotMatch(html,/id="spray-view-switch"/,'não existe uma navegação duplicada no cabeçalho');
+    assert.equal((html.match(/data-spray-view="(?:tabela-pulverizacao|mapa-pulverizacao)"/g)||[]).length,2);
+    const mapFilterIndex=html.indexOf('id="spray-map-filter-group"');
+    assert.ok(mapFilterIndex>html.indexOf('id="filter-cultura"')&&mapFilterIndex<html.indexOf('id="operation-product-filter-group"'));
+    const dashboard=html.match(/<section id="spray-map-dashboard"[\s\S]*?<\/section>/)?.[0]||'';
+    assert.match(dashboard,/id="spray-op-map-toggle"[^>]*aria-expanded="true"/);
+    assert.match(dashboard,/id="spray-op-map-content"/);assert.match(dashboard,/id="spray-report-actions"/);
+    assert.equal((html.match(/id="spray-report-button"/g)||[]).length,1);
+    assert.doesNotMatch(html,/id="spray-map-key"/,'legenda antiga do mapa removida');
     assert.match(css,/body\.spray-table-view #map-container,body\.spray-map-view #spray-panel\s*\{\s*display:none!important/);
     assert.match(css,/body\.spraying\.spray-map-view #map-container\s*\{\s*flex:1;\s*height:100%;/);
     assert.match(css,/body\.spraying\.spray-table-view \.spray-control-panel\s*\{\s*display:flex;\s*flex:1;/);

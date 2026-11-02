@@ -8,11 +8,11 @@ const SprayOperations = require('../js/spray-operations.js');
 const SprayGrid = require('../js/spray-grid.js');
 const source = fs.readFileSync(require.resolve('../js/spray-control.js'), 'utf8');
 
-function harness({ role = 'editor', accessRole = 'admin', saveFailure = null, batchFailure = null, batchDelay = false, scheduleActuals = { post1: '2026-10-16' }, fourth = false, secondPlanned = '2026-10-18', completedWithoutDate = false } = {}) {
+function harness({ role = 'editor', accessRole = 'admin', saveFailure = null, batchFailure = null, batchDelay = false, appListFailure = null, scheduleActuals = { post1: '2026-10-16' }, fourth = false, secondPlanned = '2026-10-18', completedWithoutDate = false } = {}) {
     const elements = new Map();
     class Element {
         constructor(id) {
-            this.id = id; this.dataset = {}; this.classList = { toggle() {}, add() {}, remove() {} };
+            this.id = id; this.dataset = {}; const classes=new Set(); this.classList = { toggle(name,force){if(force??!classes.has(name))classes.add(name);else classes.delete(name);return classes.has(name);}, add(name){classes.add(name);}, remove(name){classes.delete(name);}, contains(name){return classes.has(name);} };
             this.value = ''; this.textContent = ''; this.innerHTML = ''; this.hidden = false; this.disabled = false;
             this.checked = false; this.readOnly = false; this.onchange = null; this.oninput = null; this.onclick = null; this.onsubmit = null;
             this.attributes = {};
@@ -41,6 +41,7 @@ function harness({ role = 'editor', accessRole = 'admin', saveFailure = null, ba
     const appsRepo = {
         async list(farms, year, culture) {
             calls.list.push({ farms: [...farms], year, culture });
+            if(appListFailure)throw appListFailure;
             return saved.filter(row => farms.includes(row.farm) && row.year === year && row.culture === culture).map(row => ({ ...row }));
         },
         async save(row, field) {
@@ -101,7 +102,7 @@ function harness({ role = 'editor', accessRole = 'admin', saveFailure = null, ba
     const tick = () => new Promise(resolve => setImmediate(resolve));
     const el = name => document.getElementById('spray-op-' + name);
     el('form').hidden = true;
-    return { api: window.SprayControl, state, features, layers, calls, el, tick, saved, domRows, scheduleRows,
+    return { api: window.SprayControl, state, features, layers, calls, el, document, tick, saved, domRows, scheduleRows,
         releaseBatch() { releaseBatch?.(); }, setBatchFailure(value) { batchReject = value; } };
 }
 
@@ -123,6 +124,45 @@ test('confirmed load renders generated applications, summary, and a gray field w
     assert.match(h.el('table').innerHTML, /FE 03/);
     assert.equal(h.api.style(h.features[1]).fillColor, '#94a3b8');
     assert.equal(h.api.style(h.features[1]).fillOpacity, .18);
+});
+
+test('map dashboard shows area summary, scopes by map application, toggles, and follows role changes', async () => {
+    const h=harness();h.state.currentSubTab='mapa-pulverizacao';h.api.refresh(h.state,h.features);
+    assert.match(h.el('map-content').innerHTML,/Carregando aplicações/);
+    await h.tick();
+    assert.equal(h.el('map-title').textContent,'Acompanhamento da Pulverização');
+    assert.match(h.el('map-content').innerHTML,/ÁREA PROGRAMADA/);
+    assert.match(h.el('map-content').innerHTML,/ÁREA REALIZADA/);
+    assert.match(h.el('map-content').innerHTML,/Atrasadas/);
+    assert.match(h.el('map-content').innerHTML,/Em dia/);
+    assert.match(h.el('map-content').innerHTML,/Próximas da data/);
+    assert.match(h.el('map-content').innerHTML,/350 ha/);
+    assert.equal(h.el('map-toggle').attributes['aria-expanded'],'true');
+    h.el('map-toggle').onclick();assert.equal(h.el('map-toggle').attributes['aria-expanded'],'false');
+    assert.equal(h.document.getElementById('spray-map-dashboard').classList.contains('collapsed'),true);
+    h.el('map-toggle').onclick();assert.equal(h.el('map-toggle').attributes['aria-expanded'],'true');
+
+    h.el('map-application').value='post1';h.el('map-application').onchange();
+    assert.match(h.el('map-title').textContent,/1ª Pós-Emergente/);
+    assert.match(h.el('map-content').innerHTML,/70 ha/);
+    assert.equal(h.document.getElementById('spray-report-button').hidden,false);
+    h.state.userRole='viewer';h.api.refresh(h.state,h.features);
+    assert.equal(h.document.getElementById('spray-report-button').hidden,true);
+    assert.match(h.el('map-content').innerHTML,/ÁREA PROGRAMADA/);
+});
+
+test('map dashboard load error replaces KPIs and map scope ignores unsaved drafts', async () => {
+    const broken=harness({appListFailure:Error('Sem conexão')});broken.state.currentSubTab='mapa-pulverizacao';
+    broken.api.refresh(broken.state,broken.features);assert.match(broken.el('map-content').innerHTML,/Carregando/);
+    await broken.tick();assert.match(broken.el('map-content').innerHTML,/Sem conexão/);
+    assert.doesNotMatch(broken.el('map-content').innerHTML,/ÁREA PROGRAMADA|progress-bar|status-summary/);
+
+    const h=harness({batchFailure:Error('Conflito'),secondPlanned:'2026-11-20'});h.state.currentSubTab='mapa-pulverizacao';
+    h.api.refresh(h.state,h.features);await h.tick();h.el('map-application').value='post1';h.el('map-application').onchange();
+    const confirmed=h.el('map-content').innerHTML;
+    await h.el('table').onchange({target:{dataset:{sprayKey:'plant-3:post1',sprayCell:'actual'},value:'2026-10-20'}});
+    assert.equal(h.el('save-status').textContent,'Não salvo');
+    assert.equal(h.el('map-content').innerHTML,confirmed);
 });
 
 test('independent pre-planting rows appear first and never alter the linked post/fungicide schedule', async () => {

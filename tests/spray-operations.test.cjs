@@ -288,3 +288,30 @@ test('validate confere talhão, aplicação, datas, área, dose e limites dos me
     assert.throws(()=>Spray.validate({...base,responsible:'x'.repeat(151)},field,'2026-11-19'),/tamanho dos textos/);
     assert.throws(()=>Spray.validate({...base,notes:'x'.repeat(2001)},field,'2026-11-19'),/tamanho dos textos/);
 });
+
+test('areaSummary partitions planned hectares, includes undated completion, and excludes inactive rows',()=>{
+    const rows=[
+        {area:10,status:'completed',actual:'2026-10-10'},
+        {area:5,status:'completed',completedWithoutDate:true},
+        {area:20,status:'attention'},
+        {area:25,status:'scheduled'},
+        {area:30,status:'overdue'},
+        {area:100,status:'completed',actual:'2026-10-10',deleted:true},
+        {area:200,status:'optional',optional:true},
+        {area:300,status:'unplanned',unplanned:true}
+    ];
+    const result=Spray.areaSummary(rows);
+    assert.equal(result.plannedArea,90);assert.equal(result.appliedArea,15);
+    assert.equal(result.completed,2);assert.equal(result.overdueArea,30);
+    assert.equal(result.onTimeArea,45);assert.equal(result.attentionArea,20);
+    assert.equal(result.onTimeCount,2);assert.equal(result.overdue,1);
+    assert.equal(result.appliedArea+result.overdueArea+result.onTimeArea,result.plannedArea);
+    assert.ok(Math.abs(result.progress-100*15/90)<1e-9);
+});
+
+test('areaSummary returns zero-valued categories for an empty selection',()=>{
+    const result=Spray.areaSummary([]);
+    assert.equal(result.plannedArea,0);assert.equal(result.appliedArea,0);
+    assert.equal(result.overdueArea,0);assert.equal(result.onTimeArea,0);
+    assert.equal(result.attentionArea,0);assert.equal(result.progress,0);
+});

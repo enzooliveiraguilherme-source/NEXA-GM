@@ -487,6 +487,31 @@ body.spraying .spray-compact-cell input:focus { background:#fff; outline:2px sol
 .spray-map-key strong { font-size:12px; }
 .spray-map-key span { display:flex; align-items:center; gap:7px; }
 .spray-map-key i { width:11px; height:11px; border-radius:3px; border:1px solid #0002; }
+.spray-map-application-filter { min-width:220px; max-width:340px; }
+.spray-map-dashboard { max-height:calc(100% - 28px); overflow:auto; }
+.spray-map-dashboard .dashboard-title-box { flex-wrap:wrap; min-width:0; }
+.spray-map-dashboard .dashboard-header-toggle { gap:10px; }
+.spray-map-dashboard .card-realizada .kpi-value,.spray-map-dashboard .card-realizada .kpi-icon-wrapper { color:#1673d1; }
+.spray-map-status .status-pill-header strong { color:var(--spray-status-color); }
+.spray-map-status .status-pill-numbers { flex-wrap:wrap; }
+.spray-map-attention { display:block; margin-top:4px; font-size:10px; color:#946800; }
+.spray-map-note,.spray-map-message { margin:0; font-size:10px; color:#607287; }
+.spray-report-actions { display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
+.spray-report-actions #spray-report-status,.spray-save-state { color:#637b90; font-size:10px; }
+.spray-map-dashboard .spray-report-actions #spray-report-status { max-width:160px; }
+.spray-save-state { align-self:center; }
+@media(max-width:820px) {
+    .spray-map-dashboard { width:calc(100% - 20px); top:10px; left:10px; max-height:55dvh; }
+    .spray-map-dashboard .dashboard-content { padding:10px; gap:8px; }
+    .spray-map-dashboard .kpi-cards-grid,.spray-map-dashboard .status-summary-grid { grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; }
+    .spray-map-dashboard .kpi-icon-wrapper { display:none; }
+    .spray-map-dashboard .kpi-card { padding:8px 6px; }
+    .spray-map-dashboard .kpi-value { font-size:14px; }
+    .spray-map-dashboard .kpi-title,.spray-map-dashboard .kpi-subtitle { font-size:9px; }
+    .spray-map-dashboard .status-pill { padding:8px 6px; min-width:0; }
+    .spray-map-dashboard .status-ha { font-size:12px; }
+    .spray-map-dashboard .progress-bar-label-row { font-size:10px; gap:6px; }
+}
 .spray-map-popup { max-height:270px; overflow:auto; min-width:210px; font-size:11px; line-height:1.6; }
 .spray-map-popup>strong { font-size:13px; }.spray-map-popup section { border-top:1px solid #dbe4ed; padding-top:7px; margin-top:7px; }
 @media(max-width:820px) { .spray-control-actions .spray-mobile-map { display:block; }#spray-op-table { max-height:48dvh; } }

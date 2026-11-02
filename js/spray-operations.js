@@ -119,6 +119,15 @@
         if (apps.some(row => row.status === 'attention')) return 'attention';
         return 'scheduled';
     }
+    function areaSummary(rows) {
+        const active=rows.filter(row=>!row.deleted&&!row.optional&&!row.unplanned),totals=summarize(active);
+        const overdue=active.filter(row=>!isCompleted(row)&&row.status==='overdue');
+        const onTime=active.filter(row=>!isCompleted(row)&&['scheduled','attention'].includes(row.status));
+        const attention=onTime.filter(row=>row.status==='attention');
+        const area=items=>items.reduce((sum,row)=>sum+Number(row.area),0);
+        return {...totals,overdueArea:area(overdue),onTimeArea:area(onTime),attentionArea:area(attention),
+            onTimeCount:onTime.length,progress:totals.plannedArea?100*totals.appliedArea/totals.plannedArea:0};
+    }
     function validate(row, field, current = S.today()) {
         if (!field || row.farm !== field.farm || row.field !== field.field) throw Error('Escolha um talhão cadastrado.');
         if (!String(row.name || '').trim()) throw Error('Informe a aplicação.');
@@ -130,7 +139,7 @@
         if (String(row.product || '').length > 150 || String(row.responsible || '').length > 150 || String(row.notes || '').length > 2000) throw Error('Confira o tamanho dos textos informados.');
         return true;
     }
-    const api = Object.freeze({ fieldKey, rowKey, status, isCompleted, build, filter, sort, summarize, mapStatus, validate, applicationKey, matchesApplication, applicationOptions, matrix,independentSteps,isIndependent,independentKey });
+    const api = Object.freeze({ fieldKey, rowKey, status, isCompleted, build, filter, sort, summarize, areaSummary, mapStatus, validate, applicationKey, matchesApplication, applicationOptions, matrix,independentSteps,isIndependent,independentKey });
     root.SprayOperations = api;
     if (typeof module !== 'undefined') module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

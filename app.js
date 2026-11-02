@@ -745,9 +745,9 @@ function updateOperationUI() {
     document.body.classList.toggle('spray-map-view', sprayMap);
     document.body.classList.toggle('spray-table-view', spraying && !sprayMap);
     document.getElementById('map-container')?.classList.toggle('hidden', spraying && !sprayMap);
-    document.getElementById('spray-view-switch')?.classList.toggle('hidden', !spraying);
+    document.getElementById('spray-map-filter-group')?.classList.toggle('hidden', !sprayMap);
+    document.getElementById('spray-map-dashboard')?.classList.toggle('hidden', !sprayMap);
     document.querySelectorAll('[data-spray-view]').forEach(button=>button.classList.toggle('active',spraying&&button.dataset.sprayView===(sprayMap?'mapa-pulverizacao':'tabela-pulverizacao')));
-    document.getElementById('spray-map-key')?.classList.toggle('hidden', !spraying);
     const sprayPanel = document.getElementById('spray-panel');
     if (sprayPanel) sprayPanel.hidden = !spraying || sprayMap;
     const operation = OPERACOES_CONFIG[state.currentTab];
