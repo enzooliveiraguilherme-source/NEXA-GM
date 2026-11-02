@@ -18,16 +18,24 @@ test('build inclui talhões sem execução, deduplica geometrias e gera aplicaç
         {year:'2026',culture:'Soja'},'2026-11-01');
     assert.equal(result.fields.length,3);
     assert.deepEqual(result.fields.map(field=>[field.field,field.plantingId,field.plantedArea]),[['FE 01','p1',60],['FE 02','p2',60],['FE 03',null,0]]);
-    assert.equal(result.applications.length,6);
-    assert.deepEqual(result.applications.map(row=>row.stage),['post1','post2','fung1','fung2','fung3','fung4']);
-    assert.equal(result.applications[0].planned,'2026-11-16');
-    assert.equal(result.applications[0].actual,'2026-11-18');
-    assert.equal(result.applications[0].status,'completed');
-    assert.equal(result.applications[1].planned,'2026-11-28');
-    assert.equal(result.applications[2].planned,'2026-12-08');
-    assert.equal(result.applications[2].provisional,true);
-    assert.ok(result.applications.every(row=>row.field==='FE 01'&&row.area===60));
-    assert.equal(result.applications[5].optional,true);assert.equal(result.applications[5].status,'optional');
+    assert.equal(result.applications.length,15);
+    const independent=result.applications.filter(row=>row.independent);
+    assert.equal(independent.length,9);
+    assert.deepEqual(independent.filter(row=>row.field==='FE 01').map(row=>row.stage),['pre','boro','desiccation']);
+    assert.deepEqual(independent.filter(row=>row.field==='FE 02').map(row=>row.stage),['pre','boro','desiccation']);
+    assert.deepEqual(independent.filter(row=>row.field==='FE 03').map(row=>row.stage),['pre','boro','desiccation']);
+    assert.equal(independent.find(row=>row.field==='FE 01'&&row.stage==='pre').plantingId,null);
+    assert.equal(independent.find(row=>row.field==='FE 01'&&row.stage==='pre').unplanned,true);
+    assert.equal(independent.find(row=>row.field==='FE 01'&&row.stage==='pre').status,'unplanned');
+    assert.equal(independent.find(row=>row.field==='FE 02'&&row.stage==='boro').plantingId,null);
+    assert.equal(independent.find(row=>row.field==='FE 02'&&row.stage==='boro').unplanned,true);
+    const linked=result.applications.filter(row=>row.plantingId==='p1');
+    assert.equal(linked.length,6);
+    assert.deepEqual(linked.map(row=>row.stage),['post1','post2','fung1','fung2','fung3','fung4']);
+    assert.equal(linked[0].planned,'2026-11-16');assert.equal(linked[0].actual,'2026-11-18');assert.equal(linked[0].status,'completed');
+    assert.equal(linked[1].planned,'2026-11-28');assert.equal(linked[2].planned,'2026-12-08');assert.equal(linked[2].provisional,true);
+    assert.ok(linked.every(row=>row.field==='FE 01'&&row.area===60));
+    assert.equal(linked[5].optional,true);assert.equal(linked[5].status,'optional');
     assert.ok(Spray.applicationOptions(result.applications).some(option=>option.key==='fung4'));
     assert.ok(Spray.matrix(result.applications).columns.some(column=>column.key==='fung4'));
     assert.deepEqual(Spray.summarize(result.applications),{total:5,completed:1,pending:4,overdue:0,attention:0,scheduled:4,plannedArea:300,appliedArea:60});
@@ -70,7 +78,8 @@ test('build inclui a quarta aplicação por schedule ou metadado salvo e restrin
     assert.equal(result.applications.find(row=>row.plantingId==='p2'&&row.stage==='fung4').optional,false);
     const wrongContext=Spray.build(features,records,schedules,saved,{year:'2027',culture:'Milho'},'2026-11-01');
     assert.equal(wrongContext.fields.length,2);assert.equal(wrongContext.fields.every(field=>!field.plantingId),true);
-    assert.equal(wrongContext.applications.length,0);
+    assert.equal(wrongContext.applications.length,6);
+    assert.ok(wrongContext.applications.every(row=>row.independent&&!row.plantingId&&row.unplanned));
 });
 
 test('build considera aplicações manuais apenas dentro do contexto e nos talhões presentes',()=>{
@@ -81,7 +90,27 @@ test('build considera aplicações manuais apenas dentro do contexto e nos talh�
         {id:'m3',farm:'FE',field:'FE 02',year:'2026',culture:'Soja',name:'Talhão fora',planned:'2026-11-20',area:40}
     ];
     const result=Spray.build(features,[],[],saved,{year:'2026',culture:'Soja'},'2026-11-01');
-    assert.deepEqual(result.applications.map(row=>row.id),['m1']);
+    assert.equal(result.applications.filter(row=>row.independent).length,3);
+    assert.deepEqual(result.applications.filter(row=>row.id).map(row=>row.id),['m1']);
+});
+
+test('independentes são três por talhão, reconciliadas sem duplicar e persistem antes e depois do plantio',()=>{
+    const features=[feature('FE','FE 01',100),feature('FE','FE 01',95)];
+    const saved=[{farm:'FE',field:'FE 01',year:'2026',culture:'Soja',stage:'pre',planned:null,actual:'2026-10-20',area:40,product:'Pré herbicida'}];
+    const beforePlanting=Spray.build(features,[],[],saved,{year:'2026',culture:'Soja'},'2026-11-01');
+    assert.equal(beforePlanting.fields.length,1);assert.equal(beforePlanting.applications.length,3);
+    const pre=beforePlanting.applications.find(row=>row.stage==='pre');
+    assert.equal(pre.key, Spray.independentKey('FE','FE 01','2026','Soja','pre'));
+    assert.equal(pre.plantingId,null);assert.equal(pre.actual,'2026-10-20');assert.equal(pre.planned,null);
+    assert.equal(pre.unplanned,false);assert.equal(pre.status,'completed');assert.equal(pre.product,'Pré herbicida');
+    assert.equal(Spray.summarize(beforePlanting.applications).total,1);
+    assert.equal(Spray.summarize(beforePlanting.applications).appliedArea,40);
+    const afterPlanting=Spray.build(features,[planting('p1','FE','FE 01')],[],saved,{year:'2026',culture:'Soja'},'2026-11-01');
+    assert.equal(afterPlanting.fields.length,1);assert.equal(afterPlanting.applications.filter(row=>row.stage==='pre').length,1);
+    assert.equal(afterPlanting.applications.length,9);
+    const loaded=afterPlanting.applications.find(row=>row.stage==='pre');
+    assert.equal(loaded.key,pre.key);assert.equal(loaded.actual,'2026-10-20');assert.equal(loaded.plantingId,null);
+    assert.equal(afterPlanting.applications.find(row=>row.stage==='post1').planned,'2026-11-16');
 });
 
 test('filter pesquisa sem acentos em fazenda, talhão e metadados, com filtros exatos e período inclusivo',()=>{
@@ -115,6 +144,7 @@ test('summarize exclui removidas e soma área planejada e aplicada por aplicaç�
         {area:25,actual:null,status:'overdue'},
         {area:40,actual:null,status:'attention'},
         {area:10,actual:null,status:'scheduled'},
+        {area:200,actual:null,status:'unplanned',unplanned:true},
         {area:100,actual:'2026-11-18',status:'completed',deleted:true}
     ];
     assert.deepEqual(Spray.summarize(rows),{total:4,completed:1,pending:3,overdue:1,attention:1,scheduled:1,plannedArea:100,appliedArea:25});
@@ -138,6 +168,7 @@ test('mapStatus ignora aplicações opcionais, prioriza atraso/atenção e mant�
     assert.equal(Spray.mapStatus(rows,'pending',null),'scheduled');
     assert.equal(Spray.mapStatus([{fieldKey:'scheduled',status:'scheduled',actual:null}],'scheduled'),'scheduled');
     assert.equal(Spray.mapStatus([{fieldKey:'optional-only',status:'optional',actual:null,optional:true}],'optional-only'),'empty');
+    assert.equal(Spray.mapStatus([{fieldKey:'unplanned-only',status:'unplanned',actual:null,unplanned:true}],'unplanned-only'),'empty');
     assert.equal(Spray.mapStatus(rows,'empty',null),'empty');
     assert.equal(Spray.mapStatus(rows,'late','late'),'pending');
     assert.equal(Spray.mapStatus(rows,'done','done'),'completed');

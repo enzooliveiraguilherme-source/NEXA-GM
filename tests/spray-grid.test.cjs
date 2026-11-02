@@ -14,6 +14,11 @@ function app(plantingId,stage,extra={}) {
         scheduleVersion:1,...extra};
 }
 function schedule(id='p1',version=1,actuals={}) { return {plantingId:id,actuals:{...actuals},fourth:false,version}; }
+function independent(stage,extra={}) {
+    const key=Operations.independentKey('FE','FE 01','2026','Soja',stage);
+    return {key,id:key,plantingId:null,stage,independent:true,farm:'FE',field:'FE 01',year:'2026',culture:'Soja',
+        name:Operations.independentSteps.find(step=>step.id===stage).name,planned:null,actual:null,unplanned:true,area:100,dose:null,doseUnit:'L/ha',product:'',responsible:'',notes:'',...extra};
+}
 
 test('drafts editam campos permitidos, ignoram colunas somente leitura, expõem size/has/rows e limpam',()=>{
     const grid=Grid.create(),row=app('p1','post1'),farmField=field();
@@ -97,4 +102,25 @@ test('projetar o 4º fungicida ativa a quarta etapa mesmo com fourth false na fo
     const result=Operations.build([feature],[record],projected.schedules,projected.saved,{year:'2026',culture:'Soja'},'2026-11-01');
     const fourth=result.applications.find(row=>row.stage==='fung4');
     assert.equal(fourth.optional,false);assert.equal(fourth.planned,'2027-02-01');assert.equal(fourth.product,'Fungicida D');
+});
+
+test('drafts independentes usam chave por talhão/safra/cultura/etapa e permitem realização pré-plantio sem agenda',()=>{
+    const grid=Grid.create(),farmField=field(),pre=independent('pre',{area:40}),boro=independent('boro'),desiccation=independent('desiccation');
+    grid.edit(pre,farmField,null,'actual','2026-10-20');
+    grid.edit(boro,farmField,null,'planned','2026-10-25');
+    grid.edit(desiccation,farmField,null,'actual','2026-10-30');
+    assert.equal(grid.size,3);
+    assert.deepEqual(grid.rows().map(row=>row.key),[
+        Operations.independentKey('FE','FE 01','2026','Soja','pre'),
+        Operations.independentKey('FE','FE 01','2026','Soja','boro'),
+        Operations.independentKey('FE','FE 01','2026','Soja','desiccation')
+    ]);
+    assert.equal(grid.validate().length,3);
+    const projected=grid.project([],[]);
+    assert.deepEqual(projected.schedules,[]);
+    assert.equal(projected.saved.length,3);
+    assert.equal(projected.saved[0].planned,null);assert.equal(projected.saved[0].actual,'2026-10-20');
+    assert.equal(projected.saved[1].planned,'2026-10-25');
+    assert.equal(projected.saved[2].planned,null);assert.equal(projected.saved[2].actual,'2026-10-30');
+    assert.equal(projected.saved[0].key,Operations.independentKey('FE','FE 01','2026','Soja','pre'));
 });

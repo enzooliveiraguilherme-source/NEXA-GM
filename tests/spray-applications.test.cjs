@@ -106,6 +106,34 @@ test('manual planned date and empty dose are normalized while actual date is ret
     assert.equal(payload.planting_record_id, null);
 });
 
+test('independent pre-planting applications keep null source and accept actual-only dates', async () => {
+    const cases = [
+        { stage: 'pre', name: 'Pré-emergente', actual: '2026-09-20', dose: '' },
+        { stage: 'boro', name: 'Boro', actual: '2026-09-22', dose: '1.25' },
+        { stage: 'desiccation', name: 'Dessecação pré-plantio', planned: '2026-09-25', actual: '2026-09-28', dose: '' }
+    ];
+    for (const item of cases) {
+        const client = fakeClient({ rpc: call => ({ data: dbRow({
+            id: `independent-${item.stage}`, planting_record_id: null, stage_id: item.stage,
+            application_name: item.name, product: 'Produto', dose: item.dose ? Number(item.dose) : null,
+            planned_date: item.planned || null, actual_date: item.actual
+        }), error: null }) });
+        await create(client).save(application({
+            id: `independent-${item.stage}`, plantingId: null, stage: item.stage, name: item.name,
+            planned: item.planned || null, actual: item.actual, autoDate: false,
+            dose: item.dose, version: null, scheduleVersion: null
+        }), field());
+        const rpc = client.calls[0];
+        assert.equal(rpc.name, 'save_spray_application');
+        assert.equal(rpc.payload.p_payload.planting_record_id, null);
+        assert.equal(rpc.payload.p_payload.stage_id, item.stage);
+        assert.equal(rpc.payload.p_payload.planned_date, item.planned || null);
+        assert.equal(rpc.payload.p_payload.actual_date, item.actual);
+        assert.equal(rpc.payload.p_schedule_version, null);
+        assert.equal(rpc.payload.p_payload.dose, item.dose ? Number(item.dose) : null);
+    }
+});
+
 test('invalid application date or field area is rejected before RPC', async t => {
     await t.test('invalid planned date', async () => {
         const client = fakeClient({ rpc: () => { throw Error('unexpected RPC'); } });

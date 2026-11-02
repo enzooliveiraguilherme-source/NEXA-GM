@@ -21,7 +21,7 @@
             return { id: row.id || null, fazenda: row.farm, campo: row.field, ano: row.year, cultura: row.culture,
                 planting_record_id: row.plantingId || null, stage_id: row.stage || null, application_name: row.name,
                 product: row.product || '', dose: row.dose === '' || row.dose == null ? null : Number(row.dose),
-                dose_unit: row.doseUnit || 'L/ha', area: Number(row.area), planned_date: row.plantingId && row.autoDate ? null : row.planned,
+                dose_unit: row.doseUnit || 'L/ha', area: Number(row.area), planned_date: row.plantingId && row.autoDate ? null : row.planned || null,
                 actual_date: row.actual || null, responsible: row.responsible || '', notes: row.notes || '', deleted: !!row.deleted };
         }
         return {

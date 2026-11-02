@@ -58,7 +58,7 @@ function harness({ role = 'editor', accessRole = 'admin', saveFailure = null, ba
             if (batchReject) throw batchReject;
             const result = rows.map(row => ({ ...row, version: (row.version || 0) + 1 }));
             for (const row of result) {
-                const index = saved.findIndex(item => item.id === row.id);
+                const index = saved.findIndex(item => (row.id && item.id === row.id) || SprayOperations.rowKey(item) === SprayOperations.rowKey(row));
                 if (index >= 0) saved[index] = row;
                 else saved.push(row);
                 if (row.plantingId) {
@@ -123,6 +123,48 @@ test('confirmed load renders generated applications, summary, and a gray field w
     assert.match(h.el('table').innerHTML, /FE 03/);
     assert.equal(h.api.style(h.features[1]).fillColor, '#94a3b8');
     assert.equal(h.api.style(h.features[1]).fillOpacity, .18);
+});
+
+test('independent pre-planting rows appear first and never alter the linked post/fungicide schedule', async () => {
+    const h = harness();
+    h.api.refresh(h.state, h.features); await h.tick();
+    let html = h.el('table').innerHTML;
+    const pre = html.indexOf('Pré-emergente'), boro = html.indexOf('Boro'), desiccation = html.indexOf('Dessecação pré-plantio');
+    const firstPost = html.indexOf('1ª Pós');
+    assert.ok(pre >= 0 && boro > pre && desiccation > boro && firstPost > desiccation);
+    assert.match(html, /data-spray-cell="planned" data-spray-key="independent:/);
+    assert.match(h.el('summary').innerHTML, /<strong>10<\/strong>/); // only the two planted five-step schedules count
+    assert.equal(h.api.style(h.features[1]).fillColor, '#94a3b8'); // unplanned independent rows do not color the map
+
+    const beforeSchedule = structuredClone(h.scheduleRows[0].actuals);
+    const preKey = SprayOperations.independentKey('FE', 'FE 01', '2026', 'Soja', 'pre');
+    const boroKey = SprayOperations.independentKey('FE', 'FE 01', '2026', 'Soja', 'boro');
+    const desKey = SprayOperations.independentKey('FE', 'FE 01', '2026', 'Soja', 'desiccation');
+    await h.el('table').onchange({ target: { dataset: { sprayKey: preKey, sprayCell: 'actual' }, value: '2026-09-20' } });
+    assert.equal(h.calls.batch[0].rows[0].stage, 'pre');
+    assert.equal(h.calls.batch[0].rows[0].plantingId, null);
+    assert.equal(h.calls.batch[0].rows[0].planned, null);
+    assert.equal(h.calls.batch[0].rows[0].actual, '2026-09-20');
+    assert.equal(h.calls.batch[0].rows[0].scheduleVersion, null);
+    assert.deepEqual(h.scheduleRows[0].actuals, beforeSchedule);
+
+    await h.el('table').onchange({ target: { dataset: { sprayKey: boroKey, sprayCell: 'dose' }, value: '3.5' } });
+    assert.equal(h.calls.batch[1].rows[0].stage, 'boro');
+    assert.equal(h.calls.batch[1].rows[0].dose, '3.5');
+    await h.el('table').onchange({ target: { dataset: { sprayKey: boroKey, sprayCell: 'actual' }, value: '2026-09-22' } });
+    assert.equal(h.calls.batch[2].rows[0].stage, 'boro');
+    assert.equal(h.calls.batch[2].rows[0].actual, '2026-09-22');
+
+    await h.el('table').onchange({ target: { dataset: { sprayKey: desKey, sprayCell: 'planned' }, value: '2026-09-23' } });
+    assert.equal(h.calls.batch[3].rows[0].stage, 'desiccation');
+    assert.equal(h.calls.batch[3].rows[0].planned, '2026-09-23');
+    await h.el('table').onchange({ target: { dataset: { sprayKey: desKey, sprayCell: 'actual' }, value: '2026-09-24' } });
+    assert.equal(h.calls.batch[4].rows[0].stage, 'desiccation');
+    assert.equal(h.calls.batch[4].rows[0].actual, '2026-09-24');
+    assert.deepEqual(h.scheduleRows[0].actuals, beforeSchedule);
+    html = h.el('table').innerHTML;
+    assert.match(html, /data-spray-cell="actual" data-spray-key="plant-1:post1"[^>]*value="2026-10-16"/);
+    assert.match(html, /data-spray-cell="actual" data-spray-key="plant-1:post2"[^>]*value=""/);
 });
 
 test('editing preserves the form after rejection and closes then reloads after success', async t => {
@@ -217,7 +259,7 @@ test('selecting visible applications applies a bulk value only to selected rows'
     await h.el('bulk-apply').onclick();
     await h.tick();
     assert.equal(h.calls.batch.length, 1);
-    assert.equal(h.calls.batch[0].rows.length, 10);
+    assert.equal(h.calls.batch[0].rows.length, 19);
     assert.ok(h.calls.batch[0].rows.every(row => row.responsible === 'Equipe de pulverização'));
     assert.equal(h.el('save-status').textContent, 'Salvo');
 });
@@ -394,7 +436,7 @@ test('optional fourth step is visible, autosaves with schedule version, and stay
     h.el('bulk-field').value = 'responsible'; h.el('bulk-field').onchange();
     h.el('bulk-value').value = 'Equipe';
     await h.el('bulk-apply').onclick(); await h.tick();
-    assert.equal(h.calls.batch[1].rows.length, 11);
+    assert.equal(h.calls.batch[1].rows.length, 20);
     assert.ok(h.calls.batch[1].rows.some(row => row.key === 'plant-1:fung4'));
     assert.ok(h.calls.batch[1].rows.every(row => row.key !== 'plant-3:fung4'));
     h.el('table').onchange({ target: { dataset: { sprayCheck: 'plant-3:fung4' }, checked: true } });

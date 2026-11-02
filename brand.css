@@ -425,6 +425,7 @@ body.spraying .spray-compact-table th small { display:inline; margin-left:6px; f
 .spray-compact-cell.completed { border-left-color:#1673d1; background:#e8f2ff; }
 .spray-compact-cell.scheduled { border-left-color:#33a35e; background:#f2faf5; }
 .spray-compact-cell.optional { border-left-color:#a9b5c3; background:#f6f7f9; color:#7a8999; }
+.spray-compact-cell.unplanned { border-left-color:#c4ccd5; background:#f8f9fa; color:#7a8999; }
 .spray-compact-cell.attention { border-left-color:#dba925; background:#fff9e9; }
 .spray-compact-cell.overdue { border-left-color:#df6868; background:#fff5f5; }
 .spray-compact-cell+.spray-compact-cell { margin-top:3px; }
@@ -453,6 +454,7 @@ body.spraying .spray-compact-cell input:focus { background:#fff; outline:2px sol
 .spray-matrix-entry.has-draft,.spray-operations-table .has-draft { box-shadow:inset 3px 0 #d99800; }
 .spray-control-panel .spray-status.completed { background:#e0edf8; color:#194e7a; }
 .spray-control-panel .spray-status.optional { background:#eef1f5; color:#6d7e90; }
+.spray-control-panel .spray-status.unplanned { background:#eef1f5; color:#6d7e90; }
 .spray-panel input.spray-cell-draft { border-color:#d99800; background:#fff9e8; }
 .spray-operations-table input:not([type="checkbox"]) { min-width:110px; border:1px solid #cbd7e5; border-radius:5px; padding:8px; font:inherit; color:#102c4d; }
 .spray-map-key label { display:grid; gap:5px; font-size:11px; }

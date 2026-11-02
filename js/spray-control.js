@@ -5,7 +5,7 @@
     const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
     const date = value => value ? value.split('-').reverse().join('/') : '—';
     const ha = value => Number(value || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + ' ha';
-    const names = { completed:'Realizada', scheduled:'No prazo', attention:'Atenção', overdue:'Atrasada', optional:'Opcional' };
+    const names = { completed:'Realizada', scheduled:'No prazo', attention:'Atenção', overdue:'Atrasada', optional:'Opcional', unplanned:'Sem data' };
     const colors = { completed:'#1673d1', scheduled:'#169447', attention:'#f5c542', pending:'#df3838', empty:'#94a3b8' };
     const grid=root.SprayGrid.create(),checked=new Set();
     let mode='grid',mapApplication='all',mapRows=[];
@@ -43,7 +43,7 @@
     }
     function popup(feature) {
         const p = feature.properties || {}, key = O.fieldKey(p.Fazenda,p.Campo);
-        let apps = mapRows.filter(row => row.fieldKey === key && !row.deleted && !row.optional);
+        let apps = mapRows.filter(row => row.fieldKey === key && !row.deleted && !row.optional && !row.unplanned);
         const chosen = apps.find(row => row.key === selectedRow);
         if (chosen) apps = [chosen];
         return `<div class="spray-map-popup"><strong>${escape(p.Campo)} · ${escape(p.Fazenda)}</strong><div>Área do talhão: ${ha(p.Area)}</div>` +
@@ -77,7 +77,7 @@
     function selection(row){return canEdit()&&!row.deleted?`<input type="checkbox" data-spray-check="${escape(row.key)}" aria-label="Selecionar ${escape(row.field+' · '+row.name)}"${checked.has(row.key)?' checked':''}${busy?' disabled':''}>`:'';}
     function matrixTable(){
         const matrix=O.matrix(visible);
-        const heading=column=>(S.steps.find(step=>step.id===column.key)?.short||column.label)+(column.key==='fung4'?' (opcional)':'');
+        const heading=column=>([...O.independentSteps,...S.steps].find(step=>step.id===column.key)?.short||column.label)+(column.key==='fung4'?' (opcional)':'');
         return `<table class="spray-matrix spray-compact-table"><thead><tr><th scope="col" rowspan="2"><button type="button" data-spray-sort="field">Talhão / Fazenda</button></th>${matrix.columns.map(column=>`<th scope="colgroup" colspan="2">${escape(heading(column))}</th>`).join('')}</tr><tr>${matrix.columns.map(()=>'<th scope="col">Prevista</th><th scope="col">Realizada</th>').join('')}</tr></thead><tbody>`+matrix.rows.map(field=>`<tr data-spray-field-key="${escape(field.key)}" class="spray-field-row"><th scope="row"><button type="button" data-spray-field-select="${escape(field.key)}">${escape(field.field)}<small>${escape(field.farm)}</small></button></th>`+matrix.columns.map(column=>['planned','actual'].map(kind=>`<td>${(field.cells.get(column.key)||[]).map(row=>`<div class="spray-compact-cell ${row.status}${grid.has(row.key)?' has-draft':''}" data-spray-row="${escape(row.key)}" title="${escape(row.name+' · '+names[row.status])}">${cell(row,kind)}</div>`).join('')||'—'}</td>`).join('')).join('')+'</tr>').join('')+'</tbody></table>';
     }
     function listTable(){
@@ -139,7 +139,7 @@
         const cards = [['Programadas',totals.total],['Realizadas',totals.completed],['Pendentes',totals.pending],['Atrasadas',totals.overdue],['Área programada',ha(totals.plannedArea)],['Área aplicada',ha(totals.appliedArea)]];
         el('summary').innerHTML=cards.map(([label,value])=>`<div class="spray-kpi"><span>${label}</span><strong>${value}</strong></div>`).join('');
         el('counts').innerHTML=`<span class="spray-status scheduled">${totals.scheduled} no prazo</span> <span class="spray-status attention">${totals.attention} próximas</span> <span class="spray-status overdue">${totals.overdue} atrasadas</span> <span>${visible.length} registros neste filtro · ${totals.total?Math.round(totals.completed/totals.total*100):0}% concluído</span>`;
-        const next=O.sort(visible.filter(row=>!row.deleted&&!row.optional&&!row.actual),'planned',1)[0];
+        const next=O.sort(visible.filter(row=>!row.deleted&&!row.optional&&!row.unplanned&&!row.actual),'planned',1)[0];
         el('next').textContent=next?`Próxima pendência: ${next.name} · ${next.farm} / ${next.field} · ${date(next.planned)}`:'Nenhuma aplicação pendente neste filtro.';
         el('permission').textContent=canEdit() ? 'Edite as datas na grade ou os demais campos na lista. Salve todas as alterações juntas. Limpar a data programada de uma etapa do plantio retoma o cálculo automático.' : 'Modo de consulta. Seu perfil não permite alterar aplicações.';
         el('table').innerHTML=visible.length?(mode==='grid'?matrixTable():listTable()):'<p class="spray-empty">Nenhuma aplicação neste filtro. Os talhões cadastrados continuam visíveis no mapa.</p>';
@@ -204,6 +204,9 @@
         for(const [name,value]of Object.entries({name:row?.name||'',product:row?.product||'',dose:row?.dose??'',unit:row?.doseUnit||'L/ha',area:row?.area||'',planned:row?.planned||'',actual:row?.actual||'',responsible:row?.responsible||'',notes:row?.notes||''}))el('input-'+name).value=value;
         el('input-actual').max=S.today();el('input-auto').checked=!!row?.autoDate;el('auto-label').hidden=!row?.plantingId;
         el('input-planned').disabled=!!row?.autoDate;el('input-name').readOnly=!!row?.plantingId;
+        el('input-planned').required=!O.isIndependent(row?.stage);
+        if(O.isIndependent(row?.stage))el('input-name').readOnly=true;
+        el('stage-note').textContent=O.isIndependent(row?.stage)?'Datas informadas manualmente. A realização pode ser anterior ao plantio e não depende das outras aplicações.':'As próximas etapas usam a realização anterior quando registrada. Datas realizadas são preservadas.';
         if(!row)configureNew();
         previewForm();
         el('form').scrollIntoView?.({behavior:'smooth',block:'nearest'});
