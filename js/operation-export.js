@@ -92,7 +92,7 @@
         for(const row of shapes) {
             ctx.beginPath();
             for(const poly of row.polygons)for(const ring of poly){ring.forEach((p,i)=>{const pos=screen(p);if(i===0)ctx.moveTo(...pos);else ctx.lineTo(...pos);});ctx.closePath();}
-            ctx.fillStyle=colors[row.status];ctx.globalAlpha=.98;ctx.fill('evenodd');ctx.globalAlpha=1;ctx.strokeStyle='#18342c';ctx.lineWidth=2;ctx.stroke();
+            ctx.fillStyle=row.color||colors[row.status];ctx.globalAlpha=.98;ctx.fill('evenodd');ctx.globalAlpha=1;ctx.strokeStyle='#18342c';ctx.lineWidth=2;ctx.stroke();
         }
         ctx.restore();
         return missing;
@@ -164,5 +164,5 @@
         const dialog=document.getElementById('operation-export-dialog');
         if(!allowed&&dialog?.open)dialog.close();
     }
-    root.OperationExport=Object.freeze({summarize,snapshot,filename,render,init,updateAccess});
+    root.OperationExport=Object.freeze({summarize,snapshot,filename,render,drawMap,init,updateAccess});
 })(window);

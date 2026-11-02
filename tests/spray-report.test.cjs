@@ -1,15 +1,15 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const operationsSource=fs.readFileSync(require.resolve('../js/spray-operations.js'),'utf8'),source=fs.readFileSync(require.resolve('../js/spray-report.js'),'utf8');
 const SpraySchedule=require('../js/spray-schedule.js'),PlantingForecast=require('../js/planting-forecast.js');
-function setup({role='admin',userRole='editor',application='all',rows:inputRows}={}){
-    const els=new Map(),downloads=[];let onProgress;
+function setup({role='admin',userRole='editor',application='all',rows:inputRows,features:inputFeatures}={}){
+    const els=new Map(),downloads=[],drawCalls=[],pdfCalls=[],texts=[],canvases=[];let onProgress;
     class Element{constructor(id){this.id=id;this.hidden=false;this.disabled=false;this.href='';this.download='';this._text='';}
         set textContent(v){this._text=v;if(this.id==='spray-report-status'&&String(v).startsWith('Preparando página'))onProgress?.();}
         get textContent(){return this._text;}click(){downloads.push(this.download);}remove(){}}
-    const ctx={font:'',fillStyle:'',strokeStyle:'',lineWidth:1,textAlign:'left',measureText:s=>({width:String(s).length*10}),fillText(){},beginPath(){},roundRect(){},fill(){},stroke(){},rect(){},clip(){},save(){},restore(){},moveTo(){},lineTo(){},closePath(){},fillRect(){},drawImage(){}};
-    const document={fonts:{ready:Promise.resolve()},body:{appendChild(){}},getElementById(id){if(!els.has(id))els.set(id,new Element(id));return els.get(id);},createElement(tag){if(tag==='canvas')return {width:0,height:0,getContext:()=>ctx,toBlob:fn=>fn({arrayBuffer:async()=>new ArrayBuffer(4)})};return new Element(tag);}};
+    const ctx={font:'',fillStyle:'',strokeStyle:'',lineWidth:1,textAlign:'left',measureText:s=>({width:String(s).length*10}),fillText(s){texts.push(String(s));},beginPath(){},roundRect(){},fill(){},stroke(){},rect(){},clip(){},save(){},restore(){},moveTo(){},lineTo(){},closePath(){},fillRect(){},drawImage(){}};
+    const document={fonts:{ready:Promise.resolve()},body:{appendChild(){}},querySelector(){return null;},getElementById(id){if(!els.has(id))els.set(id,new Element(id));return els.get(id);},createElement(tag){if(tag==='canvas'){const canvas={width:0,height:0,getContext:()=>ctx,toBlob:fn=>fn({arrayBuffer:async()=>new ArrayBuffer(4)})};canvases.push(canvas);return canvas;}return new Element(tag);}};
     class Image{set src(_){this.onerror?.();}}
-    const features=[{properties:{Fazenda:'FE',Campo:'FE 01'},geometry:{type:'Polygon',coordinates:[]}}];
+    const features=inputFeatures||[{properties:{Fazenda:'FE',Campo:'FE 01'},geometry:{type:'Polygon',coordinates:[]}}];
     const rows=inputRows||[
         {key:'a',farm:'FE',field:'FE 01',fieldKey:JSON.stringify(['FE','FE 01']),name:'1ª Pós-Emergente',stage:'post1',planned:'2026-10-10',actual:'2026-10-10',completedWithoutDate:false,area:10,status:'completed',deleted:false,optional:false,unplanned:false},
         {key:'b',farm:'FE',field:'FE 01',fieldKey:JSON.stringify(['FE','FE 01']),name:'1º Fungicida',stage:'fung1',planned:'2026-10-12',actual:null,area:10,status:'scheduled',deleted:false,optional:false,unplanned:false},
@@ -18,11 +18,11 @@ function setup({role='admin',userRole='editor',application='all',rows:inputRows}
         {key:'unplanned',farm:'FE',field:'FE 01',fieldKey:'f',name:'Sem plano',stage:'pre',planned:null,area:5,status:'unplanned',unplanned:true}
     ];
     const state={currentTab:'pulverizacao',currentSubTab:'tabela-pulverizacao',currentAno:'2026',currentCultura:'Soja',currentFazenda:'ALL',currentGleba:'ALL',userRole};
-    const window={SpraySchedule,PlantingForecast,portalAccessRole:role,portalFarms:[{code:'FE',name:'Fazenda Esperança'}],PlantingReport:{pdfFromImages:()=>new Blob(['pdf'],{type:'application/pdf'})},setTimeout,clearTimeout,URL:{createObjectURL:()=> 'blob:test',revokeObjectURL(){}},addEventListener(){}};
+    const window={SpraySchedule,PlantingForecast,portalAccessRole:role,portalFarms:[...new Set(features.map(f=>f.properties.Fazenda))].map(code=>({code,name:code==='FE'?'Fazenda Esperança':`Fazenda ${code}`})),PlantingReport:{pdfFromImages:images=>{pdfCalls.push(images);return new Blob(['pdf'],{type:'application/pdf'});}},OperationExport:{async drawMap(_ctx,config){drawCalls.push(config);return false;}},setTimeout,clearTimeout,URL:{createObjectURL:()=> 'blob:test',revokeObjectURL(){}},addEventListener(){}};
     vm.runInNewContext(operationsSource,{window,Intl,Map,Set,Object,String,Number,Math,JSON});const O=window.SprayOperations;
     const SprayControl={reportData(){return {rows:rows.filter(r=>application==='all'||O.matchesApplication(r,application)),features,application,applicationLabel:application==='all'?'Todas':rows.find(r=>r.stage===application)?.name||application,filterLabels:['Status: No prazo']};},mapColors:{completed:'#1673d1',scheduled:'#169447',attention:'#ad8c00',overdue:'#bb2020',pending:'#bb2020',empty:'#ddd'}};window.SprayControl=SprayControl;
     vm.runInNewContext(source,{window,document,Image,Date,Intl,Map,Set,Blob,Uint8Array,Number,String,Math,JSON,setTimeout,clearTimeout});
-    return {api:window.SprayReport,state,els,downloads,document,setProgressHook(fn){onProgress=fn;}};
+    return {api:window.SprayReport,state,els,downloads,document,drawCalls,pdfCalls,texts,canvases,setProgressHook(fn){onProgress=fn;}};
 }
 test('snapshot scopes rows, excludes deleted optional and unplanned, sums actual area and labels title',()=>{
     const h=setup({application:'post1'}),d=h.api.snapshot(h.state);
@@ -43,4 +43,19 @@ test('revocation during PDF generation prevents download',async()=>{
     const h=setup();h.setProgressHook(()=>{h.state.userRole='viewer';});
     await h.api.download(h.state);
     assert.equal(h.downloads.length,0);assert.match(h.els.get('spray-report-status').textContent,/não permite exportar/i);
+});
+test('render encodes one page and one canvas for many farms, with three exhaustive status counts',async()=>{
+    const features=[],rows=[];
+    for(let i=1;i<=80;i++){
+        const farm=`F${String(i).padStart(3,'0')}`,field=`Talhão ${i}`;features.push({properties:{Fazenda:farm,Campo:field},geometry:{type:'Polygon',coordinates:[]}});
+        const statuses=['completed','attention','overdue','scheduled'];
+        for(let j=0;j<statuses.length;j++)rows.push({key:`${farm}-${j}`,farm,field,fieldKey:JSON.stringify([farm,field]),name:`Aplicação com observação longa ${'texto '.repeat(35)}`,stage:`manual-${j}`,planned:'2026-10-10',actual:j===0?'2026-10-10':null,area:12,status:statuses[j],deleted:false,optional:false,unplanned:false,notes:'detalhe '.repeat(100)});
+    }
+    const h=setup({rows,features}),data=h.api.snapshot(h.state),result=await h.api.render(data);
+    assert.equal(result.pageCount,1);assert.equal(h.canvases.length,1);assert.equal(h.pdfCalls.length,1);assert.equal(h.pdfCalls[0].length,1);
+    assert.equal(h.drawCalls.length,1);assert.equal(h.drawCalls[0].fields.length,80);
+    assert.equal(data.totals.total,320);assert.equal(data.totals.completed,80);assert.equal(data.totals.attention,80);
+    assert.equal(data.totals.pending-data.totals.attention,160);
+    assert.ok(h.texts.includes('Realizadas')&&h.texts.includes('Próximas da data')&&h.texts.includes('Pendentes'));
+    assert.ok(h.texts.includes('80')&&h.texts.includes('160'));
 });

@@ -320,18 +320,20 @@
     }
     let day=S.today();root.setInterval?.(()=>{if(state?.currentTab==='pulverizacao'&&day!==S.today()){day=S.today();render();}},60000);
     root.addEventListener?.('beforeunload',event=>{if(grid.size){event.preventDefault();event.returnValue='';}});
-    function reportData() {
+    function reportData({wholeFarm=false}={}) {
         if(!canEdit()||state?.currentTab!=='pulverizacao')throw Error('Abra a Pulverização no modo Editor para exportar.');
         if(loading||!loadedKey)throw Error('Aguarde o carregamento das aplicações.');
         if(error)throw Error('Recarregue as aplicações antes de exportar.');
         if(busy||grid.size||autoError)throw Error('Aguarde a confirmação das alterações antes de exportar.');
         const application=state.currentSubTab==='mapa-pulverizacao'?mapApplication:filters.application;
         const applicationLabel=O.applicationOptions(all).find(item=>item.key===application)?.label||'Todas';
-        const rows=(state.currentSubTab==='mapa-pulverizacao'?mapRows:visible).filter(row=>!row.deleted&&!row.optional&&!row.unplanned).map(row=>({...row}));
+        const reportRows=wholeFarm?O.filter(all,{farm:filters.farm,application,deleted:false}):(state.currentSubTab==='mapa-pulverizacao'?mapRows:visible);
+        const rows=reportRows.filter(row=>!row.deleted&&!row.optional&&!row.unplanned).map(row=>({...row}));
         const statusLabel=names[filters.status]||'';
         const filterLabels=[filters.farm&&`Fazenda: ${filters.farm}`,filters.field&&`Talhão: ${fields.find(f=>f.key===filters.field)?.field||''}`,
             statusLabel&&`Status: ${statusLabel}`,filters.from&&`De ${date(filters.from)}`,filters.to&&`Até ${date(filters.to)}`,filters.search&&`Pesquisa: ${filters.search}`].filter(Boolean);
-        return {rows,features:[...features],application,applicationLabel,filterLabels};
+        return {rows,features:[...features],application,applicationLabel,farm:filters.farm,
+            filterLabels:wholeFarm?(filters.farm?[`Fazenda: ${filters.farm}`]:[]):filterLabels};
     }
     root.SprayControl=Object.freeze({refresh,style,popup,selectFeature,reportData,mapColors:Object.freeze({...colors})});
 })(typeof window !== 'undefined'?window:globalThis);

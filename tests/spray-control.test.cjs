@@ -343,6 +343,24 @@ test('report data is blocked while loading, while a grid save is pending, and af
     assert.throws(() => failed.api.reportData(), /confirmação/i);
 });
 
+test('whole-farm report ignores table filters but keeps farm and selected application', async () => {
+    const h = harness();
+    h.api.refresh(h.state, h.features); await h.tick(); listMode(h);
+    h.el('farm').value = 'FE'; h.el('farm').onchange();
+    h.el('field').value = JSON.stringify(['FE', 'FE 01']); h.el('field').onchange();
+    h.el('application').value = 'post1'; h.el('application').onchange();
+    h.el('status').value = 'completed'; h.el('status').onchange();
+    h.el('from').value = '2026-11-01'; h.el('from').onchange();
+    h.el('to').value = '2026-11-02'; h.el('to').onchange();
+    h.el('search').value = 'Herbicida A'; h.el('search').oninput();
+    assert.equal(h.api.reportData().rows.length, 0);
+    const data = h.api.reportData({ wholeFarm: true });
+    assert.equal(data.farm, 'FE'); assert.equal(data.application, 'post1');
+    assert.equal(data.rows.length, 2);
+    assert.ok(data.rows.every(row => row.farm === 'FE' && row.stage === 'post1'));
+    assert.deepEqual(Array.from(data.filterLabels), ['Fazenda: FE']);
+});
+
 test('map selection clears incompatible table filters, scrolls to the field, and highlights it', async () => {
     const h = harness();
     h.api.refresh(h.state, h.features); await h.tick();
