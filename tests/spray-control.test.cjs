@@ -8,7 +8,7 @@ const SprayOperations = require('../js/spray-operations.js');
 const SprayGrid = require('../js/spray-grid.js');
 const source = fs.readFileSync(require.resolve('../js/spray-control.js'), 'utf8');
 
-function harness({ role = 'editor', accessRole = 'admin', saveFailure = null, batchFailure = null, batchDelay = false, scheduleActuals = { post1: '2026-10-16' } } = {}) {
+function harness({ role = 'editor', accessRole = 'admin', saveFailure = null, batchFailure = null, batchDelay = false, scheduleActuals = { post1: '2026-10-16' }, fourth = false, secondPlanned = '2026-10-18' } = {}) {
     const elements = new Map();
     class Element {
         constructor(id) {
@@ -29,13 +29,13 @@ function harness({ role = 'editor', accessRole = 'admin', saveFailure = null, ba
             name: '1ª Pós-Emergente', product: 'Herbicida A', dose: 2.5, doseUnit: 'L/ha', area: 30, planned: '2026-10-16', actual: '2026-10-16',
             responsible: 'Enzo', notes: 'Observação', deleted: false, version: 2 },
         { id: 'app-2', farm: 'FE', field: 'FE 03', year: '2026', culture: 'Soja', plantingId: 'plant-3', stage: 'post1',
-            name: '1ª Pós-Emergente', product: 'Herbicida B', dose: 1.5, doseUnit: 'L/ha', area: 40, planned: '2026-10-18', actual: null,
+            name: '1ª Pós-Emergente', product: 'Herbicida B', dose: 1.5, doseUnit: 'L/ha', area: 40, planned: secondPlanned, actual: null,
             responsible: 'Operador', notes: '', deleted: false, version: 1 }
     ];
     const calls = { list: [], schedules: [], save: [], batch: [] };
     let batchReject = batchFailure, releaseBatch;
     const scheduleRows = [
-        { plantingId: 'plant-1', fourth: false, actuals: { ...scheduleActuals }, version: 4 },
+        { plantingId: 'plant-1', fourth, actuals: { ...scheduleActuals }, version: 4 },
         { plantingId: 'plant-3', fourth: false, actuals: {}, version: 1 }
     ];
     const appsRepo = {
@@ -63,7 +63,7 @@ function harness({ role = 'editor', accessRole = 'admin', saveFailure = null, ba
                 else saved.push(row);
                 if (row.plantingId) {
                     const schedule = scheduleRows.find(item => item.plantingId === row.plantingId);
-                    if (schedule) schedule.actuals[row.stage] = row.actual || '';
+                    if (schedule) { schedule.actuals[row.stage] = row.actual || ''; if (row.stage === 'fung4') schedule.fourth = true; }
                 }
             }
             return result;
@@ -101,7 +101,7 @@ function harness({ role = 'editor', accessRole = 'admin', saveFailure = null, ba
     const tick = () => new Promise(resolve => setImmediate(resolve));
     const el = name => document.getElementById('spray-op-' + name);
     el('form').hidden = true;
-    return { api: window.SprayControl, state, features, layers, calls, el, tick, saved, domRows,
+    return { api: window.SprayControl, state, features, layers, calls, el, tick, saved, domRows, scheduleRows,
         releaseBatch() { releaseBatch?.(); }, setBatchFailure(value) { batchReject = value; } };
 }
 
@@ -258,7 +258,6 @@ test('map selection clears incompatible table filters, scrolls to the field, and
     assert.match(h.el('message').textContent, /Filtros da tabela ajustados/);
     assert.match(h.el('table').innerHTML, /FE 01/);
     assert.equal(h.domRows[0].scrollCount, 1);
-    assert.equal(h.api.style(h.features[0]).fillColor, '#1673d1');
 });
 
 test('linked planting date edit immediately recalculates following dates without saving', async () => {
@@ -337,17 +336,75 @@ test('search, status, and sort controls update the visible application table', a
     assert.match(h.el('table').innerHTML, /aria-sort="descending"/);
 });
 
-test('map selection turns the field blue and popup escapes field and application content', async () => {
+test('map selection preserves confirmed field color and popup escapes field and application content', async () => {
     const h = harness();
     h.api.refresh(h.state, h.features); await h.tick();
+    const colorBeforeSelection = h.api.style(h.features[0]).fillColor;
     h.api.selectFeature(h.features[0]);
-    assert.equal(h.api.style(h.features[0]).fillColor, '#1673d1');
+    assert.equal(h.api.style(h.features[0]).fillColor, colorBeforeSelection);
     const malicious = { properties: { Fazenda: 'FE <svg onload="x">', Campo: 'Talhão <img src=x onerror=alert(1)>', Area: 12 } };
     const popup = h.api.popup(malicious);
     assert.match(popup, /&lt;svg onload=&quot;x&quot;&gt;/);
     assert.match(popup, /&lt;img src=x onerror=alert\(1\)&gt;/);
     assert.doesNotMatch(popup, /<svg|<img/);
     assert.match(h.api.popup(h.features[0]), /Herbicida A/);
+});
+
+test('map selection is only a visual focus and keeps confirmed application colors', async () => {
+    const h = harness({ secondPlanned: '2026-11-20' });
+    h.api.refresh(h.state, h.features); await h.tick();
+    h.el('map-application').value = 'post1'; h.el('map-application').onchange();
+    assert.equal(h.api.style(h.features[0]).fillColor, '#1673d1');
+    assert.equal(h.api.style(h.features[2]).fillColor, '#169447');
+    h.api.selectFeature(h.features[0]);
+    h.api.selectFeature(h.features[0]);
+    assert.equal(h.api.style(h.features[0]).fillColor, '#1673d1');
+    assert.equal(h.api.style(h.features[2]).fillColor, '#169447');
+    assert.doesNotMatch(h.el('table').innerHTML, /class="selected"/);
+});
+
+test('failed draft does not recolor the map from an unconfirmed realization', async () => {
+    const h = harness({ batchFailure: Error('Conflito'), secondPlanned: '2026-11-20' });
+    h.api.refresh(h.state, h.features); await h.tick();
+    h.el('map-application').value = 'post1'; h.el('map-application').onchange();
+    assert.equal(h.api.style(h.features[2]).fillColor, '#169447');
+    await h.el('table').onchange({ target: { dataset: { sprayKey: 'plant-3:post1', sprayCell: 'actual' }, value: '2026-10-20' } });
+    assert.equal(h.el('save-status').textContent, 'Não salvo');
+    assert.equal(h.api.style(h.features[2]).fillColor, '#169447');
+});
+
+test('optional fourth step is visible, autosaves with schedule version, and stays out of bulk selection', async () => {
+    const h = harness({ fourth: true, scheduleActuals: {
+        post1: '2026-10-16', post2: '2026-10-26', fung1: '2026-10-27', fung2: '2026-10-28', fung3: '2026-10-29'
+    } });
+    h.api.refresh(h.state, h.features); await h.tick();
+    assert.match(h.el('table').innerHTML, /4º Fungicida \(opcional\)/);
+    assert.match(h.el('table').innerHTML, /data-spray-cell="planned" data-spray-key="plant-3:fung4"[^>]*value=""/);
+    await h.el('table').onchange({ target: { dataset: { sprayKey: 'plant-1:fung4', sprayCell: 'actual' }, value: '2026-11-01' } });
+    assert.equal(h.calls.batch.length, 1);
+    assert.equal(h.calls.batch[0].rows.length, 1);
+    assert.equal(h.calls.batch[0].rows[0].stage, 'fung4');
+    assert.equal(h.calls.batch[0].rows[0].actual, '2026-11-01');
+    assert.equal(h.calls.batch[0].rows[0].scheduleVersion, 4);
+    assert.equal(h.scheduleRows[0].fourth, true);
+    listMode(h);
+    assert.match(h.el('table').innerHTML, /data-spray-check="plant-3:fung4"/);
+    h.el('check-visible').checked = true; h.el('check-visible').onchange();
+    assert.equal(h.el('bulk-apply').disabled, false);
+    h.el('bulk-field').value = 'responsible'; h.el('bulk-field').onchange();
+    h.el('bulk-value').value = 'Equipe';
+    await h.el('bulk-apply').onclick(); await h.tick();
+    assert.equal(h.calls.batch[1].rows.length, 11);
+    assert.ok(h.calls.batch[1].rows.some(row => row.key === 'plant-1:fung4'));
+    assert.ok(h.calls.batch[1].rows.every(row => row.key !== 'plant-3:fung4'));
+    h.el('table').onchange({ target: { dataset: { sprayCheck: 'plant-3:fung4' }, checked: true } });
+    h.el('bulk-field').value = 'responsible'; h.el('bulk-field').onchange();
+    h.el('bulk-value').value = 'Planejamento explícito';
+    await h.el('bulk-apply').onclick(); await h.tick();
+    assert.equal(h.calls.batch.length, 3);
+    assert.equal(h.calls.batch[2].rows.length, 1);
+    assert.equal(h.calls.batch[2].rows[0].key, 'plant-3:fung4');
+    assert.equal(h.calls.batch[2].rows[0].responsible, 'Planejamento explícito');
 });
 
 test('viewer is read only and cannot open or submit the application form', async () => {

@@ -84,3 +84,17 @@ test('draft manual valida área e aplica alterações em saved sem tocar no cron
     assert.equal(projected.schedules.length,0);
     assert.equal(projected.saved[0].id,'m1');assert.equal(projected.saved[0].area,80);assert.equal(projected.saved[0].product,'Inseticida X');
 });
+
+test('projetar o 4º fungicida ativa a quarta etapa mesmo com fourth false na fonte original',()=>{
+    const grid=Grid.create(),farmField=field(),original=schedule('p1',5,{}),fung4=app('p1','fung4',{optional:true,planned:'2027-02-01',autoDate:false});
+    grid.edit(fung4,farmField,original,'product','Fungicida D');
+    const projected=grid.project([original],[]);
+    assert.equal(original.fourth,false);
+    assert.equal(projected.schedules[0].fourth,true);
+    const feature={properties:{Fazenda:'FE',Campo:'FE 01',Area:100}};
+    const record={id:'p1',operationType:'plantio',produto:'Plantio',fazenda:'FE',campo:'FE 01',ano:'2026',cultura:'Soja',
+        status:'concluido',areaRealizada:50,variedadeSemente:'Olimpo',dataPlantio:'2026-11-01'};
+    const result=Operations.build([feature],[record],projected.schedules,projected.saved,{year:'2026',culture:'Soja'},'2026-11-01');
+    const fourth=result.applications.find(row=>row.stage==='fung4');
+    assert.equal(fourth.optional,false);assert.equal(fourth.planned,'2027-02-01');assert.equal(fourth.product,'Fungicida D');
+});

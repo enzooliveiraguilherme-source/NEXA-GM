@@ -18,8 +18,8 @@ test('build inclui talhões sem execução, deduplica geometrias e gera aplicaç
         {year:'2026',culture:'Soja'},'2026-11-01');
     assert.equal(result.fields.length,3);
     assert.deepEqual(result.fields.map(field=>[field.field,field.plantingId,field.plantedArea]),[['FE 01','p1',60],['FE 02','p2',60],['FE 03',null,0]]);
-    assert.equal(result.applications.length,5);
-    assert.deepEqual(result.applications.map(row=>row.stage),['post1','post2','fung1','fung2','fung3']);
+    assert.equal(result.applications.length,6);
+    assert.deepEqual(result.applications.map(row=>row.stage),['post1','post2','fung1','fung2','fung3','fung4']);
     assert.equal(result.applications[0].planned,'2026-11-16');
     assert.equal(result.applications[0].actual,'2026-11-18');
     assert.equal(result.applications[0].status,'completed');
@@ -27,6 +27,10 @@ test('build inclui talhões sem execução, deduplica geometrias e gera aplicaç
     assert.equal(result.applications[2].planned,'2026-12-08');
     assert.equal(result.applications[2].provisional,true);
     assert.ok(result.applications.every(row=>row.field==='FE 01'&&row.area===60));
+    assert.equal(result.applications[5].optional,true);assert.equal(result.applications[5].status,'optional');
+    assert.ok(Spray.applicationOptions(result.applications).some(option=>option.key==='fung4'));
+    assert.ok(Spray.matrix(result.applications).columns.some(column=>column.key==='fung4'));
+    assert.deepEqual(Spray.summarize(result.applications),{total:5,completed:1,pending:4,overdue:0,attention:0,scheduled:4,plannedArea:300,appliedArea:60});
 });
 
 test('build aplica metadados manuais e override de data, área, produto e dose sem ignorar a realização anterior',()=>{
@@ -62,6 +66,8 @@ test('build inclui a quarta aplicação por schedule ou metadado salvo e restrin
     assert.equal(result.applications.filter(row=>row.plantingId==='p1').length,6);
     assert.equal(result.applications.filter(row=>row.plantingId==='p2').length,6);
     assert.equal(result.applications.find(row=>row.plantingId==='p2'&&row.stage==='fung4').planned,'2027-02-01');
+    assert.equal(result.applications.find(row=>row.plantingId==='p1'&&row.stage==='fung4').optional,false);
+    assert.equal(result.applications.find(row=>row.plantingId==='p2'&&row.stage==='fung4').optional,false);
     const wrongContext=Spray.build(features,records,schedules,saved,{year:'2027',culture:'Milho'},'2026-11-01');
     assert.equal(wrongContext.fields.length,2);assert.equal(wrongContext.fields.every(field=>!field.plantingId),true);
     assert.equal(wrongContext.applications.length,0);
@@ -114,7 +120,7 @@ test('summarize exclui removidas e soma área planejada e aplicada por aplicaç�
     assert.deepEqual(Spray.summarize(rows),{total:4,completed:1,pending:3,overdue:1,attention:1,scheduled:1,plannedArea:100,appliedArea:25});
 });
 
-test('mapStatus aplica seleção, atraso, atenção, verde para concluídas e também no prazo, e sem aplicação',()=>{
+test('mapStatus ignora aplicações opcionais, prioriza atraso/atenção e mantém verde para concluídas ou no prazo',()=>{
     const rows=[
         {fieldKey:'late',status:'overdue',actual:null},
         {fieldKey:'late',status:'attention',actual:null},
@@ -122,14 +128,19 @@ test('mapStatus aplica seleção, atraso, atenção, verde para concluídas e ta
         {fieldKey:'attn',status:'completed',actual:'2026-11-10'},
         {fieldKey:'done',status:'completed',actual:'2026-11-10'},
         {fieldKey:'pending',status:'scheduled',actual:null},
+        {fieldKey:'optional-only',status:'optional',actual:null,optional:true},
+        {fieldKey:'pending',status:'overdue',actual:null,optional:true},
         {fieldKey:'empty',status:'overdue',actual:null,deleted:true}
     ];
     assert.equal(Spray.mapStatus(rows,'late',null),'pending');
     assert.equal(Spray.mapStatus(rows,'attn',null),'attention');
     assert.equal(Spray.mapStatus(rows,'done',null),'completed');
-    assert.equal(Spray.mapStatus(rows,'pending',null),'completed');
+    assert.equal(Spray.mapStatus(rows,'pending',null),'scheduled');
+    assert.equal(Spray.mapStatus([{fieldKey:'scheduled',status:'scheduled',actual:null}],'scheduled'),'scheduled');
+    assert.equal(Spray.mapStatus([{fieldKey:'optional-only',status:'optional',actual:null,optional:true}],'optional-only'),'empty');
     assert.equal(Spray.mapStatus(rows,'empty',null),'empty');
-    assert.equal(Spray.mapStatus(rows,'late','late'),'selected');
+    assert.equal(Spray.mapStatus(rows,'late','late'),'pending');
+    assert.equal(Spray.mapStatus(rows,'done','done'),'completed');
 });
 
 test('applicationKey e matchesApplication agrupam etapas e tipos manuais sem acentos',()=>{
@@ -149,6 +160,7 @@ test('applicationOptions gera filtros dinâmicos únicos e mantém aplicações 
     const rows=[
         {stage:'post1',name:'1ª Pós-Emergente',deleted:false},
         {stage:'fung1',name:'1º Fungicida',deleted:false},
+        {stage:'fung4',name:'4º Fungicida',optional:true,deleted:false},
         {stage:'fung1',name:'Outro rótulo da mesma etapa',deleted:false},
         {name:'Inseticida',deleted:false},
         {name:'Fungicida foliar',deleted:false},
@@ -159,6 +171,7 @@ test('applicationOptions gera filtros dinâmicos únicos e mantém aplicações 
         {key:'all',label:'Todas'},{key:'fungicide',label:'Fungicidas'},{key:'insecticide',label:'Inseticidas'}
     ]);
     assert.equal(options.filter(option=>option.key==='fung1').length,1);
+    assert.ok(options.some(option=>option.key==='fung4'&&option.label==='4º Fungicida'));
     assert.equal(options.some(option=>option.key==='manual:INSETICIDA REMOVIDO'),true);
     assert.ok(options.some(option=>option.key==='post1'&&option.label==='1ª Pós-Emergente'));
     assert.ok(options.some(option=>option.key==='manual:FUNGICIDA FOLIAR'));
@@ -167,6 +180,7 @@ test('applicationOptions gera filtros dinâmicos únicos e mantém aplicações 
 test('matrix mantém aplicações duplicadas do mesmo tipo no mesmo talhão e remove filtros genéricos das colunas',()=>{
     const rows=[
         {key:'p1:post1',fieldKey:'FE01',farm:'FE',field:'FE 01',stage:'post1',name:'1ª Pós-Emergente'},
+        {key:'p1:fung4',fieldKey:'FE01',farm:'FE',field:'FE 01',stage:'fung4',name:'4º Fungicida',optional:true},
         {key:'manual:a',fieldKey:'FE01',farm:'FE',field:'FE 01',name:'Fungicida foliar'},
         {key:'manual:b',fieldKey:'FE01',farm:'FE',field:'FE 01',name:'Fungicida foliar'},
         {key:'p2:fung1',fieldKey:'FE02',farm:'FE',field:'FE 02',stage:'fung1',name:'1º Fungicida'}
@@ -174,6 +188,7 @@ test('matrix mantém aplicações duplicadas do mesmo tipo no mesmo talhão e re
     const result=Spray.matrix(rows);
     assert.equal(result.columns.some(column=>['all','fungicide','insecticide'].includes(column.key)),false);
     assert.ok(result.columns.some(column=>column.key==='post1'));
+    assert.ok(result.columns.some(column=>column.key==='fung4'));
     assert.ok(result.columns.some(column=>column.key==='manual:FUNGICIDA FOLIAR'));
     const fe01=result.rows.find(row=>row.key==='FE01');
     assert.equal(fe01.cells.get('manual:FUNGICIDA FOLIAR').length,2);

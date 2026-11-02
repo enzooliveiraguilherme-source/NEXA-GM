@@ -5,8 +5,8 @@
     const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
     const date = value => value ? value.split('-').reverse().join('/') : '—';
     const ha = value => Number(value || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + ' ha';
-    const names = { completed:'Realizada', scheduled:'No prazo', attention:'Atenção', overdue:'Atrasada' };
-    const colors = { completed:'#169447', attention:'#f5c542', pending:'#df3838', selected:'#1673d1', empty:'#94a3b8' };
+    const names = { completed:'Realizada', scheduled:'No prazo', attention:'Atenção', overdue:'Atrasada', optional:'Opcional' };
+    const colors = { completed:'#1673d1', scheduled:'#169447', attention:'#f5c542', pending:'#df3838', empty:'#94a3b8' };
     const grid=root.SprayGrid.create(),checked=new Set();
     let mode='grid',mapApplication='all',mapRows=[];
     let autoError='',focusAfterSave=null;
@@ -21,14 +21,15 @@
             { year:state.currentAno, culture:state.currentCultura });
         fields = built.fields; all = built.applications;
         visible = O.sort(O.filter(all, filters), order, direction);
-        mapRows=O.filter(all,{...filters,application:mapApplication,deleted:false});
+        const confirmed=grid.size?O.build(features,Object.values(state.cloudStore?.getRecords()||{}),schedules,saved,{year:state.currentAno,culture:state.currentCultura}).applications:all;
+        mapRows=O.filter(confirmed,{...filters,application:mapApplication,deleted:false});
     }
     function updateMap() {
         state?.geojsonLayer?.eachLayer(layer => { if (layer.feature) layer.setStyle(style(layer.feature)); });
     }
     function style(feature) {
-        const p = feature.properties || {}, status = O.mapStatus(loading || error ? [] : mapRows, O.fieldKey(p.Fazenda,p.Campo), selectedField);
-        return { color:status === 'selected' ? '#083f85' : '#283b50', weight:status === 'selected' ? 3 : .9,
+        const p = feature.properties || {}, status = O.mapStatus(loading || error ? [] : mapRows, O.fieldKey(p.Fazenda,p.Campo));
+        return { color:'#283b50', weight:.9,
             fillColor:colors[status], fillOpacity:status === 'empty' ? .18 : .7, opacity:1 };
     }
     function selectFeature(feature) {
@@ -42,7 +43,7 @@
     }
     function popup(feature) {
         const p = feature.properties || {}, key = O.fieldKey(p.Fazenda,p.Campo);
-        let apps = mapRows.filter(row => row.fieldKey === key && !row.deleted);
+        let apps = mapRows.filter(row => row.fieldKey === key && !row.deleted && !row.optional);
         const chosen = apps.find(row => row.key === selectedRow);
         if (chosen) apps = [chosen];
         return `<div class="spray-map-popup"><strong>${escape(p.Campo)} · ${escape(p.Fazenda)}</strong><div>Área do talhão: ${ha(p.Area)}</div>` +
@@ -66,10 +67,9 @@
     }
     function quietSelect(row){
         selectedField=row.fieldKey;selectedRow=row.key;updateMap();
-        for(const element of document.querySelectorAll?.('#spray-op-table [data-spray-field-key]')||[])element.classList.toggle('selected',element.dataset.sprayFieldKey===selectedField);
     }
     function cell(row,column){
-        const value=row[column]??'',editable=canEdit()&&!busy&&!loading&&!error&&!row.deleted;
+        const value=row.optional&&column==='planned'?'':row[column]??'',editable=canEdit()&&!busy&&!loading&&!error&&!row.deleted;
         if(!editable)return column==='planned'||column==='actual'?date(value):escape(value||'—');
         const type=['planned','actual'].includes(column)?'date':['dose','area'].includes(column)?'number':'text';
         return `<input type="${type}" data-spray-cell="${column}" data-spray-key="${escape(row.key)}" aria-label="${escape(row.field+' · '+row.name+' · '+({planned:'Data programada',actual:'Data realizada',product:'Produto',dose:'Dose',doseUnit:'Unidade da dose',area:'Área',responsible:'Responsável',notes:'Observações'}[column]||column))}" value="${escape(value)}"${type==='number'?' min="0" step="any"':''}${column==='actual'?` max="${S.today()}"`:''}${column==='notes'?' maxlength="2000"':type==='text'?` maxlength="${column==='doseUnit'?30:150}"`:''} class="${grid.has(row.key)?'spray-cell-draft':''}">`;
@@ -77,12 +77,12 @@
     function selection(row){return canEdit()&&!row.deleted?`<input type="checkbox" data-spray-check="${escape(row.key)}" aria-label="Selecionar ${escape(row.field+' · '+row.name)}"${checked.has(row.key)?' checked':''}${busy?' disabled':''}>`:'';}
     function matrixTable(){
         const matrix=O.matrix(visible);
-        const heading=column=>S.steps.find(step=>step.id===column.key)?.short||column.label;
-        return `<table class="spray-matrix spray-compact-table"><thead><tr><th scope="col" rowspan="2"><button type="button" data-spray-sort="field">Talhão / Fazenda</button></th>${matrix.columns.map(column=>`<th scope="colgroup" colspan="2">${escape(heading(column))}</th>`).join('')}</tr><tr>${matrix.columns.map(()=>'<th scope="col">Prevista</th><th scope="col">Realizada</th>').join('')}</tr></thead><tbody>`+matrix.rows.map(field=>`<tr data-spray-field-key="${escape(field.key)}" class="${field.key===selectedField?'selected':''}"><th scope="row"><button type="button" data-spray-field-select="${escape(field.key)}">${escape(field.field)}<small>${escape(field.farm)}</small></button></th>`+matrix.columns.map(column=>['planned','actual'].map(kind=>`<td>${(field.cells.get(column.key)||[]).map(row=>`<div class="spray-compact-cell ${row.status}${grid.has(row.key)?' has-draft':''}" data-spray-row="${escape(row.key)}" title="${escape(row.name+' · '+names[row.status])}">${cell(row,kind)}</div>`).join('')||'—'}</td>`).join('')).join('')+'</tr>').join('')+'</tbody></table>';
+        const heading=column=>(S.steps.find(step=>step.id===column.key)?.short||column.label)+(column.key==='fung4'?' (opcional)':'');
+        return `<table class="spray-matrix spray-compact-table"><thead><tr><th scope="col" rowspan="2"><button type="button" data-spray-sort="field">Talhão / Fazenda</button></th>${matrix.columns.map(column=>`<th scope="colgroup" colspan="2">${escape(heading(column))}</th>`).join('')}</tr><tr>${matrix.columns.map(()=>'<th scope="col">Prevista</th><th scope="col">Realizada</th>').join('')}</tr></thead><tbody>`+matrix.rows.map(field=>`<tr data-spray-field-key="${escape(field.key)}" class="spray-field-row"><th scope="row"><button type="button" data-spray-field-select="${escape(field.key)}">${escape(field.field)}<small>${escape(field.farm)}</small></button></th>`+matrix.columns.map(column=>['planned','actual'].map(kind=>`<td>${(field.cells.get(column.key)||[]).map(row=>`<div class="spray-compact-cell ${row.status}${grid.has(row.key)?' has-draft':''}" data-spray-row="${escape(row.key)}" title="${escape(row.name+' · '+names[row.status])}">${cell(row,kind)}</div>`).join('')||'—'}</td>`).join('')).join('')+'</tr>').join('')+'</tbody></table>';
     }
     function listTable(){
         const columns=[['farm','Fazenda'],['field','Talhão'],['culture','Cultura'],['name','Aplicação'],['product','Produto'],['dose','Dose'],['doseUnit','Unidade'],['area','Área (ha)'],['planned','Programada'],['actual','Realizada'],['responsible','Responsável'],['status','Status'],['notes','Observações']];
-        return `<table class="spray-operations-table"><caption>Lista editável · selecione células ou registros para atualizar em conjunto</caption><thead><tr><th>Selecionar</th>`+columns.map(([key,label])=>`<th scope="col" aria-sort="${order===key?direction===1?'ascending':'descending':'none'}"><button type="button" data-spray-sort="${key}">${label}${order===key?direction===1?' ↑':' ↓':''}</button></th>`).join('')+'<th scope="col">Ações</th></tr></thead><tbody>'+visible.map(row=>`<tr data-spray-field-key="${escape(row.fieldKey)}" data-spray-row="${escape(row.key)}" class="${row.fieldKey===selectedField?'selected ':''}${grid.has(row.key)?'has-draft ':''}${row.deleted?'deleted':''}"><td>${selection(row)}</td>`+columns.map(([key])=>`<td>${key==='status'?`<span class="spray-status ${row.status}">${row.deleted?'Excluída':names[row.status]}</span>`:['product','dose','doseUnit','area','planned','actual','responsible','notes'].includes(key)?cell(row,key):escape(row[key])}</td>`).join('')+`<td><button type="button" data-spray-action="map" data-spray-key="${escape(row.key)}">Mapa</button>${canEdit()?`<button type="button" data-spray-action="${row.deleted?'restore':'edit'}" data-spray-key="${escape(row.key)}"${busy||grid.size?' disabled':''}>${row.deleted?'Restaurar':'Detalhes'}</button>${row.deleted?'':`<button type="button" data-spray-action="delete" data-spray-key="${escape(row.key)}"${busy||grid.size?' disabled':''}>Excluir</button>`}`:''}</td></tr>`).join('')+'</tbody></table>';
+        return `<table class="spray-operations-table"><caption>Lista editável · selecione células ou registros para atualizar em conjunto</caption><thead><tr><th>Selecionar</th>`+columns.map(([key,label])=>`<th scope="col" aria-sort="${order===key?direction===1?'ascending':'descending':'none'}"><button type="button" data-spray-sort="${key}">${label}${order===key?direction===1?' ↑':' ↓':''}</button></th>`).join('')+'<th scope="col">Ações</th></tr></thead><tbody>'+visible.map(row=>`<tr data-spray-field-key="${escape(row.fieldKey)}" data-spray-row="${escape(row.key)}" class="${grid.has(row.key)?'has-draft ':''}${row.deleted?'deleted':''}"><td>${selection(row)}</td>`+columns.map(([key])=>`<td>${key==='status'?`<span class="spray-status ${row.status}">${row.deleted?'Excluída':names[row.status]}</span>`:['product','dose','doseUnit','area','planned','actual','responsible','notes'].includes(key)?cell(row,key):escape(row[key])}</td>`).join('')+`<td><button type="button" data-spray-action="map" data-spray-key="${escape(row.key)}">Mapa</button>${canEdit()?`<button type="button" data-spray-action="${row.deleted?'restore':'edit'}" data-spray-key="${escape(row.key)}"${busy||grid.size?' disabled':''}>${row.deleted?'Restaurar':'Detalhes'}</button>${row.deleted?'':`<button type="button" data-spray-action="delete" data-spray-key="${escape(row.key)}"${busy||grid.size?' disabled':''}>Excluir</button>`}`:''}</td></tr>`).join('')+'</tbody></table>';
     }
     function editCell(row,column,value){
         if(!canEdit()||busy||loading||error||row.deleted)return;
@@ -116,7 +116,7 @@
         el('batch-discard').disabled=busy||!grid.size;
         el('bulk-apply').disabled=!canEdit()||busy||loading||!!error||!visible.some(row=>checked.has(row.key)&&!row.deleted);
         el('check-visible').disabled=!canEdit()||busy||loading;
-        const selectable=visible.filter(row=>!row.deleted),selectedCount=selectable.filter(row=>checked.has(row.key)).length;
+        const selectable=visible.filter(row=>!row.deleted&&!row.optional),selectedCount=selectable.filter(row=>checked.has(row.key)).length;
         el('check-visible').checked=!!selectable.length&&selectedCount===selectable.length;
         el('check-visible').indeterminate=selectedCount>0&&selectedCount<selectable.length;
         el('grid-mode').setAttribute?.('aria-pressed',String(mode==='grid'));
@@ -139,7 +139,7 @@
         const cards = [['Programadas',totals.total],['Realizadas',totals.completed],['Pendentes',totals.pending],['Atrasadas',totals.overdue],['Área programada',ha(totals.plannedArea)],['Área aplicada',ha(totals.appliedArea)]];
         el('summary').innerHTML=cards.map(([label,value])=>`<div class="spray-kpi"><span>${label}</span><strong>${value}</strong></div>`).join('');
         el('counts').innerHTML=`<span class="spray-status scheduled">${totals.scheduled} no prazo</span> <span class="spray-status attention">${totals.attention} próximas</span> <span class="spray-status overdue">${totals.overdue} atrasadas</span> <span>${visible.length} registros neste filtro · ${totals.total?Math.round(totals.completed/totals.total*100):0}% concluído</span>`;
-        const next=O.sort(visible.filter(row=>!row.deleted&&!row.actual),'planned',1)[0];
+        const next=O.sort(visible.filter(row=>!row.deleted&&!row.optional&&!row.actual),'planned',1)[0];
         el('next').textContent=next?`Próxima pendência: ${next.name} · ${next.farm} / ${next.field} · ${date(next.planned)}`:'Nenhuma aplicação pendente neste filtro.';
         el('permission').textContent=canEdit() ? 'Edite as datas na grade ou os demais campos na lista. Salve todas as alterações juntas. Limpar a data programada de uma etapa do plantio retoma o cálculo automático.' : 'Modo de consulta. Seu perfil não permite alterar aplicações.';
         el('table').innerHTML=visible.length?(mode==='grid'?matrixTable():listTable()):'<p class="spray-empty">Nenhuma aplicação neste filtro. Os talhões cadastrados continuam visíveis no mapa.</p>';
@@ -182,7 +182,7 @@
         if(fourth){
             if(!field.plantingId||!field.plantingDate||!field.plantedArea){el('form-error').textContent='Este talhão precisa ter plantio e data registrados.';return;}
             const prior=all.find(row=>row.plantingId===field.plantingId&&row.stage==='fung3');
-            const existing=all.find(row=>row.plantingId===field.plantingId&&row.stage==='fung4');
+            const existing=all.find(row=>row.plantingId===field.plantingId&&row.stage==='fung4'&&!row.optional);
             if(existing){el('form-error').textContent='O 4º fungicida já existe. Edite-o na tabela ou restaure-o no filtro Excluídas.';return;}
             editing={plantingId:field.plantingId,stage:'fung4',autoDate:true,scheduleVersion:schedules.find(row=>row.plantingId===field.plantingId)?.version??null,
                 planned:S.addDays(prior?.actual||prior?.planned||field.plantingDate,15),name:'4º Fungicida'};
@@ -239,7 +239,7 @@
         el('clear').onclick=()=>{for(const name of ['farm','field','status','from','to','search']){filters[name]='';el(name).value='';}filters.application='all';filters.deleted=false;selectedField='';selectedRow='';render();};
         el('map-application').onchange=()=>{mapApplication=el('map-application').value;selectedField='';selectedRow='';render();};
         el('grid-mode').onclick=()=>{mode='grid';render();};el('list-mode').onclick=()=>{mode='list';render();};
-        el('check-visible').onchange=()=>{for(const row of visible.filter(row=>!row.deleted))if(el('check-visible').checked)checked.add(row.key);else checked.delete(row.key);render();};
+        el('check-visible').onchange=()=>{for(const row of visible.filter(row=>!row.deleted&&!row.optional))if(el('check-visible').checked)checked.add(row.key);else checked.delete(row.key);render();};
         el('bulk-field').onchange=()=>{const key=el('bulk-field').value;el('bulk-value').type=['actual','planned'].includes(key)?'date':['dose','area'].includes(key)?'number':'text';el('bulk-value').value='';};
         el('bulk-apply').onclick=()=>{
             if(!canEdit()||busy||loading||error)return;

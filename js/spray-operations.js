@@ -24,16 +24,17 @@
             const schedule = scheduleIndex.get(record.id) || { actuals: {}, fourth: false };
             let base = projected.plantingDate, provisional = false;
             const fourth = schedule.fourth || metadata.has(`${record.id}:fung4`);
-            for (const step of S.steps.slice(0, fourth ? 6 : 5)) {
+            for (const step of S.steps) {
                 const extra = metadata.get(`${record.id}:${step.id}`) || {};
+                const optional = step.id === 'fung4' && !fourth;
                 const planned = extra.planned || S.addDays(base, step.days), actual = schedule.actuals[step.id] || null;
                 applications.push({ ...extra, key: `${record.id}:${step.id}`, plantingId: record.id, stage: step.id,
                     farm: field.farm, field: field.field, fieldKey: key, culture: context.culture, year: context.year,
                     name: step.name, area: extra.area ?? projected.plantedArea, planned, actual,
-                    autoDate: !extra.planned, provisional: !actual && provisional,
+                    autoDate: !extra.planned, provisional: !actual && provisional, optional,
                     scheduleVersion: schedule.version ?? null, plantingDate: projected.plantingDate,
                     product: extra.product || '', dose: extra.dose ?? null, doseUnit: extra.doseUnit || 'L/ha',
-                    responsible: extra.responsible || '', notes: extra.notes || '', status: status(planned, actual, current) });
+                    responsible: extra.responsible || '', notes: extra.notes || '', status: optional ? 'optional' : status(planned, actual, current) });
                 base = actual || planned; provisional = !actual;
             }
         }
@@ -84,7 +85,7 @@
             String(a[column] || '').localeCompare(String(b[column] || ''), 'pt-BR', { numeric: true })) || a.key.localeCompare(b.key));
     }
     function summarize(rows) {
-        const active = rows.filter(row => !row.deleted);
+        const active = rows.filter(row => !row.deleted && !row.optional);
         return { total: active.length, completed: active.filter(row => row.actual).length,
             pending: active.filter(row => !row.actual).length, overdue: active.filter(row => row.status === 'overdue').length,
             attention: active.filter(row => row.status === 'attention').length,
@@ -92,13 +93,13 @@
             plannedArea: active.reduce((total, row) => total + Number(row.area), 0),
             appliedArea: active.reduce((total, row) => total + (row.actual ? Number(row.area) : 0), 0) };
     }
-    function mapStatus(rows, key, selected) {
-        if (key === selected) return 'selected';
-        const apps = rows.filter(row => row.fieldKey === key && !row.deleted);
+    function mapStatus(rows, key) {
+        const apps = rows.filter(row => row.fieldKey === key && !row.deleted && !row.optional);
         if (!apps.length) return 'empty';
+        if (apps.every(row => !!row.actual)) return 'completed';
         if (apps.some(row => row.status === 'overdue')) return 'pending';
         if (apps.some(row => row.status === 'attention')) return 'attention';
-        return 'completed';
+        return 'scheduled';
     }
     function validate(row, field, current = S.today()) {
         if (!field || row.farm !== field.farm || row.field !== field.field) throw Error('Escolha um talhão cadastrado.');

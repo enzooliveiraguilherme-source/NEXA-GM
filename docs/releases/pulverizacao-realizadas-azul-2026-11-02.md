@@ -1,0 +1,9 @@
+# Azul por realização e quarto fungicida visível
+
+O clique mantém apenas a referência de navegação e popup: não altera a cor nem a espessura do talhão, e não pinta linhas da tabela. Azul identifica aplicações com data realizada confirmada. Verde indica pendências ainda no prazo, amarelo proximidade e vermelho atraso. Em Todas, a cor considera o conjunto ativo: atrasos e atenção prevalecem sobre etapas futuras/concluídas, e azul aparece quando todas as aplicações ativas do filtro estão realizadas. Uma etapa específica é azul quando a realização correspondente está registrada. Rascunhos e gravações com falha não deixam o mapa azul: o mapa usa os dados confirmados.
+
+A causa da ausência do 4º fungicida era a geração de apenas cinco etapas enquanto o quarto não estivesse ativado. A tabela e os filtros passam a disponibilizar a sexta etapa como opcional. Os campos ficam vazios, e a etapa não conta como pendência, área ou atraso enquanto não for incluída. Preencher explicitamente a etapa na grade ou selecioná-la individualmente para preenchimento em massa ativa a etapa usando o fluxo de autosave e as validações existentes. O preenchimento em massa de aplicações visíveis não ativa o quarto fungicida inadvertidamente. Registros excluídos continuam respeitando o filtro de restauração.
+
+As células concluídas e a legenda usam o azul; não há azul permanente por seleção. As colunas de datas ficaram um pouco mais estreitas para facilitar a visualização do quarto fungicida em telas grandes.
+
+Não há alteração de schema ou dados agrícolas nesta entrega. Testes são executados por agentes Luna, com cobertura de paleta por realização, cliques repetidos, dados confirmados versus erro de autosave, etapa opcional e ativação/persistência do quarto fungicida. Conferência visual em navegador real permanece bloqueada pela identificação da URL no controle do Chrome.
