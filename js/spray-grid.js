@@ -16,6 +16,7 @@
                 draft.patch.autoDate=!!row.plantingId&&!value;
                 draft.patch.planned=value|| (row.plantingId?draft.original.planned:'');
             }else draft.patch[column]=value;
+            if(column==='actual')draft.patch.completedWithoutDate=false;
         }
         function rows(){return [...drafts.values()].map(draft=>({...draft.original,...draft.patch}));}
         function project(schedules,saved){

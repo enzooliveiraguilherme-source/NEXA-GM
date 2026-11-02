@@ -45,7 +45,7 @@ function dbRow(overrides = {}) {
         id: 'application-1', fazenda: 'FE', campo: 'FE 01', ano: '2026', cultura: 'Soja',
         planting_record_id: 'plant-1', stage_id: 'post1', application_name: '1ª Pós-Emergente',
         product: 'Produto de teste', dose: 2.5, dose_unit: 'L/ha', area: 30, planned_date: null,
-        actual_date: '2026-10-18', responsible: 'Operador de teste', notes: 'Observação de teste',
+        actual_date: '2026-10-18', completed_without_date: false, responsible: 'Operador de teste', notes: 'Observação de teste',
         deleted: false, version: 4, ...overrides
     };
 }
@@ -88,7 +88,7 @@ test('save converts numeric dose, preserves actual date, versions, and linked au
         id: 'application-1', fazenda: 'FE', campo: 'FE 01', ano: '2026', cultura: 'Soja',
         planting_record_id: 'plant-1', stage_id: 'post1', application_name: '1ª Pós-Emergente',
         product: 'Produto de teste', dose: 2.5, dose_unit: 'L/ha', area: 30, planned_date: null,
-        actual_date: '2026-10-18', responsible: 'Operador de teste', notes: 'Observação de teste', deleted: false
+        actual_date: '2026-10-18', completed_without_date: false, responsible: 'Operador de teste', notes: 'Observação de teste', deleted: false
     });
     assert.equal(saved.dose, 2.5);
     assert.equal(saved.actual, '2026-10-18');
@@ -132,6 +132,30 @@ test('independent pre-planting applications keep null source and accept actual-o
         assert.equal(rpc.payload.p_schedule_version, null);
         assert.equal(rpc.payload.p_payload.dose, item.dose ? Number(item.dose) : null);
     }
+});
+
+test('completed without date round-trips; adding an actual date clears the persisted flag', async () => {
+    const client = fakeClient({ rpc: call => {
+        const payload = call.payload.p_payload;
+        return { data: dbRow({ actual_date: payload.actual_date, completed_without_date: payload.completed_without_date,
+            planned_date: payload.planned_date }), error: null };
+    } });
+    const repository=create(client),withoutDate=application({actual:'',completedWithoutDate:true});
+    const saved=await repository.save(withoutDate,field());
+    assert.equal(client.calls[0].payload.p_payload.actual_date,null);
+    assert.equal(client.calls[0].payload.p_payload.completed_without_date,true);
+    assert.equal(saved.completedWithoutDate,true);
+    const dated=await repository.save({...withoutDate,actual:'2026-10-20',version:saved.version},field());
+    assert.equal(client.calls[1].payload.p_payload.actual_date,'2026-10-20');
+    assert.equal(client.calls[1].payload.p_payload.completed_without_date,false);
+    assert.equal(dated.completedWithoutDate,false);
+});
+
+test('list selects and maps completed_without_date from the repository row', async () => {
+    const client=fakeClient({query:()=>({data:[dbRow({completed_without_date:true})],count:1,error:null})});
+    const rows=await create(client).list(['FE'],'2026','Soja');
+    assert.match(client.calls[0].columns,/completed_without_date/);
+    assert.equal(rows[0].completedWithoutDate,true);
 });
 
 test('invalid application date or field area is rejected before RPC', async t => {

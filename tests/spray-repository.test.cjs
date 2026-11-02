@@ -84,8 +84,8 @@ test('invalid schedule is rejected before any database request', async () => {
     const client = fakeClient(() => { throw Error('unexpected request'); });
     await assert.rejects(create(client).save({
         plantingId: 'plant-1', fourth: false,
-        actuals: { ...actuals, post2: '' , fung1: '2026-11-05' }
-    }, plantingDate, current), /registre primeiro/);
+        actuals: { ...actuals, post2: '2026-10-05' , fung1: '2026-11-05' }
+    }, plantingDate, current), /anterior ao plantio ou à aplicação anterior/);
     assert.equal(client.calls.length, 0);
 });
 

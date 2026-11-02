@@ -113,6 +113,32 @@ test('independentes são três por talhão, reconciliadas sem duplicar e persist
     assert.equal(afterPlanting.applications.find(row=>row.stage==='post1').planned,'2026-11-16');
 });
 
+test('OK sem data conclui pré sem previsão, soma área aplicada e pinta o talhão concluído',()=>{
+    const features=[feature('FE','FE 01',100)];
+    const saved=[{farm:'FE',field:'FE 01',year:'2026',culture:'Soja',stage:'pre',planned:null,actual:null,
+        completedWithoutDate:true,area:40,product:'Pré herbicida'}];
+    const result=Spray.build(features,[],[],saved,{year:'2026',culture:'Soja'},'2026-11-01');
+    const pre=result.applications.find(row=>row.stage==='pre');
+    assert.equal(pre.planned,null);assert.equal(pre.actual,null);assert.equal(pre.completedWithoutDate,true);
+    assert.equal(pre.unplanned,false);assert.equal(pre.status,'completed');assert.equal(Spray.isCompleted(pre),true);
+    assert.deepEqual(Spray.summarize(result.applications),{total:1,completed:1,pending:0,overdue:0,attention:0,scheduled:0,plannedArea:40,appliedArea:40});
+    assert.equal(Spray.mapStatus(result.applications,pre.fieldKey),'completed');
+});
+
+test('OK sem data conta como concluído mas não altera a base prevista das etapas seguintes',()=>{
+    const features=[feature('FE','FE 01',100)],records=[planting('p1','FE','FE 01')];
+    const saved=[{plantingId:'p1',stage:'post1',planned:null,actual:null,completedWithoutDate:true,area:40}];
+    const result=Spray.build(features,records,[{plantingId:'p1',fourth:false,actuals:{},version:4}],saved,
+        {year:'2026',culture:'Soja'},'2026-11-01');
+    const post1=result.applications.find(row=>row.stage==='post1'),post2=result.applications.find(row=>row.stage==='post2');
+    assert.equal(post1.status,'completed');assert.equal(post1.actual,null);assert.equal(post1.completedWithoutDate,true);
+    assert.equal(post1.planned,'2026-11-16');
+    assert.equal(post2.planned,'2026-11-26');assert.equal(post2.provisional,true);
+    assert.equal(Spray.summarize(result.applications).completed,1);
+    assert.equal(Spray.summarize(result.applications).appliedArea,40);
+    assert.equal(Spray.mapStatus([post1],post1.fieldKey),'completed');
+});
+
 test('filter pesquisa sem acentos em fazenda, talhão e metadados, com filtros exatos e período inclusivo',()=>{
     const rows=[
         {farm:'São José',field:'Talhão 2',fieldKey:'f2',culture:'Soja',name:'Pós-emergente',product:'Herbicida Ágil',responsible:'José',notes:'Área norte',planned:'2026-11-10',status:'attention'},

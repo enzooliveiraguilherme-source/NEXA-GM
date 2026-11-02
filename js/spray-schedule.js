@@ -25,13 +25,14 @@
         if (time(plantingDate) === null) throw Error('Informe uma data de plantio válida no módulo Plantio.');
         if (time(current) === null) throw Error('Data de referência inválida.');
         if (!fourth && actuals.fung4) throw Error('Remova a data realizada do 4º fungicida antes de desativá-lo.');
-        let previous = plantingDate, missing = false;
+        // O histórico pode confirmar aplicações anteriores sem informar suas datas.
+        // Compare as datas conhecidas, sem criar datas fictícias para preencher lacunas.
+        let previous = plantingDate;
         for (const step of steps.slice(0, fourth ? 6 : 5)) {
             const value = actuals[step.id];
-            if (!value) { missing = true; continue; }
+            if (!value) continue;
             if (time(value) === null) throw Error(`${step.short}: informe uma data válida.`);
             if (value > current) throw Error(`${step.short}: a data realizada não pode estar no futuro.`);
-            if (missing) throw Error(`${step.short}: registre primeiro a data realizada da aplicação anterior.`);
             if (value < previous) throw Error(`${step.short}: a data realizada não pode ser anterior ao plantio ou à aplicação anterior.`);
             previous = value;
         }

@@ -1,11 +1,11 @@
 (function (root) {
     'use strict';
-    const columns = 'id,fazenda,campo,ano,cultura,planting_record_id,stage_id,application_name,product,dose,dose_unit,area,planned_date,actual_date,responsible,notes,deleted,version';
+    const columns = 'id,fazenda,campo,ano,cultura,planting_record_id,stage_id,application_name,product,dose,dose_unit,area,planned_date,actual_date,completed_without_date,responsible,notes,deleted,version';
     function fromRow(row) {
         return { id: row.id, farm: row.fazenda, field: row.campo, year: row.ano, culture: row.cultura,
             plantingId: row.planting_record_id, stage: row.stage_id, name: row.application_name,
             product: row.product, dose: row.dose == null ? null : Number(row.dose), doseUnit: row.dose_unit,
-            area: Number(row.area), planned: row.planned_date, actual: row.actual_date,
+            area: Number(row.area), planned: row.planned_date, actual: row.actual_date, completedWithoutDate:!!row.completed_without_date,
             responsible: row.responsible, notes: row.notes, deleted: row.deleted, version: row.version };
     }
     function check(result) {
@@ -22,7 +22,8 @@
                 planting_record_id: row.plantingId || null, stage_id: row.stage || null, application_name: row.name,
                 product: row.product || '', dose: row.dose === '' || row.dose == null ? null : Number(row.dose),
                 dose_unit: row.doseUnit || 'L/ha', area: Number(row.area), planned_date: row.plantingId && row.autoDate ? null : row.planned || null,
-                actual_date: row.actual || null, responsible: row.responsible || '', notes: row.notes || '', deleted: !!row.deleted };
+                actual_date: row.actual || null, completed_without_date:!row.actual&&!!row.completedWithoutDate,
+                responsible: row.responsible || '', notes: row.notes || '', deleted: !!row.deleted };
         }
         return {
             async saveBatch(rows,fields){

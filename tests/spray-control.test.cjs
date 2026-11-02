@@ -8,7 +8,7 @@ const SprayOperations = require('../js/spray-operations.js');
 const SprayGrid = require('../js/spray-grid.js');
 const source = fs.readFileSync(require.resolve('../js/spray-control.js'), 'utf8');
 
-function harness({ role = 'editor', accessRole = 'admin', saveFailure = null, batchFailure = null, batchDelay = false, scheduleActuals = { post1: '2026-10-16' }, fourth = false, secondPlanned = '2026-10-18' } = {}) {
+function harness({ role = 'editor', accessRole = 'admin', saveFailure = null, batchFailure = null, batchDelay = false, scheduleActuals = { post1: '2026-10-16' }, fourth = false, secondPlanned = '2026-10-18', completedWithoutDate = false } = {}) {
     const elements = new Map();
     class Element {
         constructor(id) {
@@ -30,7 +30,7 @@ function harness({ role = 'editor', accessRole = 'admin', saveFailure = null, ba
             responsible: 'Enzo', notes: 'Observação', deleted: false, version: 2 },
         { id: 'app-2', farm: 'FE', field: 'FE 03', year: '2026', culture: 'Soja', plantingId: 'plant-3', stage: 'post1',
             name: '1ª Pós-Emergente', product: 'Herbicida B', dose: 1.5, doseUnit: 'L/ha', area: 40, planned: secondPlanned, actual: null,
-            responsible: 'Operador', notes: '', deleted: false, version: 1 }
+            completedWithoutDate, responsible: 'Operador', notes: '', deleted: false, version: 1 }
     ];
     const calls = { list: [], schedules: [], save: [], batch: [] };
     let batchReject = batchFailure, releaseBatch;
@@ -46,7 +46,7 @@ function harness({ role = 'editor', accessRole = 'admin', saveFailure = null, ba
         async save(row, field) {
             calls.save.push({ row: { ...row }, field: { ...field } });
             if (saveFailure) throw saveFailure;
-            const result = { ...row, version: (row.version || 0) + 1 };
+            const result = { ...row, completedWithoutDate:row.actual?false:!!row.completedWithoutDate, version: (row.version || 0) + 1 };
             const index = saved.findIndex(item => item.id === row.id || item.key === row.key);
             if (index >= 0) saved[index] = result;
             else saved.push(result);
@@ -210,6 +210,35 @@ test('one inline date edit autosaves once and recalculates following dates', asy
     assert.match(h.el('table').innerHTML, /data-spray-cell="actual" data-spray-key="plant-1:post1"[^>]*value="2026-10-20"/);
 });
 
+test('completed without date contributes to summary/map, is skipped as next, and clears when date is entered', async () => {
+    const h=harness({completedWithoutDate:true});
+    h.api.refresh(h.state,h.features);await h.tick();
+    assert.match(h.el('table').innerHTML,/Aplicada · sem data/);
+    assert.match(h.el('summary').innerHTML,/<span>Realizadas<\/span><strong>2<\/strong>/);
+    assert.match(h.el('summary').innerHTML,/<span>Área aplicada<\/span><strong>70 ha<\/strong>/);
+    assert.match(h.el('next').textContent,/2ª Pós-Emergente.*FE 01/);
+    assert.doesNotMatch(h.el('next').textContent,/FE 03/);
+    h.el('map-application').value='post1';h.el('map-application').onchange();
+    assert.equal(h.api.style(h.features[2]).fillColor,'#1673d1');
+
+    await h.el('table').onchange({target:{dataset:{sprayKey:'plant-3:post1',sprayCell:'actual'},value:'2026-10-20'}});
+    assert.equal(h.calls.batch[0].rows[0].completedWithoutDate,false);
+    assert.equal(h.saved.find(row=>row.id==='app-2').completedWithoutDate,false);
+    assert.doesNotMatch(h.el('table').innerHTML,/Aplicada · sem data/);
+    assert.match(h.el('table').innerHTML,/data-spray-cell="actual" data-spray-key="plant-3:post1"[^>]*value="2026-10-20"/);
+});
+
+test('details resave without a date preserves completed-without-date state', async () => {
+    const h=harness({completedWithoutDate:true});
+    h.api.refresh(h.state,h.features);await h.tick();
+    listMode(h);clickAction(h,'edit','plant-3:post1');
+    assert.equal(h.el('input-actual').value,'');
+    await h.el('form').onsubmit({preventDefault(){}});await h.tick();
+    assert.equal(h.calls.save.length,1);
+    assert.equal(h.calls.save[0].row.completedWithoutDate,true);
+    assert.equal(h.saved.find(row=>row.id==='app-2').completedWithoutDate,true);
+});
+
 test('autosave failure preserves the draft and exposes an explicit retry', async () => {
         const h = harness({ batchFailure: Error('Conflito do lote') });
         h.api.refresh(h.state, h.features); await h.tick();
@@ -314,13 +343,15 @@ test('linked planting date edit immediately recalculates following dates without
     assert.equal(h.calls.save.length, 0);
 });
 
-test('clearing a prior realization while a later one exists blocks autosave before request', async () => {
+test('clearing an earlier realization preserves and autosaves later known dates', async () => {
     const h = harness({ scheduleActuals: { post1: '2026-10-16', post2: '2026-10-26' } });
     h.api.refresh(h.state, h.features); await h.tick();
     await h.el('table').onchange({ target: { dataset: { sprayKey: 'plant-1:post1', sprayCell: 'actual' }, value: '' } });
-    assert.match(h.el('save-status').textContent, /Não salvo/);
-    assert.match(h.el('message').textContent, /registre primeiro a data realizada da aplicação anterior/);
-    assert.equal(h.calls.batch.length, 0);
+    assert.match(h.el('save-status').textContent, /Salvo/);
+    assert.equal(h.calls.batch.length, 1);
+    assert.equal(h.calls.batch[0].rows[0].actual,'');
+    assert.equal(h.scheduleRows[0].actuals.post1,'');
+    assert.equal(h.scheduleRows[0].actuals.post2,'2026-10-26');
     assert.equal(h.calls.save.length, 0);
 });
 

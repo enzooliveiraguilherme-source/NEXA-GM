@@ -10,7 +10,8 @@
     const independentKey=(farm,field,year,culture,stage)=>'independent:'+JSON.stringify([farm,field,year,culture,stage]);
     const fieldKey = (farm, field) => JSON.stringify([farm, field]);
     const rowKey = row => row.plantingId ? `${row.plantingId}:${row.stage}` : isIndependent(row.stage)?independentKey(row.farm,row.field,row.year,row.culture,row.stage):row.id;
-    const status = (planned, actual, current = S.today()) => actual ? 'completed' : !planned?'unplanned':
+    const isCompleted = row => !!(row.actual || row.completedWithoutDate);
+    const status = (planned, actual, current = S.today(), completedWithoutDate = false) => actual || completedWithoutDate ? 'completed' : !planned?'unplanned':
         planned < current ? 'overdue' : (S.time(planned) - S.time(current)) / 86400000 <= 2 ? 'attention' : 'scheduled';
     function build(features, plantingRecords, schedules, saved, context, current = S.today()) {
         const planting = new Map(plantingRecords.filter(row => row.operationType === 'plantio' || row.produto === 'Plantio')
@@ -33,9 +34,9 @@
                 applications.push({...extra,key:id,plantingId:null,stage:step.id,independent:true,
                     farm:field.farm,field:field.field,fieldKey:key,year:context.year,culture:context.culture,
                     name:step.name,area:extra.area??field.area,planned:extra.planned||null,actual:extra.actual||null,
-                    unplanned:!extra.planned&&!extra.actual,autoDate:false,provisional:false,
+                    unplanned:!extra.planned&&!extra.actual&&!extra.completedWithoutDate,autoDate:false,provisional:false,
                     product:extra.product||'',dose:extra.dose??null,doseUnit:extra.doseUnit||'L/ha',responsible:extra.responsible||'',notes:extra.notes||'',
-                    status:status(extra.planned,extra.actual,current)});
+                    status:status(extra.planned,extra.actual,current,extra.completedWithoutDate)});
             }
             if (!record?.id || !projected.planted || !projected.plantingDate) continue;
             const schedule = scheduleIndex.get(record.id) || { actuals: {}, fourth: false };
@@ -51,13 +52,13 @@
                     autoDate: !extra.planned, provisional: !actual && provisional, optional,
                     scheduleVersion: schedule.version ?? null, plantingDate: projected.plantingDate,
                     product: extra.product || '', dose: extra.dose ?? null, doseUnit: extra.doseUnit || 'L/ha',
-                    responsible: extra.responsible || '', notes: extra.notes || '', status: optional ? 'optional' : status(planned, actual, current) });
+                    responsible: extra.responsible || '', notes: extra.notes || '', status: optional ? 'optional' : status(planned, actual, current,extra.completedWithoutDate) });
                 base = actual || planned; provisional = !actual;
             }
         }
         for (const row of saved.filter(row => !row.plantingId&&!isIndependent(row.stage))) {
             if (row.year !== context.year || row.culture !== context.culture || !fields.has(fieldKey(row.farm, row.field))) continue;
-            applications.push({ ...row, key: row.id, fieldKey: fieldKey(row.farm, row.field), status: status(row.planned, row.actual, current) });
+            applications.push({ ...row, key: row.id, fieldKey: fieldKey(row.farm, row.field), status: status(row.planned, row.actual, current,row.completedWithoutDate) });
         }
         return { fields: [...fields.values()], applications };
     }
@@ -103,17 +104,17 @@
     }
     function summarize(rows) {
         const active = rows.filter(row => !row.deleted && !row.optional && !row.unplanned);
-        return { total: active.length, completed: active.filter(row => row.actual).length,
-            pending: active.filter(row => !row.actual).length, overdue: active.filter(row => row.status === 'overdue').length,
+        return { total: active.length, completed: active.filter(isCompleted).length,
+            pending: active.filter(row => !isCompleted(row)).length, overdue: active.filter(row => row.status === 'overdue').length,
             attention: active.filter(row => row.status === 'attention').length,
             scheduled: active.filter(row => row.status === 'scheduled').length,
             plannedArea: active.reduce((total, row) => total + Number(row.area), 0),
-            appliedArea: active.reduce((total, row) => total + (row.actual ? Number(row.area) : 0), 0) };
+            appliedArea: active.reduce((total, row) => total + (isCompleted(row) ? Number(row.area) : 0), 0) };
     }
     function mapStatus(rows, key) {
         const apps = rows.filter(row => row.fieldKey === key && !row.deleted && !row.optional && !row.unplanned);
         if (!apps.length) return 'empty';
-        if (apps.every(row => !!row.actual)) return 'completed';
+        if (apps.every(isCompleted)) return 'completed';
         if (apps.some(row => row.status === 'overdue')) return 'pending';
         if (apps.some(row => row.status === 'attention')) return 'attention';
         return 'scheduled';
@@ -129,7 +130,7 @@
         if (String(row.product || '').length > 150 || String(row.responsible || '').length > 150 || String(row.notes || '').length > 2000) throw Error('Confira o tamanho dos textos informados.');
         return true;
     }
-    const api = Object.freeze({ fieldKey, rowKey, status, build, filter, sort, summarize, mapStatus, validate, applicationKey, matchesApplication, applicationOptions, matrix,independentSteps,isIndependent,independentKey });
+    const api = Object.freeze({ fieldKey, rowKey, status, isCompleted, build, filter, sort, summarize, mapStatus, validate, applicationKey, matchesApplication, applicationOptions, matrix,independentSteps,isIndependent,independentKey });
     root.SprayOperations = api;
     if (typeof module !== 'undefined') module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

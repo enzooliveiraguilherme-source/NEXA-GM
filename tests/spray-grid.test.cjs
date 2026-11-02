@@ -50,12 +50,12 @@ test('drafts de várias etapas do talhão recalculam previsões em sequência se
     assert.equal(originalSchedule.actuals.post1,undefined);assert.equal(JSON.stringify(originalSchedule),before);
 });
 
-test('limpar duas realizações de uma vez valida o estado final e rejeita o estado intermediário',()=>{
+test('limpar datas realizadas em qualquer etapa mantém as demais datas conhecidas ordenadas',()=>{
     const grid=Grid.create(),farmField=field('FE','FE 01',100,'2026-10-01'),savedSchedule=schedule('p1',4,{post1:'2026-10-18',post2:'2026-10-28'});
     const post1=app('p1','post1',{planned:'2026-10-16',actual:'2026-10-18'});
     const post2=app('p1','post2',{planned:'2026-10-28',actual:'2026-10-28'});
     grid.edit(post1,farmField,savedSchedule,'actual','');
-    assert.throws(()=>grid.validate(),/registre primeiro a data realizada da aplicação anterior/);
+    assert.equal(grid.validate().length,1);
     grid.edit(post2,farmField,savedSchedule,'actual','');
     assert.equal(grid.validate().length,2);
     const projected=grid.project([savedSchedule],[]);
@@ -123,4 +123,17 @@ test('drafts independentes usam chave por talhão/safra/cultura/etapa e permitem
     assert.equal(projected.saved[1].planned,'2026-10-25');
     assert.equal(projected.saved[2].planned,null);assert.equal(projected.saved[2].actual,'2026-10-30');
     assert.equal(projected.saved[0].key,Operations.independentKey('FE','FE 01','2026','Soja','pre'));
+});
+
+test('informar data real em uma célula limpa completedWithoutDate do draft e da projeção',()=>{
+    const grid=Grid.create(),farmField=field('FE','FE 01',100,'2026-11-01');
+    const row=independent('pre',{completedWithoutDate:true,unplanned:false,actual:null});
+    grid.edit(row,farmField,null,'actual','2026-10-20');
+    assert.equal(grid.rows()[0].completedWithoutDate,false);
+    assert.equal(grid.rows()[0].actual,'2026-10-20');
+    assert.equal(grid.validate().length,1);
+    const projected=grid.project([],[]);
+    assert.equal(projected.saved[0].completedWithoutDate,false);
+    assert.equal(projected.saved[0].actual,'2026-10-20');
+    assert.equal(projected.schedules.length,0);
 });

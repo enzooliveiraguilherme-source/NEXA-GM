@@ -65,12 +65,15 @@ test('a data de hoje usa o calendário de São Paulo, inclusive na virada UTC',(
     assert.equal(Spray.today(new Date('2026-11-02T03:00:00.000Z')),'2026-11-02');
 });
 
-test('validate rejeita datas inválidas ou futuras e exige sequência em ordem',()=>{
+test('validate aceita lacunas com datas conhecidas ordenadas e rejeita limites inválidos',()=>{
     const current='2026-12-31';
     assert.throws(()=>Spray.validate('2026-02-30',{},false,current),/plantio válida/);
     assert.throws(()=>Spray.validate('2026-11-01',{},false,'invalid'),/referência inválida/);
     assert.throws(()=>Spray.validate('2026-11-01',{post1:'2026-11-18'},false,'2026-11-17'),/não pode estar no futuro/);
-    assert.throws(()=>Spray.validate('2026-11-01',{post2:'2026-11-28'},false,current),/registre primeiro/);
+    assert.equal(Spray.validate('2026-11-01',{post2:'2026-11-10',fung1:'2026-11-20'},false,current),true);
+    assert.throws(()=>Spray.validate('2026-11-01',{post2:'2026-11-20',fung1:'2026-11-19'},false,current),/anterior ao plantio ou à aplicação anterior/);
+    assert.throws(()=>Spray.validate('2026-11-01',{post2:'2026-10-31'},false,current),/anterior ao plantio/);
+    assert.throws(()=>Spray.validate('2026-11-01',{post2:'2026-11-20',fung1:'2027-01-01'},false,current),/não pode estar no futuro/);
     assert.throws(()=>Spray.validate('2026-11-01',{post1:'2026-11-18',post2:'2026-11-17'},false,current),/anterior ao plantio ou à aplicação anterior/);
     assert.throws(()=>Spray.validate('2026-11-01',{post1:'2026-10-31'},false,current),/anterior ao plantio/);
     assert.throws(()=>Spray.validate('2026-11-01',{post1:'2026-11-18',post2:'2026-11-28',fung4:'2026-12-30'},false,current),/Remova a data realizada do 4º fungicida/);

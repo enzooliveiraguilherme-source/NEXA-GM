@@ -48,7 +48,7 @@
         if (chosen) apps = [chosen];
         return `<div class="spray-map-popup"><strong>${escape(p.Campo)} · ${escape(p.Fazenda)}</strong><div>Área do talhão: ${ha(p.Area)}</div>` +
             (loading || error ? '<p>Aplicações ainda não confirmadas. Consulte o aviso na tabela.</p>' : !apps.length ? '<p>Sem aplicação neste filtro.</p>' :
-            apps.map(row => `<section><b>${escape(row.name)}</b><div>Produto: ${escape(row.product || 'Não informado')}</div><div>Área: ${ha(row.area)}</div><div>Prevista: ${date(row.planned)}</div><div>Realizada: ${date(row.actual)}</div><div>Responsável: ${escape(row.responsible || 'Não informado')}</div><div>Status: ${names[row.status]}</div></section>`).join('')) + '</div>';
+            apps.map(row => `<section><b>${escape(row.name)}</b><div>Produto: ${escape(row.product || 'Não informado')}</div><div>Área: ${ha(row.area)}</div><div>Prevista: ${date(row.planned)}</div><div>Realizada: ${row.completedWithoutDate&&!row.actual?'Aplicada · data não informada':date(row.actual)}</div><div>Responsável: ${escape(row.responsible || 'Não informado')}</div><div>Status: ${names[row.status]}</div></section>`).join('')) + '</div>';
     }
     function locate(row) {
         selectedRow = row.key; selectedField = row.fieldKey; render();
@@ -70,9 +70,10 @@
     }
     function cell(row,column){
         const value=row.optional&&column==='planned'?'':row[column]??'',editable=canEdit()&&!busy&&!loading&&!error&&!row.deleted;
-        if(!editable)return column==='planned'||column==='actual'?date(value):escape(value||'—');
+        const completedLabel=column==='actual'&&row.completedWithoutDate&&!row.actual?'<small>Aplicada · sem data</small>':'';
+        if(!editable)return completedLabel||(column==='planned'||column==='actual'?date(value):escape(value||'—'));
         const type=['planned','actual'].includes(column)?'date':['dose','area'].includes(column)?'number':'text';
-        return `<input type="${type}" data-spray-cell="${column}" data-spray-key="${escape(row.key)}" aria-label="${escape(row.field+' · '+row.name+' · '+({planned:'Data programada',actual:'Data realizada',product:'Produto',dose:'Dose',doseUnit:'Unidade da dose',area:'Área',responsible:'Responsável',notes:'Observações'}[column]||column))}" value="${escape(value)}"${type==='number'?' min="0" step="any"':''}${column==='actual'?` max="${S.today()}"`:''}${column==='notes'?' maxlength="2000"':type==='text'?` maxlength="${column==='doseUnit'?30:150}"`:''} class="${grid.has(row.key)?'spray-cell-draft':''}">`;
+        return `${completedLabel}<input type="${type}" data-spray-cell="${column}" data-spray-key="${escape(row.key)}" aria-label="${escape(row.field+' · '+row.name+' · '+({planned:'Data programada',actual:'Data realizada',product:'Produto',dose:'Dose',doseUnit:'Unidade da dose',area:'Área',responsible:'Responsável',notes:'Observações'}[column]||column))}" value="${escape(value)}"${type==='number'?' min="0" step="any"':''}${column==='actual'?` max="${S.today()}"`:''}${column==='notes'?' maxlength="2000"':type==='text'?` maxlength="${column==='doseUnit'?30:150}"`:''} class="${grid.has(row.key)?'spray-cell-draft':''}">`;
     }
     function selection(row){return canEdit()&&!row.deleted?`<input type="checkbox" data-spray-check="${escape(row.key)}" aria-label="Selecionar ${escape(row.field+' · '+row.name)}"${checked.has(row.key)?' checked':''}${busy?' disabled':''}>`:'';}
     function matrixTable(){
@@ -139,7 +140,7 @@
         const cards = [['Programadas',totals.total],['Realizadas',totals.completed],['Pendentes',totals.pending],['Atrasadas',totals.overdue],['Área programada',ha(totals.plannedArea)],['Área aplicada',ha(totals.appliedArea)]];
         el('summary').innerHTML=cards.map(([label,value])=>`<div class="spray-kpi"><span>${label}</span><strong>${value}</strong></div>`).join('');
         el('counts').innerHTML=`<span class="spray-status scheduled">${totals.scheduled} no prazo</span> <span class="spray-status attention">${totals.attention} próximas</span> <span class="spray-status overdue">${totals.overdue} atrasadas</span> <span>${visible.length} registros neste filtro · ${totals.total?Math.round(totals.completed/totals.total*100):0}% concluído</span>`;
-        const next=O.sort(visible.filter(row=>!row.deleted&&!row.optional&&!row.unplanned&&!row.actual),'planned',1)[0];
+        const next=O.sort(visible.filter(row=>!row.deleted&&!row.optional&&!row.unplanned&&!O.isCompleted(row)),'planned',1)[0];
         el('next').textContent=next?`Próxima pendência: ${next.name} · ${next.farm} / ${next.field} · ${date(next.planned)}`:'Nenhuma aplicação pendente neste filtro.';
         el('permission').textContent=canEdit() ? 'Edite as datas na grade ou os demais campos na lista. Salve todas as alterações juntas. Limpar a data programada de uma etapa do plantio retoma o cálculo automático.' : 'Modo de consulta. Seu perfil não permite alterar aplicações.';
         el('table').innerHTML=visible.length?(mode==='grid'?matrixTable():listTable()):'<p class="spray-empty">Nenhuma aplicação neste filtro. Os talhões cadastrados continuam visíveis no mapa.</p>';
