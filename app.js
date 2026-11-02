@@ -733,11 +733,16 @@ function updateOperationUI() {
     const harvest = state.currentTab === 'colheita';
     const operational = isOperationalMapMode();
     const spraying = state.currentTab === 'pulverizacao';
+    const sprayMap = spraying && state.currentSubTab === 'mapa-pulverizacao';
     document.body.classList.toggle('spraying', spraying);
-    document.getElementById('map-container')?.classList.remove('hidden');
+    document.body.classList.toggle('spray-map-view', sprayMap);
+    document.body.classList.toggle('spray-table-view', spraying && !sprayMap);
+    document.getElementById('map-container')?.classList.toggle('hidden', spraying && !sprayMap);
+    document.getElementById('spray-view-switch')?.classList.toggle('hidden', !spraying);
+    document.querySelectorAll('[data-spray-view]').forEach(button=>button.classList.toggle('active',spraying&&button.dataset.sprayView===(sprayMap?'mapa-pulverizacao':'tabela-pulverizacao')));
     document.getElementById('spray-map-key')?.classList.toggle('hidden', !spraying);
     const sprayPanel = document.getElementById('spray-panel');
-    if (sprayPanel) sprayPanel.hidden = !spraying;
+    if (sprayPanel) sprayPanel.hidden = !spraying || sprayMap;
     const operation = OPERACOES_CONFIG[state.currentTab];
     const heading = document.querySelector('.portal-heading h1');
     if (heading && operation) heading.textContent = operation.name;
@@ -1123,6 +1128,7 @@ function renderMap(shouldFitBounds = true) {
         document.getElementById('planning-banner-bar')?.classList.add('hidden');
         const count = document.getElementById('stats-count');
         if (count) count.textContent = filteredFeatures.length;
+        if (state.currentSubTab !== 'mapa-pulverizacao') return;
     }
     
     const filteredData = {
@@ -2272,6 +2278,7 @@ function setupEventListeners() {
     const subtabCalcario = document.getElementById('subtab-calcario-btn');
     const plantioGroup = document.getElementById('nav-plantio-group');
     const subtabPlantio = document.getElementById('subtab-mapa-plantio-btn');
+    const sprayingGroup = document.getElementById('nav-pulverizacao-group');
 
     function switchMainTab(tabKey, subtabKey = null) {
         if (!tabKey) return;
@@ -2281,6 +2288,7 @@ function setupEventListeners() {
         }
         const previousTab = state.currentTab;
         state.currentTab = tabKey;
+        sprayingGroup?.classList.toggle('expanded',tabKey==='pulverizacao');
         if (tabKey === 'colheita' && previousTab !== 'colheita') {
             state.currentFazenda = 'ALL';
             state.currentGleba = 'ALL';
@@ -2316,7 +2324,7 @@ function setupEventListeners() {
             if (plantioGroup) plantioGroup.classList.add('expanded');
             if (infoPanel) infoPanel.classList.add('hidden');
         } else {
-            state.currentSubTab = null;
+            state.currentSubTab = tabKey==='pulverizacao' ? subtabKey || 'tabela-pulverizacao' : null;
             if (subtabCalcario) subtabCalcario.classList.remove('active');
             if (subtabPlantio) subtabPlantio.classList.remove('active');
             if (adubacaoGroup) adubacaoGroup.classList.remove('expanded');
@@ -2373,6 +2381,9 @@ function setupEventListeners() {
                 } else {
                     switchMainTab('plantio', 'mapa-plantio');
                 }
+            } else if(tabKey==='pulverizacao'){
+                if(state.currentTab==='pulverizacao')sprayingGroup?.classList.toggle('expanded');
+                else switchMainTab('pulverizacao','tabela-pulverizacao');
             } else {
                 switchMainTab(tabKey);
             }
@@ -2392,6 +2403,10 @@ function setupEventListeners() {
             e.stopPropagation();
             switchMainTab('plantio', button.dataset.subtab);
         });
+    });
+    document.querySelectorAll('[data-spray-view]').forEach(button=>button.addEventListener('click',event=>{event.stopPropagation();switchMainTab('pulverizacao',button.dataset.sprayView);}));
+    window.addEventListener('geoportal:spray-view',event=>{
+        if(['tabela-pulverizacao','mapa-pulverizacao'].includes(event.detail?.view))switchMainTab('pulverizacao',event.detail.view);
     });
 
     // Alternância de Modos (Aplicação vs Planejamento)

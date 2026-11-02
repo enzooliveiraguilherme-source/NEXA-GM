@@ -9,6 +9,7 @@
     const colors = { completed:'#169447', attention:'#f5c542', pending:'#df3838', selected:'#1673d1', empty:'#94a3b8' };
     const grid=root.SprayGrid.create(),checked=new Set();
     let mode='grid',mapApplication='all',mapRows=[];
+    let autoError='',focusAfterSave=null;
     let state, features = [], schedules = [], saved = [], fields = [], all = [], visible = [], selectedField = '', selectedRow = '',
         loadedKey = '', scope = '', request = 0, loading = false, busy = false, error = '', message = '', editing = null, order = 'planned', direction = 1;
     const filters = { farm:'', field:'', application:'all', status:'', from:'', to:'', search:'', deleted:false };
@@ -37,7 +38,7 @@
             for(const name of ['farm','field','status','from','to','search']){filters[name]='';el(name).value='';}
             filters.application='all';filters.deleted=false;message='Filtros da tabela ajustados para localizar o talhão selecionado.';
         }
-        render();scrollSelection();
+        render();if(state.currentSubTab!=='mapa-pulverizacao')scrollSelection();
     }
     function popup(feature) {
         const p = feature.properties || {}, key = O.fieldKey(p.Fazenda,p.Campo);
@@ -50,6 +51,7 @@
     }
     function locate(row) {
         selectedRow = row.key; selectedField = row.fieldKey; render();
+        root.dispatchEvent?.(new root.CustomEvent('geoportal:spray-view',{detail:{view:'mapa-pulverizacao'}}));
         state.geojsonLayer?.eachLayer(layer => {
             if (!layer.feature) return;
             const p = layer.feature.properties;
@@ -75,7 +77,8 @@
     function selection(row){return canEdit()&&!row.deleted?`<input type="checkbox" data-spray-check="${escape(row.key)}" aria-label="Selecionar ${escape(row.field+' · '+row.name)}"${checked.has(row.key)?' checked':''}${busy?' disabled':''}>`:'';}
     function matrixTable(){
         const matrix=O.matrix(visible);
-        return `<table class="spray-matrix"><caption>Grade de datas · edite várias células e depois salve o conjunto</caption><thead><tr><th scope="col"><button type="button" data-spray-sort="field">Fazenda / Talhão</button></th>${matrix.columns.map(column=>`<th scope="col">${escape(column.label)}<small>Programada / Realizada</small></th>`).join('')}</tr></thead><tbody>`+matrix.rows.map(field=>`<tr data-spray-field-key="${escape(field.key)}" class="${field.key===selectedField?'selected':''}"><th scope="row"><button type="button" data-spray-field-select="${escape(field.key)}">${escape(field.field)}<small>${escape(field.farm)}</small></button></th>`+matrix.columns.map(column=>`<td>${(field.cells.get(column.key)||[]).map(row=>`<div class="spray-matrix-entry ${row.status}${grid.has(row.key)?' has-draft':''}" data-spray-row="${escape(row.key)}">${selection(row)}<span class="spray-status ${row.status}">${row.deleted?'Excluída':names[row.status]}</span><label>Programada${cell(row,'planned')}</label><label>Realizada${cell(row,'actual')}</label>${row.provisional?'<small>Previsão provisória</small>':''}</div>`).join('')||'—'}</td>`).join('')+'</tr>').join('')+'</tbody></table>';
+        const heading=column=>S.steps.find(step=>step.id===column.key)?.short||column.label;
+        return `<table class="spray-matrix spray-compact-table"><thead><tr><th scope="col" rowspan="2"><button type="button" data-spray-sort="field">Talhão / Fazenda</button></th>${matrix.columns.map(column=>`<th scope="colgroup" colspan="2">${escape(heading(column))}</th>`).join('')}</tr><tr>${matrix.columns.map(()=>'<th scope="col">Prevista</th><th scope="col">Realizada</th>').join('')}</tr></thead><tbody>`+matrix.rows.map(field=>`<tr data-spray-field-key="${escape(field.key)}" class="${field.key===selectedField?'selected':''}"><th scope="row"><button type="button" data-spray-field-select="${escape(field.key)}">${escape(field.field)}<small>${escape(field.farm)}</small></button></th>`+matrix.columns.map(column=>['planned','actual'].map(kind=>`<td>${(field.cells.get(column.key)||[]).map(row=>`<div class="spray-compact-cell ${row.status}${grid.has(row.key)?' has-draft':''}" data-spray-row="${escape(row.key)}" title="${escape(row.name+' · '+names[row.status])}">${cell(row,kind)}</div>`).join('')||'—'}</td>`).join('')).join('')+'</tr>').join('')+'</tbody></table>';
     }
     function listTable(){
         const columns=[['farm','Fazenda'],['field','Talhão'],['culture','Cultura'],['name','Aplicação'],['product','Produto'],['dose','Dose'],['doseUnit','Unidade'],['area','Área (ha)'],['planned','Programada'],['actual','Realizada'],['responsible','Responsável'],['status','Status'],['notes','Observações']];
@@ -88,11 +91,28 @@
         if(!field)return;
         grid.edit(row,field,schedules.find(item=>item.plantingId===row.plantingId),column,value);
         selectedField=row.fieldKey;selectedRow=row.key;message='Prévia das alterações. As aplicações ainda não foram salvas.';
+        autoError='';
+    }
+    async function savePending(){
+        if(!canEdit()||busy||loading||error||!grid.size)return;
+        let rows;try{rows=grid.validate();}catch(failure){autoError=failure.message;message='Não salvo: '+autoError;render();return;}
+        busy=true;autoError='';message='Salvando…';render();
+        try{
+            await repo().saveBatch(rows,grid.fields());grid.clear();checked.clear();el('check-visible').checked=false;
+            loadedKey='';await load();message='Salvo';
+        }catch(failure){autoError=failure.message;message='Não foi possível salvar: '+autoError;}
+        finally{
+            busy=false;render();
+            if(focusAfterSave){const target=focusAfterSave;focusAfterSave=null;
+                Array.from(el('table').querySelectorAll?.('[data-spray-cell]')||[]).find(input=>input.dataset.sprayKey===target.sprayKey&&input.dataset.sprayCell===target.sprayCell)?.focus?.({preventScroll:true});}
+        }
     }
     function batchControls(){
         let failure='';if(grid.size)try{grid.validate();}catch(problem){failure=problem.message;}
         el('batch-message').textContent=failure||`${grid.size} aplicações com alterações não salvas · ${visible.filter(row=>checked.has(row.key)&&!row.deleted).length} selecionadas neste filtro.`+(grid.size?' Alterações fora do filtro também serão salvas.':' Edite as células ou aplique um valor aos itens selecionados.');
         el('batch-save').disabled=!canEdit()||busy||loading||!!error||!grid.size||!!failure;
+        el('batch-save').hidden=!autoError;
+        el('batch-discard').hidden=!autoError;
         el('batch-discard').disabled=busy||!grid.size;
         el('bulk-apply').disabled=!canEdit()||busy||loading||!!error||!visible.some(row=>checked.has(row.key)&&!row.deleted);
         el('check-visible').disabled=!canEdit()||busy||loading;
@@ -105,8 +125,11 @@
     function render() {
         if (!state || state.currentTab !== 'pulverizacao' || !el('table')) return;
         prepare();
-        el('message').textContent = error || (loading ? 'Carregando aplicações…' : message || 'Selecione uma aplicação na tabela ou um talhão no mapa.');
-        el('message').classList.toggle('is-error', !!error);
+        el('message').textContent = error || (busy ? 'Salvando…' : loading ? 'Carregando…' : message || 'Alterações salvas automaticamente');
+        el('message').classList.toggle('is-error', !!error||!!autoError);
+        el('save-status').textContent=error?'Falha ao carregar':busy?'Salvando…':loading?'Carregando…':autoError?'Não salvo':grid.size?'Alteração não salva':message==='Salvo'?'Salvo':'Salvamento automático';
+        el('save-status').classList.toggle('is-error',!!error||!!autoError);
+        el('save-status').title=error||autoError||'';
         el('add').disabled = !canEdit() || loading || busy || !!error || !fields.length || !!grid.size;
         el('inputs').disabled = busy || !canEdit();
         el('reload').disabled = loading || busy;
@@ -207,7 +230,7 @@
     function initialize() {
         if(el('table').dataset.initialized)return;el('table').dataset.initialized='true';
         el('add').onclick=()=>openForm(null);
-        el('map-jump').onclick=()=>{document.getElementById('map-container')?.scrollIntoView?.({behavior:'smooth',block:'start'});state.map?.invalidateSize?.();};
+        el('map-jump').onclick=()=>{root.dispatchEvent?.(new root.CustomEvent('geoportal:spray-view',{detail:{view:'mapa-pulverizacao'}}));state.map?.invalidateSize?.();};
         el('reload').onclick=()=>{if(busy)return;if(grid.size){message='Suas alterações da grade foram mantidas. Salve ou descarte antes de recarregar.';render();return;}el('form').hidden=true;editing=null;loadedKey='';load();};
         for(const name of ['farm','field','application','status','from','to','search']){
             const handler=()=>{filters[name]=el(name).value;if(name==='farm')filters.field='';if(name==='status'){filters.deleted=filters.status==='deleted';if(filters.deleted)filters.status='';}render();};
@@ -224,22 +247,16 @@
             const targets=visible.filter(row=>checked.has(row.key)&&!row.deleted);
             if(new Set([...grid.rows().map(row=>row.key),...targets.map(row=>row.key)]).size>1000){message='O limite é de 1000 aplicações por lote. Reduza a seleção ou salve as alterações pendentes.';render();return;}
             for(const row of targets)editCell(row,key,value);
-            render();
+            render();return savePending();
         };
-        el('batch-discard').onclick=()=>{if(busy)return;grid.clear();message='Alterações da grade descartadas.';render();};
-        el('batch-save').onclick=async()=>{
-            if(!canEdit()||busy||loading||error||!grid.size)return;
-            let rows;try{rows=grid.validate();}catch(failure){message=failure.message;render();return;}
-            busy=true;render();
-            try{await repo().saveBatch(rows,grid.fields());grid.clear();checked.clear();el('check-visible').checked=false;message=`${rows.length} aplicações salvas e confirmadas juntas.`;loadedKey='';await load();}
-            catch(failure){message=failure.message;}
-            finally{busy=false;render();}
-        };
+        el('batch-discard').onclick=()=>{if(busy)return;grid.clear();autoError='';message='Alteração descartada.';render();};
+        el('batch-save').onclick=savePending;
         el('table').onchange=event=>{
             const key=event.target.dataset?.sprayKey,column=event.target.dataset?.sprayCell;
             if(event.target.dataset?.sprayCheck){const id=event.target.dataset.sprayCheck;if(event.target.checked)checked.add(id);else checked.delete(id);batchControls();return;}
             const row=visible.find(item=>item.key===key);if(!row||!column)return;
-            editCell(row,column,event.target.value);render();
+            if(document.activeElement===event.target)focusAfterSave={sprayKey:key,sprayCell:column};
+            editCell(row,column,event.target.value);render();return savePending();
         };
         el('table').onfocusin=event=>{const row=visible.find(item=>item.key===event.target.dataset?.sprayKey);if(row)quietSelect(row);};
         el('table').onkeydown=event=>{
@@ -248,16 +265,18 @@
             if(index<0||!next)return;
             event.preventDefault();
             const row=visible.find(item=>item.key===event.target.dataset.sprayKey),column=event.target.dataset.sprayCell;
-            if(row&&String(row[column]??'')!==event.target.value)editCell(row,column,event.target.value);
+            const changed=row&&String(row[column]??'')!==event.target.value;
+            if(changed)editCell(row,column,event.target.value);
             const target={...next.dataset};render();
+            if(changed){focusAfterSave=target;return savePending();}
             const replacement=Array.from(el('table').querySelectorAll?.('[data-spray-cell]')||[]).find(input=>input.dataset.sprayKey===target.sprayKey&&input.dataset.sprayCell===target.sprayCell);
             replacement?.focus?.({preventScroll:true});
         };
         el('table').onclick=event=>{
-            const fieldButton=event.target.closest?.('[data-spray-field-select]');if(fieldButton){const row=visible.find(item=>item.fieldKey===fieldButton.dataset.sprayFieldSelect);if(row)locate(row);return;}
+            const fieldButton=event.target.closest?.('[data-spray-field-select]');if(fieldButton){const row=visible.find(item=>item.fieldKey===fieldButton.dataset.sprayFieldSelect);if(row)quietSelect(row);return;}
             if(event.target.dataset?.sprayCell||event.target.dataset?.sprayCheck)return;
             const sort=event.target.closest?.('[data-spray-sort]');if(sort){direction=order===sort.dataset.spraySort?-direction:1;order=sort.dataset.spraySort;render();return;}
-            const button=event.target.closest?.('[data-spray-action]');if(!button){const element=event.target.closest?.('[data-spray-row]');const row=visible.find(item=>item.key===element?.dataset.sprayRow);if(row)locate(row);return;}
+            const button=event.target.closest?.('[data-spray-action]');if(!button){const element=event.target.closest?.('[data-spray-row]');const row=visible.find(item=>item.key===element?.dataset.sprayRow);if(row)quietSelect(row);return;}
             const row=visible.find(item=>item.key===button.dataset.sprayKey);if(!row)return;
             if(button.dataset.sprayAction==='map'){locate(row);return;}
             if(!canEdit()||busy)return;
@@ -289,6 +308,7 @@
         if(context!==scope){scope=context;selectedField='';selectedRow='';filters.farm='';filters.field='';filters.application='all';mapApplication='all';editing=null;el('form').hidden=true;}
         if(!canEdit()){el('form').hidden=true;editing=null;}
         initialize();render();load();
+        if(state.currentSubTab!=='mapa-pulverizacao'&&selectedField)scrollSelection();
     }
     let day=S.today();root.setInterval?.(()=>{if(state?.currentTab==='pulverizacao'&&day!==S.today()){day=S.today();render();}},60000);
     root.addEventListener?.('beforeunload',event=>{if(grid.size){event.preventDefault();event.returnValue='';}});
