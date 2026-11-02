@@ -16,7 +16,7 @@
     
     <!-- Custom CSS -->
     <link rel="stylesheet" href="style.css?v=savecloud-rate-1">
-    <link rel="stylesheet" href="brand.css?v=planting-multiselect-20261102">
+    <link rel="stylesheet" href="brand.css?v=spray-20261102">
 </head>
 <body data-page="portal">
     <div id="auth-loading-overlay" class="loading-overlay"><div class="spinner"></div><p>Validando seu acesso…</p></div>
@@ -315,6 +315,25 @@
                 </div>
             </div>
 
+            <section id="spray-panel" class="spray-panel" aria-label="Cronograma de pulverização" hidden>
+                <header class="spray-heading"><div><span class="spray-eyebrow">ACOMPANHAMENTO DAS APLICAÇÕES</span><h2>Cronograma de pulverização</h2><p>Do plantio à última aplicação, com previsões recalculadas pelas datas realizadas.</p></div><button type="button" id="spray-reload">Recarregar dados</button></header>
+                <p id="spray-status" class="spray-message" role="status" aria-live="polite"></p>
+                <div id="spray-summary" class="spray-summary" aria-label="Resumo das aplicações"></div>
+                <div id="spray-next" class="spray-next"></div>
+                <p id="spray-scope" class="spray-scope"></p>
+                <div class="spray-color-key"><span class="spray-status scheduled">No prazo: mais de 2 dias</span><span class="spray-status attention">Atenção: hoje, 1 ou 2 dias</span><span class="spray-status overdue">Atrasada: data ultrapassada</span><span class="spray-status completed">✓ Concluída: realização registrada</span></div>
+                <div class="spray-field-picker"><label for="spray-field">Editar cronograma do talhão</label><select id="spray-field"></select></div>
+                <section id="spray-editor" class="spray-editor" hidden>
+                    <header><div><h3 id="spray-detail-title" tabindex="-1"></h3><p id="spray-detail-meta"></p></div><label class="spray-fourth"><input type="checkbox" id="spray-fourth"> Incluir 4º fungicida</label></header>
+                    <p id="spray-permission"></p>
+                    <div class="spray-table-scroll" tabindex="0" aria-label="Datas previstas e realizadas"><table class="spray-detail"><caption>Aplicações do talhão selecionado</caption><thead><tr><th scope="col">Aplicação</th><th scope="col">Data prevista</th><th scope="col">Data realizada</th><th scope="col">Dias para vencimento</th><th scope="col">Status</th></tr></thead><tbody id="spray-rows"></tbody></table></div>
+                    <p class="spray-note">Sem realização anterior, a previsão é provisória e segue a data prevista anterior. Ao registrar ou corrigir uma realização, as próximas previsões são recalculadas. Datas realizadas são preservadas.</p>
+                    <p id="spray-validation" class="spray-validation" role="alert"></p>
+                    <footer><button type="button" id="spray-save">Salvar aplicações do talhão</button><button type="button" id="spray-discard">Descartar alterações</button></footer>
+                </section>
+                <h3 class="spray-overview-title">Panorama dos talhões</h3>
+                <div id="spray-overview" class="spray-table-scroll" tabindex="0" aria-label="Panorama de pulverização por talhão"></div>
+            </section>
             <!-- Container do Mapa -->
             <div id="map-container" class="map-container">
                 <div id="savefarm-legend" class="savefarm-rate-legend" aria-label="Legenda da taxa de aplicação" hidden></div>
@@ -1050,9 +1069,12 @@
     <script src="js/seed-cycles.js?v=2"></script>
     <script src="js/planting-maps.js?v=planting-multiselect-20261102"></script>
     <script src="js/planting-report.js?v=5"></script>
+    <script src="js/spray-schedule.js?v=1"></script>
+    <script src="js/spray-repository.js?v=1"></script>
+    <script src="js/spray-view.js?v=1"></script>
     <script src="js/savefarm-rate.js?v=1"></script>
     <script src="js/savefarm-view.js?v=4"></script>
-    <script src="app.js?v=planting-labels-20261102"></script>
+    <script src="app.js?v=spray-20261102"></script>
     <script src="js/mobile-layout.js?v=3"></script>
 </body>
 </html>

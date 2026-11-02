@@ -457,6 +457,7 @@ function getTalhaoRecord(fazenda, campo, ano, cultura, produto, areaTotal = 0) {
 function updateRoleUI() {
     const isViewer = (state.userRole === 'viewer');
     window.OperationExport?.updateAccess?.(state);
+    if (state.currentTab === 'pulverizacao' && state.geojsonData) window.SprayView?.refresh(state, state.geojsonData.features.filter(featureMatchesFilters));
     if (isPlantingAnalysisMode() && state.geojsonData) {
         window.PlantingMaps?.refresh(state, state.geojsonData.features.filter(featureMatchesFilters));
         window.PlantingMaps?.refreshLabels(state);
@@ -667,7 +668,7 @@ function updateFilterTag() {
     if (tagGleba) tagGleba.textContent = glebaLabel;
     if (tagAno) tagAno.textContent = state.currentAno;
     if (tagCul) tagCul.textContent = state.currentCultura;
-    if (tagPro) tagPro.textContent = state.currentProduto;
+    if (tagPro) tagPro.textContent = state.currentTab === 'pulverizacao' ? 'Pulverização' : state.currentProduto;
     if (dashFaz) dashFaz.textContent = `${state.currentFazenda === 'ALL' ? 'Fazendas: Todas' : `Fazenda: ${fazendaLabel}`} • ${glebaLabel}`;
 }
 
@@ -731,12 +732,17 @@ function updateOperationUI() {
     const analysis = isPlantingAnalysisMode();
     const harvest = state.currentTab === 'colheita';
     const operational = isOperationalMapMode();
+    const spraying = state.currentTab === 'pulverizacao';
+    document.body.classList.toggle('spraying', spraying);
+    document.getElementById('map-container')?.classList.toggle('hidden', spraying);
+    const sprayPanel = document.getElementById('spray-panel');
+    if (sprayPanel) sprayPanel.hidden = !spraying;
     const operation = OPERACOES_CONFIG[state.currentTab];
     const heading = document.querySelector('.portal-heading h1');
     if (heading && operation) heading.textContent = operation.name;
     document.getElementById('calcario-dashboard')?.classList.toggle('hidden', !operational);
-    document.getElementById('calcario-filter-bar')?.classList.toggle('hidden', !operational && !analysis);
-    document.getElementById('generic-op-bar')?.classList.toggle('hidden', operational || analysis || state.currentTab === 'savefarm');
+    document.getElementById('calcario-filter-bar')?.classList.toggle('hidden', !operational && !analysis && !spraying);
+    document.getElementById('generic-op-bar')?.classList.toggle('hidden', operational || analysis || spraying || state.currentTab === 'savefarm');
     document.body.classList.toggle('planting-analysis', analysis);
     if (operation) {
         const name = document.getElementById('generic-op-name');
@@ -751,7 +757,7 @@ function updateOperationUI() {
     };
 
     const productGroup = document.getElementById('operation-product-filter-group');
-    if (productGroup) productGroup.classList.toggle('hidden', plantio);
+    if (productGroup) productGroup.classList.toggle('hidden', plantio || spraying);
     document.querySelectorAll('.plantio-only').forEach(element => {
         element.classList.toggle('hidden', !plantio);
     });
@@ -1055,6 +1061,7 @@ function onEachFeature(feature, layer) {
 
 // Atualização de estilos e KPIs sem destruir o GeoJSON Layer
 function updateMapStylesAndKPIs() {
+    if (state.currentTab === 'pulverizacao') { renderMap(false); return; }
     if (isPlantingAnalysisMode()) { renderMap(false); return; }
     TalhaoSelection.updateUI();
     try {
@@ -1100,6 +1107,16 @@ function renderMap(shouldFitBounds = true) {
     if (state.currentTab === 'colheita') HarvestView.refreshFilters(state);
     const filteredFeatures = activeData.features.filter(featureMatchesFilters);
     window.PlantingMaps?.refresh(state, filteredFeatures);
+    window.SprayView?.refresh(state, filteredFeatures);
+    if (state.currentTab === 'pulverizacao') {
+        document.getElementById('calcario-filter-bar')?.classList.remove('hidden');
+        document.getElementById('calcario-dashboard')?.classList.add('hidden');
+        document.getElementById('generic-op-bar')?.classList.add('hidden');
+        document.getElementById('planning-banner-bar')?.classList.add('hidden');
+        const count = document.getElementById('stats-count');
+        if (count) count.textContent = filteredFeatures.length;
+        return;
+    }
     
     const filteredData = {
         type: "FeatureCollection",
