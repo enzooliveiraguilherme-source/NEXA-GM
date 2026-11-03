@@ -1,0 +1,72 @@
+/* Keep the desktop sheet; expose filters and field details on demand on phones. */
+.spray-mobile-views,.spray-mobile-table-tools { display:none; }
+.spray-filter-disclosure>summary,.spray-legend-disclosure>summary { display:none; }
+.spray-filter-disclosure,.spray-legend-disclosure { flex-shrink:0; }
+.spray-quick-dialog { padding:0; border:0; color:#153c35; }
+.spray-quick-dialog::backdrop { background:#102c4d80; }
+
+@media (max-width:820px) {
+    body.spraying .operation-workspace { flex-direction:column; min-width:0; overflow:hidden; }
+    body.spraying .spray-mobile-views { display:flex; flex:0 0 auto; gap:6px; padding:6px 10px; background:white; border-bottom:1px solid #d5e0eb; }
+    body.spraying .spray-mobile-views button { display:flex; align-items:center; justify-content:center; gap:8px; flex:1; min-height:44px; border:1px solid #c9d8d1; border-radius:8px; background:#fff; color:#153c35; font:inherit; font-size:14px; font-weight:600; line-height:1.3; }
+    body.spray-table-view .spray-mobile-views [data-spray-view="tabela-pulverizacao"],body.spray-map-view .spray-mobile-views [data-spray-view="mapa-pulverizacao"] { background:#176743; border-color:#176743; color:white; }
+    body.spraying.spray-table-view .spray-control-panel { flex:1; min-height:0; min-width:0; width:100%; padding:8px 10px max(8px,env(safe-area-inset-bottom)); gap:7px; overflow:auto; }
+    body.spraying .spray-heading { flex-direction:column; align-items:stretch; gap:0; }
+    body.spraying .spray-heading h2 { font-size:17px; }
+    body.spraying .spray-control-actions { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); align-items:start; gap:6px; width:100%; }
+    body.spraying .spray-control-actions>div { min-width:0; }
+    body.spraying .spray-control-panel button { min-height:44px; padding:7px 8px; font-size:13px; line-height:1.3; }
+    body.spraying .spray-control-actions>button,.spray-control-actions .spray-report-actions button { width:100%; min-height:48px; white-space:normal; }
+    body.spraying #spray-op-save-status { order:-1; grid-column:1/-1; min-height:18px; margin:-18px 0 5px 105px; text-align:right; font-size:11px; }
+    body.spraying .spray-report-actions { display:block; }
+    body.spraying #spray-report-status { display:block; overflow-wrap:anywhere; font-size:11px; }
+    body.spraying .spray-report-actions #spray-report-status:empty { display:none; }
+    body.spraying .spray-filter-disclosure { border:1px solid #d5e0db; border-radius:8px; background:#fff; }
+    body.spraying .spray-filter-disclosure>summary,body.spraying .spray-legend-disclosure>summary { display:list-item; min-height:44px; padding:11px 12px; cursor:pointer; font-size:13px; line-height:20px; color:#234b3c; }
+    body.spraying #spray-op-filter-count { float:right; max-width:68%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#61776d; font-size:12px; }
+    body.spraying .spray-operation-filters { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); padding:0 10px 10px; margin:0; gap:10px; }
+    body.spraying .spray-operation-filters label { min-width:0; gap:4px; font-size:12px; }
+    body.spraying .spray-operation-filters .spray-search { grid-column:1/-1; }
+    body.spraying .spray-operation-filters input,body.spraying .spray-operation-filters select { width:100%; min-width:0; min-height:44px; padding:8px; font-size:16px; }
+    body.spraying .spray-operation-filters button { grid-column:1/-1; }
+    body.spraying .spray-extra-options { flex-shrink:0; margin:0; }
+    body.spraying .spray-extra-options>summary { min-height:44px; padding:11px 2px; font-size:12px; line-height:20px; }
+    body.spraying .spray-save-recovery:not(:has(button:not([hidden]))) { display:none; }
+    body.spraying .spray-mobile-table-tools { display:flex; flex:0 0 auto; flex-wrap:wrap; gap:0 8px; align-items:center; justify-content:space-between; }
+    body.spraying #spray-op-table-count { font-size:12px; color:#526b60; }
+    body.spraying #spray-op-field-info { font-size:12px; background:#fff; border:1px solid #c7d8cc; border-radius:7px; }
+    body.spraying #spray-op-field-info[aria-pressed="true"] { background:#e3f1e9; color:#176743; }
+    body.spraying #spray-op-touch-hint { flex-basis:100%; font-size:11px; line-height:1.5; color:#61776d; }
+    body.spray-table-view #spray-op-table { flex:1 0 180px; min-width:0; min-height:180px; max-width:100%; max-height:none; overflow:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; touch-action:pan-x pan-y; scrollbar-width:thin; border-radius:7px; }
+    body.spraying .spray-compact-table { font-size:13px; border-collapse:separate; }
+    body.spraying .spray-compact-table th,body.spraying .spray-compact-table td { border-width:0 1px 1px 0; }
+    body.spraying .spray-compact-table thead th { position:sticky; top:0; z-index:2; height:44px; padding:6px; font-size:11px; }
+    body.spraying .spray-compact-table th:first-child { position:sticky; left:0; min-width:112px; width:112px; max-width:132px; z-index:3; box-shadow:2px 0 4px #153c351c; }
+    body.spraying .spray-compact-table thead th:first-child { z-index:4; }
+    body.spraying .spray-compact-table th:first-child button { width:100%; max-width:132px; min-height:48px; white-space:normal; overflow-wrap:anywhere; text-align:left; font-size:12px; }
+    body.spraying .spray-compact-table th small { font-size:10px; }
+    body.spraying #spray-op-table:not(.spray-show-field-info) .spray-compact-table .spray-field-info { display:none; }
+    body.spraying .spray-compact-table td { min-width:108px; }
+    body.spraying .spray-compact-cell .spray-date-button,body.spraying .spray-compact-cell .spray-date-value { min-height:48px; padding:14px 8px; font-size:13px; }
+    body.spraying .spray-legend-disclosure { border-top:1px solid #d5e0db; }
+    body.spraying .spray-excel-key { gap:8px 12px; padding:0 2px 8px; font-size:12px; }
+    body.spraying .spray-excel-key i { width:15px; height:15px; flex-shrink:0; }
+    body.spraying .spray-excel-key small { font-size:11px; line-height:1.5; }
+    body.spraying .spray-quick-dialog[open] { position:fixed; inset:auto 0 0; width:100%; max-width:560px; max-height:90dvh; margin:0 auto; overflow:auto; overscroll-behavior:contain; border-radius:18px 18px 0 0; box-shadow:0 -8px 35px #102c4d33; }
+    body.spraying .spray-quick-dialog .spray-quick-editor { width:100%; min-width:0; max-width:none; padding:18px 18px max(18px,env(safe-area-inset-bottom)); gap:14px; border-width:4px 0 0; border-radius:18px 18px 0 0; box-sizing:border-box; }
+    body.spraying .spray-quick-dialog .spray-quick-editor strong { font-size:16px; line-height:1.5; }
+    body.spraying .spray-quick-dialog .spray-quick-editor label { font-size:13px; gap:6px; }
+    body.spraying .spray-quick-dialog .spray-quick-editor input,body.spraying .spray-quick-dialog .spray-quick-editor select { min-height:48px; width:100%; font-size:16px; box-sizing:border-box; }
+    body.spraying .spray-quick-dialog .spray-quick-editor small,body.spraying .spray-quick-dialog .spray-quick-editor p { font-size:12px; line-height:1.5; }
+    body.spraying .spray-quick-dialog .spray-quick-editor>div { position:sticky; bottom:0; background:white; padding-top:6px; }
+    body.spraying .spray-quick-dialog .spray-quick-editor button { flex:1; min-height:48px; font-size:15px; }
+    body.spraying .spray-editor { margin:0; padding:12px; }
+    body.spraying .spray-form-fields { grid-template-columns:1fr; }
+    body.spraying .spray-form-fields input,body.spraying .spray-form-fields select,body.spraying .spray-form-fields textarea { min-height:44px; font-size:16px; }
+    body.spraying.spray-map-view #map-container { flex:1; height:auto; min-height:0; }
+    body.spraying .spray-map-dashboard { top:auto; bottom:0; left:0; width:100%; max-height:38dvh; border-radius:16px 16px 0 0; }
+    body.spraying .spray-map-dashboard.collapsed { max-height:64px; }
+    body.spraying .spray-map-dashboard .dashboard-header-toggle { min-height:48px; }
+    body.spraying .spray-map-dashboard .dashboard-content { padding-bottom:max(12px,env(safe-area-inset-bottom)); }
+    body.spraying .spray-map-popup { min-width:0; max-width:65vw; max-height:35dvh; font-size:13px; }
+}

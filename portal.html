@@ -17,6 +17,7 @@
     <!-- Custom CSS -->
     <link rel="stylesheet" href="style.css?v=savecloud-rate-1">
     <link rel="stylesheet" href="brand.css?v=spray-quick-edit-20261103">
+    <link rel="stylesheet" href="js/spray-mobile.css?v=spray-mobile-20261103">
     <link rel="stylesheet" href="js/savefarm-connection.css?v=20261102">
 </head>
 <body data-page="portal">
@@ -324,6 +325,7 @@
             </div>
 
             <div id="operation-workspace" class="operation-workspace">
+            <nav class="spray-mobile-views" aria-label="Visualização da pulverização"><button type="button" data-spray-view="tabela-pulverizacao"><i class="fa-solid fa-table" aria-hidden="true"></i> Tabela</button><button type="button" data-spray-view="mapa-pulverizacao"><i class="fa-solid fa-map" aria-hidden="true"></i> Mapa</button></nav>
             <section id="spray-panel" class="spray-panel spray-control-panel" aria-label="Controle de pulverização" hidden>
                 <header class="spray-heading"><div><h2>Aplicações</h2></div><div class="spray-control-actions"><div id="spray-table-export-actions"></div><span id="spray-op-save-status" class="spray-save-state" role="status" aria-live="polite">Salvamento automático</span><button id="spray-op-add" type="button">Adicionar aplicação</button><button id="spray-op-reload" type="button">Recarregar</button><button id="spray-op-map-jump" class="spray-mobile-map" type="button">Ver mapa</button></div></header>
                 <p id="spray-op-message" class="spray-message" role="status" aria-live="polite"></p>
@@ -332,14 +334,14 @@
                 <div id="spray-op-counts" class="spray-color-key" aria-live="polite"></div>
                 <p id="spray-op-next" class="spray-note"></p>
                 <p id="spray-op-permission" class="spray-note"></p>
-                <div class="spray-operation-filters" aria-label="Filtros das aplicações">
+                <details id="spray-op-filter-disclosure" class="spray-filter-disclosure" open><summary>Filtros <span id="spray-op-filter-count">Todos os talhões</span></summary><div class="spray-operation-filters" aria-label="Filtros das aplicações">
                     <label>Fazenda<select id="spray-op-farm"><option value="">Todas</option></select></label>
                     <label>Talhão<select id="spray-op-field"><option value="">Todos</option></select></label>
                     <label>Aplicação<select id="spray-op-application"><option value="all">Todas</option></select></label>
                     <label>Status<select id="spray-op-status"><option value="">Todos</option><option value="planned">Planejadas</option><option value="in_progress">Em execução</option><option value="overdue">Atrasadas</option><option value="completed">Concluídas</option><option value="unplanned">Sem planejamento</option><option value="deleted">Excluídas</option></select></label>
                     <label>Programada de<input id="spray-op-from" type="date"></label><label>Até<input id="spray-op-to" type="date"></label>
                     <label class="spray-search">Pesquisa rápida<input id="spray-op-search" type="search" placeholder="Talhão, produto, responsável…"></label><button id="spray-op-clear" type="button">Limpar</button>
-                </div>
+                </div></details>
                 <form id="spray-op-form" class="spray-editor" hidden>
                     <h3 id="spray-op-form-title">Aplicação</h3>
                     <fieldset id="spray-op-inputs" class="spray-form-fields">
@@ -370,8 +372,10 @@
                 </div>
                 </details>
                 <div class="spray-save-recovery"><div class="spray-grid-actions editor-control"><button id="spray-op-batch-save" type="button">Tentar novamente</button><button id="spray-op-batch-discard" type="button">Descartar alteração</button></div></div>
-                <div id="spray-op-table" class="spray-table-scroll" tabindex="0" aria-label="Tabela de controle de pulverização"></div>
-                <div class="spray-excel-key" aria-label="Legenda da tabela"><span><i class="completed"></i>Concluída</span><span><i class="planned"></i>Planejada</span><span><i class="in_progress"></i>Em execução · data de início</span><span><i class="overdue"></i>Atrasada</span><span><i class="unplanned"></i>Sem planejamento confirmado</span><small>Branco pode conter data calculada. Não significa que está em dia. Clique na célula para atualizar.</small></div>
+                <div class="spray-mobile-table-tools"><span id="spray-op-table-count" role="status" aria-live="polite"></span><button id="spray-op-field-info" type="button" aria-pressed="false">Dados do talhão</button><small id="spray-op-touch-hint">Deslize para ver as aplicações. Toque na data para editar.</small></div>
+                <div id="spray-op-table" class="spray-table-scroll" tabindex="0" aria-label="Tabela de controle de pulverização" aria-describedby="spray-op-touch-hint"></div>
+                <dialog id="spray-op-quick-dialog" class="spray-quick-dialog" aria-label="Editar data e cor da aplicação"></dialog>
+                <details id="spray-op-legend-disclosure" class="spray-legend-disclosure" open><summary>Legenda das cores</summary><div class="spray-excel-key" aria-label="Legenda da tabela"><span><i class="completed"></i>Concluída</span><span><i class="planned"></i>Planejada</span><span><i class="in_progress"></i>Em execução · data de início</span><span><i class="overdue"></i>Atrasada</span><span><i class="unplanned"></i>Sem planejamento confirmado</span><small>Branco pode conter data calculada. Não significa que está em dia. Clique na célula para atualizar.</small></div></details>
             </section>
 
             <!-- Container do Mapa -->
@@ -1124,7 +1128,7 @@
     <script src="js/spray-operations.js?v=spray-quick-edit-20261103"></script>
     <script src="js/spray-applications.js?v=spray-single-cell-20261103"></script>
     <script src="js/spray-grid.js?v=spray-single-cell-20261103"></script>
-    <script src="js/spray-control.js?v=spray-quick-edit-20261103"></script>
+    <script src="js/spray-control.js?v=spray-mobile-20261103"></script>
     <script src="js/spray-report.js?v=spray-area-pdf-20261102"></script>
     <script src="js/savefarm-rate.js?v=1"></script>
     <script src="js/savefarm-view.js?v=connection-20261102"></script>

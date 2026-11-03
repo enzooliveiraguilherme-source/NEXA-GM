@@ -8,7 +8,7 @@ const SprayOperations = require('../js/spray-operations.js');
 const SprayGrid = require('../js/spray-grid.js');
 const source = fs.readFileSync(require.resolve('../js/spray-control.js'), 'utf8');
 
-function harness({ role = 'editor', accessRole = 'admin', saveFailure = null, batchFailure = null, batchDelay = false, appListFailure = null, scheduleActuals = { post1: '2026-10-16' }, fourth = false, secondPlanned = '2026-10-18', completedWithoutDate = false } = {}) {
+function harness({ role = 'editor', accessRole = 'admin', saveFailure = null, saveDelay = false, batchFailure = null, batchDelay = false, appListFailure = null, scheduleActuals = { post1: '2026-10-16' }, fourth = false, secondPlanned = '2026-10-18', completedWithoutDate = false, mobile = false, dialog = true } = {}) {
     const elements = new Map();
     class Element {
         constructor(id) {
@@ -16,6 +16,9 @@ function harness({ role = 'editor', accessRole = 'admin', saveFailure = null, ba
             this.value = ''; this.textContent = ''; this.innerHTML = ''; this.hidden = false; this.disabled = false;
             this.checked = false; this.readOnly = false; this.onchange = null; this.oninput = null; this.onclick = null; this.onsubmit = null;
             this.attributes = {};
+            this.open = false;
+            this.showModal = id === 'spray-op-quick-dialog' && dialog ? function () { this.open = true; } : undefined;
+            this.close = function () { this.open = false; };
         }
         scrollIntoView() {}
         setAttribute(name, value) { this.attributes[name] = value; }
@@ -33,7 +36,7 @@ function harness({ role = 'editor', accessRole = 'admin', saveFailure = null, ba
             completedWithoutDate, responsible: 'Operador', notes: '', deleted: false, version: 1 }
     ];
     const calls = { list: [], schedules: [], save: [], batch: [] };
-    let batchReject = batchFailure, releaseBatch;
+    let batchReject = batchFailure, releaseBatch, releaseSave;
     const scheduleRows = [
         { plantingId: 'plant-1', fourth, actuals: { ...scheduleActuals }, version: 4 },
         { plantingId: 'plant-3', fourth: false, actuals: {}, version: 1 }
@@ -46,6 +49,7 @@ function harness({ role = 'editor', accessRole = 'admin', saveFailure = null, ba
         },
         async save(row, field) {
             calls.save.push({ row: { ...row }, field: { ...field } });
+            if (saveDelay) await new Promise(resolve => { releaseSave = resolve; });
             if (saveFailure) throw saveFailure;
             const result = { ...row, completedWithoutDate:row.actual?false:!!row.completedWithoutDate, version: (row.version || 0) + 1 };
             const index = saved.findIndex(item => item.id === row.id || item.key === row.key);
@@ -76,10 +80,13 @@ function harness({ role = 'editor', accessRole = 'admin', saveFailure = null, ba
             return scheduleRows.filter(row => ids.includes(row.plantingId)).map(row => ({ ...row, actuals: { ...row.actuals } }));
         }
     };
+    const mediaListeners = [];
+    const media = { matches: mobile, addEventListener(event, handler) { if (event === 'change') mediaListeners.push(handler); } };
     const window = {
         SpraySchedule, PlantingForecast, SprayOperations, SprayGrid,
         SprayApplications: { create: () => appsRepo }, SprayRepository: { create: () => scheduleRepo },
-        portalAccessRole: accessRole, confirm() { return true; }, setInterval() { return 1; }, addEventListener() {}
+        portalAccessRole: accessRole, confirm() { return true; }, setInterval() { return 1; }, addEventListener() {},
+        matchMedia() { return media; }
     };
     const context = vm.createContext({ window, document, console, Date, Intl, Map, Set, Object, String, Number, Math, JSON });
     vm.runInContext(source, context);
@@ -102,8 +109,8 @@ function harness({ role = 'editor', accessRole = 'admin', saveFailure = null, ba
     const tick = () => new Promise(resolve => setImmediate(resolve));
     const el = name => document.getElementById('spray-op-' + name);
     el('form').hidden = true;
-    return { api: window.SprayControl, state, features, layers, calls, el, document, tick, saved, domRows, scheduleRows,
-        releaseBatch() { releaseBatch?.(); }, setBatchFailure(value) { batchReject = value; } };
+    return { api: window.SprayControl, state, features, layers, calls, el, document, tick, saved, domRows, scheduleRows, media, mediaListeners,
+        releaseBatch() { releaseBatch?.(); }, releaseSave() { releaseSave?.(); }, setBatchFailure(value) { batchReject = value; } };
 }
 
 function listMode(h) { h.el('list-mode').onclick(); }
@@ -111,6 +118,136 @@ function clickAction(h, action, key) {
     const button = { dataset: { sprayAction: action, sprayKey: key } };
     h.el('table').onclick({ target: { closest: selector => selector === '[data-spray-action]' ? button : null } });
 }
+
+function openQuick(h, key = 'plant-1:post1') {
+    const button = { dataset: { sprayAction: 'quick', sprayKey: key } };
+    h.el('table').onclick({ target: { closest: selector => selector === '[data-spray-action]' ? button : null } });
+}
+
+test('mobile breakpoint moves quick edit between inline and native dialog and restores disclosure defaults', async () => {
+    const h = harness();
+    h.api.refresh(h.state, h.features); await h.tick();
+    assert.equal(h.el('filter-disclosure').open, true);
+    assert.equal(h.el('legend-disclosure').open, true);
+    openQuick(h);
+    assert.match(h.el('table').innerHTML, /spray-quick-editor/);
+    assert.equal(h.el('quick-dialog').open, false);
+
+    h.media.matches = true; h.mediaListeners[0]({ matches: true });
+    assert.equal(h.el('filter-disclosure').open, false);
+    assert.equal(h.el('legend-disclosure').open, false);
+    assert.doesNotMatch(h.el('table').innerHTML, /spray-quick-editor/);
+    assert.equal(h.el('quick-dialog').open, true);
+    assert.match(h.el('quick-dialog').innerHTML, /Editar FE 01/);
+
+    h.media.matches = false; h.mediaListeners[0]({ matches: false });
+    assert.equal(h.el('filter-disclosure').open, true);
+    assert.equal(h.el('legend-disclosure').open, true);
+    assert.equal(h.el('quick-dialog').open, false);
+    assert.match(h.el('table').innerHTML, /spray-quick-editor/);
+});
+
+test('mobile filter summary and field metadata toggle reflect their current state', async () => {
+    const h = harness({ mobile: true });
+    h.api.refresh(h.state, h.features); await h.tick();
+    assert.equal(h.el('filter-count').textContent, 'Todos os talhões');
+    assert.match(h.el('table-count').textContent, /3 talhões · 21 aplicações/);
+    assert.equal(h.el('touch-hint').textContent, 'Deslize para ver as aplicações. Toque na data para editar.');
+    assert.equal(h.el('table').classList.contains('spray-show-field-info'), false);
+    assert.match(h.el('table').innerHTML, /class="spray-field-info"/);
+
+    h.el('application').value = 'post1'; h.el('application').onchange();
+    assert.match(h.el('filter-count').textContent, /1 filtro ativo/);
+    assert.match(h.el('table-count').textContent, /2 talhões · 2 aplicações/);
+    h.el('field-info').onclick();
+    assert.equal(h.el('table').classList.contains('spray-show-field-info'), true);
+    assert.equal(h.el('field-info').attributes['aria-pressed'], 'true');
+    assert.equal(h.el('field-info').textContent, 'Ocultar dados');
+    h.el('field-info').onclick();
+    assert.equal(h.el('table').classList.contains('spray-show-field-info'), false);
+});
+
+test('mobile quick dialog edits and cancels without rebuilding or scrolling the matrix', async () => {
+    const h = harness({ mobile: true });
+    h.api.refresh(h.state, h.features); await h.tick();
+    const table = h.el('table');
+    const originalHtml = table.innerHTML;
+    table.scrollLeft = 137; table.scrollTop = 83;
+
+    openQuick(h);
+    assert.equal(table.innerHTML, originalHtml);
+    assert.equal(table.scrollLeft, 137); assert.equal(table.scrollTop, 83);
+    assert.equal(h.el('quick-dialog').open, true);
+
+    h.el('quick-status').value = 'in_progress';
+    h.el('quick-dialog').onchange({ target: { dataset: { sprayQuick: 'status' }, value: 'in_progress' } });
+    assert.match(h.el('quick-dialog').innerHTML, /A data informa quando a execução começou/);
+    assert.equal(table.innerHTML, originalHtml);
+    assert.equal(table.scrollLeft, 137); assert.equal(table.scrollTop, 83);
+
+    let prevented = false;
+    h.el('quick-dialog').oncancel({ preventDefault() { prevented = true; } });
+    assert.equal(prevented, true);
+    assert.equal(h.el('quick-dialog').open, false);
+    assert.equal(table.innerHTML, originalHtml);
+    assert.equal(table.scrollLeft, 137); assert.equal(table.scrollTop, 83);
+    assert.equal(h.calls.save.length, 0);
+});
+
+test('mobile quick dialog cancel, save, failure, and busy cancellation preserve edit state', async t => {
+    await t.test('cancel and Escape close without saving', async () => {
+        const h = harness({ mobile: true }); h.api.refresh(h.state, h.features); await h.tick(); openQuick(h);
+        assert.equal(h.el('quick-dialog').open, true);
+        let prevented = false; h.el('quick-dialog').oncancel({ preventDefault() { prevented = true; } });
+        assert.equal(prevented, true); assert.equal(h.el('quick-dialog').open, false);
+        assert.equal(h.calls.save.length, 0);
+        openQuick(h);
+        h.el('quick-dialog').onkeydown({ target: { dataset: { sprayQuick: 'date' } }, key: 'Escape', preventDefault() {} });
+        assert.equal(h.el('quick-dialog').open, false);
+        assert.equal(h.calls.save.length, 0);
+    });
+    await t.test('save confirms and closes the dialog', async () => {
+        const h = harness({ mobile: true }); h.api.refresh(h.state, h.features); await h.tick(); openQuick(h);
+        h.el('quick-status').value = 'completed'; h.el('quick-date').value = '2026-10-20';
+        h.el('quick-dialog').onchange({ target: { dataset: { sprayQuick: 'date' }, value: '2026-10-20' } });
+        const button = { dataset: { sprayAction: 'quick-save', sprayKey: 'plant-1:post1' } };
+        await h.el('quick-dialog').onclick({ target: { closest: selector => selector === '[data-spray-action]' ? button : null } });
+        assert.equal(h.calls.save.length, 1);
+        assert.equal(h.calls.save[0].row.actual, '2026-10-20');
+        assert.equal(h.el('quick-dialog').open, false);
+        assert.match(h.el('message').textContent, /Alteração salva e confirmada/);
+    });
+    await t.test('failed save leaves the editor open with the error', async () => {
+        const h = harness({ mobile: true, saveFailure: Error('Sem conexão') }); h.api.refresh(h.state, h.features); await h.tick(); openQuick(h);
+        h.el('quick-status').value = 'completed'; h.el('quick-date').value = '2026-10-20';
+        const button = { dataset: { sprayAction: 'quick-save', sprayKey: 'plant-1:post1' } };
+        await h.el('quick-dialog').onclick({ target: { closest: selector => selector === '[data-spray-action]' ? button : null } });
+        assert.equal(h.el('quick-dialog').open, true);
+        assert.match(h.el('quick-dialog').innerHTML, /Sem conexão/);
+        assert.equal(h.calls.save.length, 1);
+    });
+    await t.test('busy dialog cannot be dismissed by Escape or cancel', async () => {
+        const h = harness({ mobile: true, saveDelay: true }); h.api.refresh(h.state, h.features); await h.tick(); openQuick(h);
+        h.el('quick-status').value = 'completed'; h.el('quick-date').value = '2026-10-20';
+        const button = { dataset: { sprayAction: 'quick-save', sprayKey: 'plant-1:post1' } };
+        const saving = h.el('quick-dialog').onclick({ target: { closest: selector => selector === '[data-spray-action]' ? button : null } });
+        assert.equal(h.el('quick-dialog').open, true);
+        h.el('quick-dialog').onkeydown({ target: { dataset: { sprayQuick: 'date' } }, key: 'Escape', preventDefault() {} });
+        h.el('quick-dialog').oncancel({ preventDefault() {} });
+        assert.equal(h.el('quick-dialog').open, true);
+        h.releaseSave(); await saving; await h.tick();
+        assert.equal(h.el('quick-dialog').open, false);
+    });
+});
+
+test('mobile readonly mode exposes no quick editor and uses the read-only hint', async () => {
+    const h = harness({ mobile: true, role: 'viewer' });
+    h.api.refresh(h.state, h.features); await h.tick();
+    assert.doesNotMatch(h.el('table').innerHTML, /data-spray-action="quick"/);
+    assert.equal(h.el('quick-dialog').open, false);
+    assert.equal(h.el('touch-hint').textContent, 'Deslize para ver as aplicações.');
+    assert.match(h.el('permission').textContent, /Modo de consulta/);
+});
 
 test('confirmed load renders generated applications, summary, and a gray field without planting', async () => {
     const h = harness();

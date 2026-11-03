@@ -176,7 +176,10 @@ test('HTML agrupa o painel e mapa da pulverização sem incluir o painel de plan
     const sidebar=html.match(/<div class="nav-group" id="nav-pulverizacao-group">([\s\S]*?)<\/div>\s*<\/div>/)?.[1]||'';
     assert.match(sidebar,/data-spray-view="tabela-pulverizacao"/);assert.match(sidebar,/data-spray-view="mapa-pulverizacao"/);
     assert.doesNotMatch(html,/id="spray-view-switch"/,'não existe uma navegação duplicada no cabeçalho');
-    assert.equal((html.match(/data-spray-view="(?:tabela-pulverizacao|mapa-pulverizacao)"/g)||[]).length,2);
+    assert.equal((html.match(/data-spray-view="(?:tabela-pulverizacao|mapa-pulverizacao)"/g)||[]).length,4);
+    const mobileViews=html.match(/<nav class="spray-mobile-views"[\s\S]*?>([\s\S]*?)<\/nav>/)?.[1]||'';
+    assert.match(mobileViews,/data-spray-view="tabela-pulverizacao"/);
+    assert.match(mobileViews,/data-spray-view="mapa-pulverizacao"/);
     const mapFilterIndex=html.indexOf('id="spray-map-filter-group"');
     assert.ok(mapFilterIndex>html.indexOf('id="filter-cultura"')&&mapFilterIndex<html.indexOf('id="operation-product-filter-group"'));
     const dashboard=html.match(/<section id="spray-map-dashboard"[\s\S]*?<\/section>/)?.[0]||'';

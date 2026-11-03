@@ -8,9 +8,11 @@
     const names = { completed:'Realizada', scheduled:'No prazo', attention:'Atenção', overdue:'Atrasada', optional:'Opcional', unplanned:'Sem data' };
     const tableNames = {completed:'Concluída', in_progress:'Em execução', planned:'Planejada', overdue:'Atrasada', unplanned:'Sem planejamento'};
     const colors = { completed:'#1673d1', scheduled:'#169447', attention:'#f5c542', pending:'#df3838', empty:'#94a3b8' };
+    const phone=root.matchMedia?.('(max-width: 820px)');
+    const onPhone=()=>!!phone?.matches;
     const grid=root.SprayGrid.create(),checked=new Set();
     let mode='grid',mapApplication='all',mapRows=[],mapDashboardCollapsed=false;
-    let autoError='',focusAfterSave=null,quick=null;
+    let autoError='',focusAfterSave=null,quick=null,showFieldInfo=false;
     let state, features = [], schedules = [], saved = [], fields = [], all = [], visible = [], selectedField = '', selectedRow = '',
         loadedKey = '', scope = '', request = 0, loading = false, busy = false, error = '', message = '', editing = null, order = 'planned', direction = 1;
     const filters = { farm:'', field:'', application:'all', status:'', from:'', to:'', search:'', deleted:false, table:true };
@@ -83,16 +85,32 @@
         const disabled=busy||loading||!canEdit(),limit=['completed','in_progress','overdue'].includes(quick.status)?` max="${quick.status==='overdue'?S.addDays(S.today(),-1):S.today()}"`:'';
         return `<div class="spray-quick-editor ${quick.status}" role="group" aria-label="Editar ${escape(row.field+' · '+row.name)}"><strong>${escape(row.field)} · ${escape(row.name)}</strong><label>Legenda / cor<select id="spray-op-quick-status" data-spray-quick="status"${disabled?' disabled':''}>${choices.filter(([key])=>key!=='unplanned'||row.plantingId||O.isIndependent(row.stage)).map(([key,label])=>`<option value="${key}"${quick.status===key?' selected':''}>${label}</option>`).join('')}</select></label><label>${labels[quick.status]}<input id="spray-op-quick-date" type="date" data-spray-quick="date" value="${escape(quick.date)}"${limit}${disabled||quick.status==='unplanned'?' disabled':''}></label><small>${quick.status==='unplanned'?(row.plantingId?'Retoma a previsão calculada. Se estiver vencida, ficará vermelha automaticamente.':'Limpa a data e o planejamento desta aplicação.'):quick.status==='completed'?'Sem data, mantém a confirmação como OK. Ao informar a data, as próximas etapas são recalculadas.':quick.status==='in_progress'?'A data informa quando a execução começou. Permanece amarela até concluir.':'O vermelho indica uma data vencida sem execução.'}</small><p class="spray-validation" role="alert">${escape(quick.error||'')}</p><div><button type="button" data-spray-action="quick-save" data-spray-key="${escape(row.key)}"${disabled?' disabled':''}>${busy?'Salvando…':'Salvar'}</button><button type="button" data-spray-action="quick-cancel" data-spray-key="${escape(row.key)}"${disabled?' disabled':''}>Cancelar</button></div></div>`;
     }
+    function quickUsesDialog(){return onPhone()&&typeof el('quick-dialog').showModal==='function';}
+    function hideQuickDialog(){const dialog=el('quick-dialog');if(dialog.open)dialog.close?.();dialog.innerHTML='';}
+    function focusQuickCell(key){
+        const button=Array.from(el('table').querySelectorAll?.('[data-spray-action="quick"]')||[]).find(button=>button.dataset.sprayKey===key);
+        (button||el('table')).focus?.({preventScroll:true});
+    }
+    function syncQuickDialog(){
+        const row=quick&&visible.find(row=>row.key===quick.key),dialog=el('quick-dialog');
+        if(row&&quickUsesDialog()){
+            dialog.innerHTML=quickEditor(row);
+            el('quick-status').value=quick.status;el('quick-date').value=quick.date;
+            if(!dialog.open)dialog.showModal();
+        }else hideQuickDialog();
+    }
     function openQuick(row) {
         if(!canEdit()||busy||loading||error||row.deleted)return;
         if(grid.size){message='Salve ou descarte as alterações pendentes antes de editar outra célula.';render();return;}
         quick={key:row.key,status:O.tableStatus(row),date:row.completedWithoutDate&&!row.actual?'':row.actual||row.started||(row.optional?'':row.planned)||'',error:''};
-        editing=null;el('form').hidden=true;quietSelect(row);render();
+        editing=null;el('form').hidden=true;quietSelect(row);
+        if(quickUsesDialog())syncQuickDialog();else render();
         el('quick-status').focus?.({preventScroll:true});
     }
     function closeQuick() {
-        const key=quick?.key;quick=null;render();
-        Array.from(el('table').querySelectorAll?.('[data-spray-action="quick"]')||[]).find(button=>button.dataset.sprayKey===key)?.focus?.({preventScroll:true});
+        const key=quick?.key,modal=quickUsesDialog();quick=null;
+        if(modal)hideQuickDialog();else render();
+        focusQuickCell(key);
     }
     async function saveQuick() {
         if(!quick||!canEdit()||busy||loading||error)return;
@@ -102,21 +120,22 @@
         if(quick.status==='unplanned'&&row.optional){closeQuick();return;}
         let updated;
         try { updated=O.quickUpdate(row,quick.status,quick.date,field);if(updated.plantingId)linkedPreview(updated,field); }
-        catch(failure){quick.error=failure.message;render();return;}
-        return persist(updated);
+        catch(failure){quick.error=failure.message;if(quickUsesDialog())syncQuickDialog();else render();return;}
+        await persist(updated);
+        if(!quick)focusQuickCell(row.key);
     }
     function matrixTable(){
         const matrix=O.matrix(visible);
         const heading=column=>([...O.independentSteps,...S.steps].find(step=>step.id===column.key)?.short||column.label)+(column.key==='fung4'?' (opcional)':'');
         const applicationCell=row=>{
-            if(quick&&quick.key===row.key)return quickEditor(row);
+            if(quick&&quick.key===row.key&&!quickUsesDialog())return quickEditor(row);
             const status=O.tableStatus(row),value=row.actual||row.started||(row.optional?'':row.planned);
             const label=row.completedWithoutDate&&!row.actual?'OK':value?date(value).slice(0,6)+value.slice(2,4):'';
             const title=`${row.field} · ${row.name} · ${tableNames[status]}${row.autoDate?' · Data calculada':''}\nPrevista: ${date(row.optional?'':row.planned)}\nInício: ${date(row.started)}\nRealizada: ${row.completedWithoutDate&&!row.actual?'OK · sem data informada':date(row.actual)}`;
             const editable=canEdit()&&!busy&&!loading&&!error&&!row.deleted;
             return `<div class="spray-compact-cell ${status}${grid.has(row.key)?' has-draft':''}" data-spray-row="${escape(row.key)}" title="${escape(title)}">${editable?`<button type="button" class="spray-date-button" data-spray-action="quick" data-spray-key="${escape(row.key)}" aria-label="${escape(title+' · Editar data e cor')}">${escape(label)||'&nbsp;'}</button>`:`<span class="spray-date-value" aria-label="${escape(title)}">${escape(label)||'&nbsp;'}</span>`}</div>`;
         };
-        return `<table class="spray-matrix spray-compact-table"><thead><tr><th scope="col"><button type="button" data-spray-sort="field">Talhão / Fazenda</button></th><th scope="col">Variedade</th><th scope="col">Hectares</th><th scope="col">Plantio</th><th scope="col" title="Dias após o plantio">DAP</th>${matrix.columns.map(column=>`<th scope="col">${escape(heading(column))}</th>`).join('')}</tr></thead><tbody>`+matrix.rows.map(field=>{
+        return `<table class="spray-matrix spray-compact-table"><thead><tr><th scope="col"><button type="button" data-spray-sort="field">Talhão / Fazenda</button></th><th scope="col" class="spray-field-info">Variedade</th><th scope="col" class="spray-field-info">Hectares</th><th scope="col" class="spray-field-info">Plantio</th><th scope="col" class="spray-field-info" title="Dias após o plantio">DAP</th>${matrix.columns.map(column=>`<th scope="col">${escape(heading(column))}</th>`).join('')}</tr></thead><tbody>`+matrix.rows.map(field=>{
             const info=fields.find(item=>item.key===field.key)||{};
             const dap=info.plantingDate?Math.round((S.time(S.today())-S.time(info.plantingDate))/86400000):null;
             return `<tr data-spray-field-key="${escape(field.key)}" class="spray-field-row"><th scope="row"><button type="button" data-spray-field-select="${escape(field.key)}">${escape(field.field)}<small>${escape(field.farm)}</small></button></th><td class="spray-field-info">${escape(info.variety)}</td><td class="spray-field-info">${Number(info.area||0).toLocaleString('pt-BR',{maximumFractionDigits:2})}</td><td class="spray-field-info">${info.plantingDate?date(info.plantingDate).slice(0,6)+info.plantingDate.slice(2,4):''}</td><td class="spray-field-info">${dap===null?'':dap}</td>`+matrix.columns.map(column=>`<td>${(field.cells.get(column.key)||[]).map(applicationCell).join('')}</td>`).join('')+'</tr>';
@@ -190,6 +209,15 @@
     function render() {
         if (!state || state.currentTab !== 'pulverizacao' || !el('table')) return;
         prepare();
+        document.querySelectorAll?.('.spray-mobile-views [data-spray-view]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.sprayView===(state.currentSubTab||'tabela-pulverizacao'))));
+        if(!quick||loading||error)hideQuickDialog();
+        const activeFilters=[filters.farm,filters.field,filters.application!=='all',filters.status,filters.deleted,filters.from,filters.to,filters.search].filter(Boolean).length;
+        el('filter-count').textContent=activeFilters?`${activeFilters} filtro${activeFilters===1?'':'s'} ativo${activeFilters===1?'':'s'}`:'Todos os talhões';
+        el('table-count').textContent=loading?'Carregando…':error?'Não foi possível carregar':`${new Set(visible.map(row=>row.fieldKey)).size} talhões · ${visible.length} aplicações`;
+        el('field-info').hidden=mode!=='grid';el('field-info').setAttribute('aria-pressed',String(showFieldInfo));
+        el('field-info').textContent=showFieldInfo?'Ocultar dados':'Dados do talhão';
+        el('touch-hint').textContent=canEdit()?'Deslize para ver as aplicações. Toque na data para editar.':'Deslize para ver as aplicações.';
+        el('table').classList.toggle('spray-show-field-info',showFieldInfo);
         el('message').textContent = error || (busy ? 'Salvando…' : loading ? 'Carregando…' : message || 'Alterações salvas automaticamente');
         el('message').classList.toggle('is-error', !!error||!!autoError);
         el('save-status').textContent=error?'Falha ao carregar':busy?'Salvando…':loading?'Carregando…':autoError?'Não salvo':grid.size?'Alteração não salva':message==='Salvo'?'Salvo':'Salvamento automático';
@@ -214,6 +242,7 @@
         el('next').textContent=next?`Próxima pendência: ${next.name} · ${next.farm} / ${next.field} · ${date(next.planned)}`:'Nenhuma aplicação pendente neste filtro.';
         el('permission').textContent=canEdit() ? 'Edite as datas na grade ou os demais campos na lista. Salve todas as alterações juntas. Limpar a data programada de uma etapa do plantio retoma o cálculo automático.' : 'Modo de consulta. Seu perfil não permite alterar aplicações.';
         el('table').innerHTML=visible.length?(mode==='grid'?matrixTable():listTable()):'<p class="spray-empty">Nenhuma aplicação neste filtro. Os talhões cadastrados continuam visíveis no mapa.</p>';
+        syncQuickDialog();
         if(quick){el('quick-status').value=quick.status;el('quick-date').value=quick.date;}
         const options=O.applicationOptions(all).map(option=>'<option value="'+escape(option.key)+'">'+escape(option.label)+'</option>').join('');
         el('application').innerHTML=options;el('application').value=filters.application;
@@ -305,6 +334,10 @@
     }
     function initialize() {
         if(el('table').dataset.initialized)return;el('table').dataset.initialized='true';
+        el('filter-disclosure').open=!onPhone();
+        el('legend-disclosure').open=!onPhone();
+        phone?.addEventListener?.('change',()=>{el('filter-disclosure').open=!onPhone();el('legend-disclosure').open=!onPhone();if(state?.currentTab==='pulverizacao'){render();if(quick)el('quick-status').focus?.({preventScroll:true});}});
+        el('field-info').onclick=()=>{showFieldInfo=!showFieldInfo;render();};
         const report=document.getElementById('spray-report-button');
         if(report)report.onclick=()=>root.SprayReport?.download(state);
         el('map-toggle').onclick=()=>{mapDashboardCollapsed=!mapDashboardCollapsed;renderMapDashboard();};
@@ -336,7 +369,8 @@
                 quick[event.target.dataset.sprayQuick]=event.target.value;quick.error='';
                 if(event.target.dataset.sprayQuick==='status'){
                     if(quick.status==='unplanned'){const row=all.find(row=>row.key===quick.key);quick.date=row?.plantingId&&!row.optional?row.planned||'':'';}
-                    render();
+                    if(quickUsesDialog())syncQuickDialog();else render();
+                    el('quick-status').focus?.({preventScroll:true});
                 }
                 return;
             }
@@ -348,6 +382,7 @@
         };
         el('table').onfocusin=event=>{const row=visible.find(item=>item.key===event.target.dataset?.sprayKey);if(row)quietSelect(row);};
         el('table').onkeydown=event=>{
+            if(event.key==='Escape'&&quick&&!busy){event.preventDefault();closeQuick();return;}
             if(event.target.dataset?.sprayQuick){
                 if(busy)return;
                 if(event.key==='Escape'){event.preventDefault();closeQuick();}
@@ -382,6 +417,10 @@
             if(button.dataset.sprayAction==='restore')persist({...row,deleted:false});
             if(button.dataset.sprayAction==='delete'&&root.confirm(`Excluir ${row.name} de ${row.field}? O registro sairá do controle e poderá ser restaurado no filtro Excluídas. Realizações já registradas serão preservadas no histórico do cronograma.`))persist({...row,deleted:true});
         };
+        const dialog=el('quick-dialog');
+        dialog.onchange=el('table').onchange;dialog.onkeydown=el('table').onkeydown;
+        dialog.onclick=event=>{if(event.target===dialog){if(!busy)closeQuick();return;}return el('table').onclick(event);};
+        dialog.oncancel=event=>{event.preventDefault();if(!busy)closeQuick();};
         el('cancel').onclick=()=>{if(!busy){el('form').hidden=true;editing=null;}};
         el('input-field').onchange=configureNew;el('input-type').onchange=()=>{editing={};configureNew();};
         el('input-auto').onchange=()=>{el('input-planned').disabled=el('input-auto').checked;previewForm();};
@@ -403,6 +442,7 @@
         if(state.currentTab!=='pulverizacao'||!el('table'))return;
         const context=JSON.stringify([state.currentAno,state.currentCultura,state.currentFazenda,state.currentGleba]);
         if(context!==scope){scope=context;quick=null;selectedField='';selectedRow='';filters.farm='';filters.field='';filters.application='all';mapApplication='all';editing=null;el('form').hidden=true;}
+        if(state.currentSubTab==='mapa-pulverizacao')quick=null;
         if(!canEdit()){quick=null;el('form').hidden=true;editing=null;}
         initialize();render();load();
         if(state.currentSubTab!=='mapa-pulverizacao'&&selectedField)scrollSelection();
