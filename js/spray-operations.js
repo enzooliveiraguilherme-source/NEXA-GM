@@ -163,6 +163,25 @@
         return {...totals,overdueArea:area(overdue),onTimeArea:area(onTime),attentionArea:area(attention),
             onTimeCount:onTime.length,progress:totals.plannedArea?100*totals.appliedArea/totals.plannedArea:0};
     }
+    function dashboardSummary(rows, fields = [], current = S.today()) {
+        const scoped=rows.filter(row=>!row.deleted&&!row.optional);
+        const fieldKeys=new Set(scoped.map(row=>row.fieldKey)),fieldIndex=new Map(fields.map(field=>[field.key,field]));
+        const area=row=>Number.isFinite(Number(row?.area))?Math.max(0,Number(row.area)):0;
+        const active=scoped.filter(row=>isCompleted(row)||row.started||row.planned);
+        const buckets=Object.fromEntries(['completed','in_progress','planned','overdue','calculated'].map(key=>[key,{count:0,area:0}]));
+        for(const row of active){const status=tableStatus(row,current);const bucket=buckets[status==='unplanned'?'calculated':status];bucket.count++;bucket.area+=area(row);}
+        const totalArea=active.reduce((sum,row)=>sum+area(row),0),appliedArea=buckets.completed.area;
+        const stages=applicationOptions(active).filter(option=>!['all','fungicide','insecticide'].includes(option.key)).map(option=>{
+            const items=active.filter(row=>applicationKey(row)===option.key),total=items.reduce((sum,row)=>sum+area(row),0),applied=items.filter(isCompleted).reduce((sum,row)=>sum+area(row),0);
+            return {...option,totalArea:total,appliedArea:applied,count:items.length,completed:items.filter(isCompleted).length,progress:total?100*applied/total:null};
+        });
+        const due=active.filter(row=>!isCompleted(row)&&!row.started&&row.planned&&row.planned<=S.addDays(current,7))
+            .sort((a,b)=>String(a.planned).localeCompare(String(b.planned))||String(a.field||'').localeCompare(String(b.field||''),'pt-BR',{numeric:true}));
+        return {fieldCount:fieldKeys.size,fieldArea:[...fieldKeys].reduce((sum,key)=>sum+area(fieldIndex.get(key)),0),
+            totalArea,appliedArea,runningArea:buckets.in_progress.area,overdueArea:buckets.overdue.area,
+            progress:totalArea?100*appliedArea/totalArea:null,count:active.length,buckets,
+            unplannedCount:scoped.length-active.length,stages,upcoming:due.slice(0,5),dueCount:due.length};
+    }
     function validate(row, field, current = S.today()) {
         if (!field || row.farm !== field.farm || row.field !== field.field) throw Error('Escolha um talhão cadastrado.');
         if (!String(row.name || '').trim()) throw Error('Informe a aplicação.');
@@ -177,7 +196,7 @@
         if (String(row.product || '').length > 150 || String(row.responsible || '').length > 150 || String(row.notes || '').length > 2000) throw Error('Confira o tamanho dos textos informados.');
         return true;
     }
-    const api = Object.freeze({ fieldKey, rowKey, status, tableStatus, quickUpdate, isCompleted, build, filter, sort, summarize, areaSummary, mapStatus, validate, applicationKey, matchesApplication, applicationOptions, matrix,independentSteps,isIndependent,independentKey });
+    const api = Object.freeze({ fieldKey, rowKey, status, tableStatus, quickUpdate, isCompleted, build, filter, sort, summarize, areaSummary, dashboardSummary, mapStatus, validate, applicationKey, matchesApplication, applicationOptions, matrix,independentSteps,isIndependent,independentKey });
     root.SprayOperations = api;
     if (typeof module !== 'undefined') module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

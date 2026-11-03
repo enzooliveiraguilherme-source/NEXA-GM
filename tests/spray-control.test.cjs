@@ -302,6 +302,49 @@ test('map dashboard load error replaces KPIs and map scope ignores unsaved draft
     assert.equal(h.el('map-content').innerHTML,confirmed);
 });
 
+test('spray overview follows table filters, uses confirmed rows, and avoids zero KPIs while loading or after failure', async () => {
+    const loading=harness();loading.api.refresh(loading.state,loading.features);
+    assert.match(loading.el('overview-content').innerHTML,/Carregando indicadores/);
+    assert.doesNotMatch(loading.el('overview-content').innerHTML,/ÁREA DOS TALHÕES|0,00 ha/);
+    await loading.tick();
+    assert.match(loading.el('overview-content').innerHTML,/Indicadores conforme os filtros da tabela/);
+    assert.match(loading.el('overview-content').innerHTML,/240 ha/);
+    assert.match(loading.el('overview-content').innerHTML,/30 ha/);
+    loading.el('application').value='post1';loading.el('application').onchange();
+    assert.match(loading.el('overview-content').innerHTML,/160 ha/);
+    assert.match(loading.el('overview-content').innerHTML,/1\/2 concluídas/);
+    assert.match(loading.el('overview-content').innerHTML,/Andamento por aplicação/);
+
+    const failed=harness({appListFailure:Error('Sem conexão')});failed.api.refresh(failed.state,failed.features);
+    assert.match(failed.el('overview-content').innerHTML,/Carregando indicadores/);
+    await failed.tick();
+    assert.match(failed.el('overview-content').innerHTML,/Sem conexão/);
+    assert.equal(failed.el('overview-progress').textContent,'Indisponível');
+    assert.doesNotMatch(failed.el('overview-content').innerHTML,/0,00 ha|Área dos talhões/);
+});
+
+test('spray overview stays on confirmed data during pending saves and excludes deleted-status views', async () => {
+    const pending=harness({batchDelay:true});pending.api.refresh(pending.state,pending.features);await pending.tick();
+    const completedCard=()=>pending.el('overview-content').innerHTML.match(/data-spray-overview-area="completed">([^<]+)/)?.[1];
+    assert.equal(completedCard(),'30 ha');
+    const saving=pending.el('table').onchange({target:{dataset:{sprayKey:'plant-3:post1',sprayCell:'actual'},value:'2026-10-20'}});
+    assert.equal(completedCard(),'30 ha');
+    assert.match(pending.el('overview-content').innerHTML,/Indicadores mantêm os dados confirmados durante o salvamento/);
+    pending.releaseBatch();await saving;await pending.tick();
+    assert.equal(completedCard(),'70 ha');
+
+    const failed=harness({batchFailure:Error('Conflito de versão')});failed.api.refresh(failed.state,failed.features);await failed.tick();
+    const failedSave=failed.el('table').onchange({target:{dataset:{sprayKey:'plant-3:post1',sprayCell:'actual'},value:'2026-10-20'}});
+    await failedSave;
+    assert.equal(failed.el('overview-content').innerHTML.match(/data-spray-overview-area="completed">([^<]+)/)?.[1],'30 ha');
+    assert.match(failed.el('overview-content').innerHTML,/Indicadores mantêm os dados confirmados durante o salvamento/);
+
+    failed.el('status').value='deleted';failed.el('status').onchange();
+    assert.equal(failed.el('overview-progress').textContent,'Excluídas');
+    assert.match(failed.el('overview-content').innerHTML,/Registros excluídos não entram nos indicadores/);
+    assert.doesNotMatch(failed.el('overview-content').innerHTML,/data-spray-overview-area=|progressbar/);
+});
+
 test('independent pre-planting rows appear first and never alter the linked post/fungicide schedule', async () => {
     const h = harness();
     h.api.refresh(h.state, h.features); await h.tick();

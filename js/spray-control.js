@@ -12,7 +12,7 @@
     const onPhone=()=>!!phone?.matches;
     const grid=root.SprayGrid.create(),checked=new Set();
     let mode='grid',mapApplication='all',mapRows=[],mapDashboardCollapsed=false;
-    let autoError='',focusAfterSave=null,quick=null,showFieldInfo=false;
+    let autoError='',focusAfterSave=null,quick=null,showFieldInfo=false,overviewExpanded=false,overviewRows=[];
     let state, features = [], schedules = [], saved = [], fields = [], all = [], visible = [], selectedField = '', selectedRow = '',
         loadedKey = '', scope = '', request = 0, loading = false, busy = false, error = '', message = '', editing = null, order = 'planned', direction = 1;
     const filters = { farm:'', field:'', application:'all', status:'', from:'', to:'', search:'', deleted:false, table:true };
@@ -25,6 +25,7 @@
         fields = built.fields; all = built.applications;
         visible = O.sort(O.filter(all, filters), order, direction);
         const confirmed=grid.size?O.build(features,Object.values(state.cloudStore?.getRecords()||{}),schedules,saved,{year:state.currentAno,culture:state.currentCultura}).applications:all;
+        overviewRows=O.filter(confirmed,filters);
         mapRows=O.filter(confirmed,{application:mapApplication,deleted:false});
     }
     function updateMap() {
@@ -206,6 +207,25 @@
             `<div class="status-summary-grid">${categories.map(([key,label,area,count,color])=>`<div class="status-pill spray-map-status" style="--spray-status-color:${color}"><div class="status-pill-header"><span class="status-dot" style="background:${color}"></span><strong>${label}</strong></div><div class="status-pill-numbers"><span class="status-ha" data-spray-map-area="${key}">${ha(area)}</span><span class="status-pct">(${pct(percent(area))})</span></div><span class="status-count">${count} aplicações</span>${key==='ontime'?`<span class="spray-map-attention">Próximas da data: ${ha(total.attentionArea)}</span>`:''}</div>`).join('')}</div>`+
             `<p class="spray-map-note">${['all','fungicide','insecticide'].includes(mapApplication)?'Áreas somadas por aplicação. ':''}Amarelo: vence hoje ou em até 2 dias. Cinza: sem aplicação neste filtro.</p>`;
     }
+    function renderOverview() {
+        const host=el('overview-content'),badge=el('overview-progress');
+        if(loading||error){badge.textContent=error?'Indisponível':'Carregando…';host.innerHTML=`<p class="spray-overview-note" role="status">${escape(error||'Carregando indicadores…')}</p>`;return;}
+        if(filters.deleted){badge.textContent='Excluídas';host.innerHTML='<p class="spray-overview-note">Registros excluídos não entram nos indicadores. Selecione outro status para acompanhar a execução.</p>';return;}
+        const t=O.dashboardSummary(overviewRows,fields),pct=value=>value===null?'—':Number(value).toLocaleString('pt-BR',{maximumFractionDigits:1})+'%';
+        badge.textContent=t.progress===null?'Sem área prevista':pct(t.progress)+' concluído';
+        const count=(n,one,many)=>`${n} ${n===1?one:many}`;
+        const cards=[['fields','Área dos talhões',ha(t.fieldArea),count(t.fieldCount,'talhão','talhões')+' no filtro'],
+            ['completed','Área aplicada',ha(t.appliedArea),count(t.buckets.completed.count,'aplicação','aplicações')+' concluída'+(t.buckets.completed.count===1?'':'s')],
+            ['in_progress','Em execução',ha(t.runningArea),count(t.buckets.in_progress.count,'aplicação','aplicações')+' em andamento'],
+            ['overdue','Em atraso',ha(t.overdueArea),count(t.buckets.overdue.count,'aplicação','aplicações')+' atrasada'+(t.buckets.overdue.count===1?'':'s')]];
+        const buckets=[['completed','Concluída','#00b050'],['in_progress','Em execução','#e4c600'],['planned','Planejada','#00a9df'],['overdue','Atrasada','#e3655e'],['calculated','Previsão calculada','#cbd5df']];
+        host.innerHTML=`<p class="spray-overview-scope">${escape(state.currentCultura)} · ${escape(state.currentAno)} · Indicadores conforme os filtros da tabela</p>`+
+            `<div class="spray-overview-cards" aria-label="Indicadores de área">${cards.map(([key,label,value,sub])=>`<article class="spray-overview-card ${key}"><span>${label}</span><strong data-spray-overview-area="${key}">${value}</strong><small>${escape(sub)}</small></article>`).join('')}</div>`+
+            `<div class="spray-overview-progress"><div><strong>Andamento por área</strong><span>${t.totalArea?`${ha(t.appliedArea)} de ${ha(t.totalArea)} previstas`:'Sem aplicações com data ou confirmação'}</span></div><div class="spray-overview-track" role="progressbar" aria-label="Percentual da área aplicada" aria-valuemin="0" aria-valuemax="100"${t.progress===null?' aria-valuetext="Sem área prevista"':` aria-valuenow="${t.progress.toFixed(2)}"`}>${buckets.map(([key,label,color])=>`<span style="width:${t.totalArea?100*t.buckets[key].area/t.totalArea:0}%;background:${color}" title="${label}: ${ha(t.buckets[key].area)}"></span>`).join('')}</div></div>`+
+            `<p class="spray-overview-note">${grid.size||busy?'Indicadores mantêm os dados confirmados durante o salvamento. ':''}Áreas de aplicação são somadas por etapa. Um talhão pode entrar mais de uma vez.</p>`+
+            `<details id="spray-op-overview-details" class="spray-overview-details"${overviewExpanded?' open':''}><summary>Etapas e prioridades</summary><div class="spray-overview-detail-grid"><section><h3>Andamento por aplicação</h3><div class="spray-overview-stages">${t.stages.map(stage=>`<div class="spray-overview-stage"><div><strong>${escape(stage.label)}</strong><span>${pct(stage.progress)}</span></div><div class="spray-overview-stage-track"><span style="width:${stage.progress??0}%"></span></div><small>${ha(stage.appliedArea)} aplicadas de ${ha(stage.totalArea)} previstas · ${stage.completed}/${stage.count} concluídas</small></div>`).join('')||'<p class="spray-overview-note">Nenhuma etapa com área prevista neste filtro.</p>'}</div></section><section><h3>Atrasos e próximos 7 dias</h3><ol class="spray-overview-priorities">${t.upcoming.map(row=>`<li><div><strong>${escape(row.field)} <small>${escape(row.farm)}</small></strong><span class="${row.planned<S.today()?'overdue':''}">${date(row.planned)}${row.planned<S.today()?' · Atrasada':row.planned===S.today()?' · Hoje':''}</span></div><p>${escape(row.name)} · ${ha(row.area)}</p></li>`).join('')||'<li>Nenhuma pendência datada nesse período.</li>'}</ol>${t.dueCount>5?`<p class="spray-overview-note">Mostrando 5 de ${t.dueCount} pendências. Use os filtros para consultar as demais.</p>`:''}<div class="spray-overview-breakdown">${buckets.map(([key,label,color])=>`<span><i style="background:${color}"></i>${label}: <b>${ha(t.buckets[key].area)}</b></span>`).join('')}</div><p class="spray-overview-note">${t.unplannedCount} etapas sem data ou planejamento ficam fora da área prevista. Branco não significa em dia. Em execução considera a área da aplicação inteira, sem estimar uma conclusão parcial.</p></section></div></details>`;
+        const detail=el('overview-details');detail.ontoggle=()=>{if(el('overview-details')===detail)overviewExpanded=detail.open;};
+    }
     function render() {
         if (!state || state.currentTab !== 'pulverizacao' || !el('table')) return;
         prepare();
@@ -229,6 +249,7 @@
         const exportActions=document.getElementById('spray-report-actions');
         if(exportActions){exportActions.hidden=!canEdit();if(exportHost&&exportActions.parentElement!==exportHost)exportHost.appendChild?.(exportActions);}
         renderMapDashboard();
+        renderOverview();
         el('add').disabled = !canEdit() || loading || busy || !!error || !fields.length || !!grid.size;
         el('inputs').disabled = busy || !canEdit();
         el('reload').disabled = loading || busy;

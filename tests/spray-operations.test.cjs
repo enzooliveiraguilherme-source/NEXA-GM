@@ -337,3 +337,52 @@ test('areaSummary returns zero-valued categories for an empty selection',()=>{
     assert.equal(result.overdueArea,0);assert.equal(result.onTimeArea,0);
     assert.equal(result.attentionArea,0);assert.equal(result.progress,0);
 });
+
+test('dashboardSummary counts field hectares once and buckets application hectares by table status',()=>{
+    const rows=[
+        {key:'p1:post1',fieldKey:'f1',field:'FE 01',farm:'FE',stage:'post1',name:'Pós',area:20,planned:'2026-11-01',actual:'2026-11-02'},
+        {key:'p2:post1',fieldKey:'f1',field:'FE 01',farm:'FE',stage:'post1',name:'Pós',area:10,planned:'',actual:null,completedWithoutDate:true},
+        {key:'p3:post1',fieldKey:'f2',field:'FE 02',farm:'FE',stage:'post1',name:'Pós',area:30,planned:'2026-11-01',started:'2026-11-02'},
+        {key:'p4:fung1',fieldKey:'f2',field:'FE 02',farm:'FE',stage:'fung1',name:'Fungicida',area:40,planned:'2026-11-01',autoDate:false},
+        {key:'p5:manual',fieldKey:'f3',field:'FE 03',farm:'FE',name:'Inseticida foliar',area:50,planned:'2026-11-15',autoDate:false},
+        {key:'p6:pre',fieldKey:'f3',field:'FE 03',farm:'FE',stage:'pre',name:'Pré-plantio',area:60,planned:'2026-11-15',autoDate:true},
+        {key:'p7:blank',fieldKey:'f4',field:'FE 04',farm:'FE',stage:'post1',name:'Pós',area:70,planned:'',actual:null},
+        {key:'deleted',fieldKey:'gone',stage:'post1',name:'Pós',area:90,planned:'2026-11-01',deleted:true},
+        {key:'optional',fieldKey:'opt',stage:'fung4',name:'4º Fungicida',area:80,planned:'2026-11-01',optional:true}
+    ];
+    const fields=[{key:'f1',area:100},{key:'f2',area:80},{key:'f3',area:60},{key:'f4',area:40},{key:'gone',area:90},{key:'opt',area:80}];
+    const result=Spray.dashboardSummary(rows,fields,'2026-11-10');
+    assert.equal(result.fieldCount,4);assert.equal(result.fieldArea,280);
+    assert.equal(result.totalArea,210);assert.equal(result.appliedArea,30);assert.equal(result.runningArea,30);
+    assert.equal(result.overdueArea,40);assert.equal(result.progress,100*30/210);assert.equal(result.count,6);
+    assert.deepEqual(result.buckets,{completed:{count:2,area:30},in_progress:{count:1,area:30},planned:{count:1,area:50},overdue:{count:1,area:40},calculated:{count:1,area:60}});
+    assert.equal(result.unplannedCount,1);
+    const post=result.stages.find(stage=>stage.key==='post1');
+    assert.equal(post.count,3);assert.equal(post.totalArea,60);assert.equal(post.appliedArea,30);assert.equal(post.completed,2);assert.equal(post.progress,50);
+    assert.equal(result.stages.some(stage=>stage.key==='fung4'),false);
+    assert.equal(result.upcoming.length,3);assert.equal(result.dueCount,3);
+    assert.deepEqual(result.upcoming.map(row=>row.key),['p4:fung1','p5:manual','p6:pre']);
+});
+
+test('dashboardSummary returns null progress and excludes blank, optional, and deleted rows from planned hectares',()=>{
+    const result=Spray.dashboardSummary([
+        {fieldKey:'f1',area:10,planned:'',actual:null},
+        {fieldKey:'f2',area:20,planned:'2026-11-01',deleted:true},
+        {fieldKey:'f3',area:30,planned:'2026-11-01',optional:true}
+    ],[{key:'f1',area:100},{key:'f2',area:50},{key:'f3',area:25}],'2026-11-10');
+    assert.equal(result.fieldCount,1);assert.equal(result.fieldArea,100);assert.equal(result.totalArea,0);
+    assert.equal(result.progress,null);assert.equal(result.count,0);assert.equal(result.unplannedCount,1);
+    assert.deepEqual(result.buckets,{completed:{count:0,area:0},in_progress:{count:0,area:0},planned:{count:0,area:0},overdue:{count:0,area:0},calculated:{count:0,area:0}});
+});
+
+test('dashboardSummary limits upcoming rows to five within seven days and excludes started or completed work',()=>{
+    const rows=[
+        ...['01','02','03','04','05','06','07'].map((day,index)=>({key:`due${index+1}`,fieldKey:`f${index+1}`,field:`FE ${index+1}`,farm:'FE',stage:`stage${index+1}`,name:'Aplicação',area:10,planned:`2026-11-${day}`,autoDate:false})),
+        {key:'outside',fieldKey:'f8',field:'FE 8',farm:'FE',stage:'outside',name:'Aplicação',area:10,planned:'2026-11-18',autoDate:false},
+        {key:'started',fieldKey:'f9',field:'FE 9',farm:'FE',stage:'started',name:'Aplicação',area:10,planned:'2026-11-11',started:'2026-11-09'},
+        {key:'completed',fieldKey:'f10',field:'FE 10',farm:'FE',stage:'completed',name:'Aplicação',area:10,planned:'2026-11-11',actual:'2026-11-09'}
+    ];
+    const result=Spray.dashboardSummary(rows,[],'2026-11-10');
+    assert.equal(result.dueCount,7);assert.equal(result.upcoming.length,5);
+    assert.deepEqual(result.upcoming.map(row=>row.key),['due1','due2','due3','due4','due5']);
+});
