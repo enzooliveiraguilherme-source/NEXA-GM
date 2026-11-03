@@ -347,10 +347,50 @@ test('compact matrix shows field context and one application button per cell', a
     assert.match(html, /Variedade/);
     assert.match(html, /Plantio/);
     assert.match(html, /DAP/);
-    assert.match(html, /data-spray-action="edit"/);
+    assert.match(html, /data-spray-action="quick"/);
     assert.match(html, /spray-date-button/);
     assert.doesNotMatch(html, /data-spray-cell=|spray-status|data-spray-check|type="checkbox"/);
     assert.doesNotMatch(html, /spray-kpi/);
+});
+
+test('quick editor opens one cell, cancel discards it, and viewer cannot edit', async()=>{
+    const h=harness();h.api.refresh(h.state,h.features);await h.tick();
+    clickAction(h,'quick','plant-1:post1');
+    assert.match(h.el('table').innerHTML,/spray-quick-editor/);
+    assert.equal(h.el('quick-status').value,'completed');
+    clickAction(h,'quick-cancel','plant-1:post1');
+    assert.doesNotMatch(h.el('table').innerHTML,/spray-quick-editor/);
+    assert.equal(h.calls.save.length,0);
+    const viewer=harness({role:'viewer'});viewer.api.refresh(viewer.state,viewer.features);await viewer.tick();
+    clickAction(viewer,'quick','plant-1:post1');
+    assert.doesNotMatch(viewer.el('table').innerHTML,/spray-quick-editor/);
+});
+
+test('quick editor persists completion without a date and retains editor error after RPC failure',async()=>{
+    const h=harness({saveFailure:Error('Falha RPC')});h.api.refresh(h.state,h.features);await h.tick();
+    clickAction(h,'quick','plant-1:post1');
+    h.el('quick-status').value='completed';h.el('quick-date').value='';
+    await h.el('table').onclick({target:{closest:selector=>selector==='[data-spray-action]'?{dataset:{sprayAction:'quick-save',sprayKey:'plant-1:post1'}}:null}});
+    await h.tick();
+    assert.equal(h.calls.save.length,1);
+    assert.equal(h.calls.save[0].row.actual,null);
+    assert.equal(h.calls.save[0].row.completedWithoutDate,true);
+    assert.match(h.el('table').innerHTML,/spray-quick-editor/);
+    assert.match(h.el('table').innerHTML,/Falha RPC/);
+});
+
+test('quick editor keeps blank completion date and closes without activating an optional stage',async()=>{
+    const h=harness({completedWithoutDate:true});h.api.refresh(h.state,h.features);await h.tick();
+    clickAction(h,'quick','plant-3:post1');
+    assert.equal(h.el('quick-status').value,'completed');
+    assert.equal(h.el('quick-date').value,'');
+    clickAction(h,'quick-cancel','plant-3:post1');
+    clickAction(h,'quick','plant-1:fung4');
+    assert.equal(h.el('quick-status').value,'unplanned');
+    await h.el('table').onclick({target:{closest:selector=>selector==='[data-spray-action]'?{dataset:{sprayAction:'quick-save',sprayKey:'plant-1:fung4'}}:null}});
+    assert.equal(h.calls.save.length,0);
+    assert.equal(h.scheduleRows[0].fourth,false);
+    assert.doesNotMatch(h.el('table').innerHTML,/spray-quick-editor/);
 });
 
 test('matrix button opens details and saves start plus completion dates with recalculated next steps', async () => {

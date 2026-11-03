@@ -10,7 +10,7 @@
     const colors = { completed:'#1673d1', scheduled:'#169447', attention:'#f5c542', pending:'#df3838', empty:'#94a3b8' };
     const grid=root.SprayGrid.create(),checked=new Set();
     let mode='grid',mapApplication='all',mapRows=[],mapDashboardCollapsed=false;
-    let autoError='',focusAfterSave=null;
+    let autoError='',focusAfterSave=null,quick=null;
     let state, features = [], schedules = [], saved = [], fields = [], all = [], visible = [], selectedField = '', selectedRow = '',
         loadedKey = '', scope = '', request = 0, loading = false, busy = false, error = '', message = '', editing = null, order = 'planned', direction = 1;
     const filters = { farm:'', field:'', application:'all', status:'', from:'', to:'', search:'', deleted:false, table:true };
@@ -77,15 +77,44 @@
         return `${completedLabel}<input type="${type}" data-spray-cell="${column}" data-spray-key="${escape(row.key)}" aria-label="${escape(row.field+' · '+row.name+' · '+({planned:'Data programada',actual:'Data realizada',started:'Início da execução',product:'Produto',dose:'Dose',doseUnit:'Unidade da dose',area:'Área',responsible:'Responsável',notes:'Observações'}[column]||column))}" value="${escape(value)}"${type==='number'?' min="0" step="any"':''}${['actual','started'].includes(column)?` max="${S.today()}"`:''}${column==='notes'?' maxlength="2000"':type==='text'?` maxlength="${column==='doseUnit'?30:150}"`:''} class="${grid.has(row.key)?'spray-cell-draft':''}">`;
     }
     function selection(row){return canEdit()&&!row.deleted?`<input type="checkbox" data-spray-check="${escape(row.key)}" aria-label="Selecionar ${escape(row.field+' · '+row.name)}"${checked.has(row.key)?' checked':''}${busy?' disabled':''}>`:'';}
+    function quickEditor(row) {
+        const choices=[['completed','Verde · Concluída'],['planned','Azul · Planejada'],['in_progress','Amarelo · Em execução'],['overdue','Vermelho · Atrasada'],['unplanned','Branco · Sem planejamento']];
+        const labels={completed:'Data realizada',planned:'Data planejada',in_progress:'Data de início',overdue:'Data prevista vencida',unplanned:'Previsão calculada'};
+        const disabled=busy||loading||!canEdit(),limit=['completed','in_progress','overdue'].includes(quick.status)?` max="${quick.status==='overdue'?S.addDays(S.today(),-1):S.today()}"`:'';
+        return `<div class="spray-quick-editor ${quick.status}" role="group" aria-label="Editar ${escape(row.field+' · '+row.name)}"><strong>${escape(row.field)} · ${escape(row.name)}</strong><label>Legenda / cor<select id="spray-op-quick-status" data-spray-quick="status"${disabled?' disabled':''}>${choices.filter(([key])=>key!=='unplanned'||row.plantingId||O.isIndependent(row.stage)).map(([key,label])=>`<option value="${key}"${quick.status===key?' selected':''}>${label}</option>`).join('')}</select></label><label>${labels[quick.status]}<input id="spray-op-quick-date" type="date" data-spray-quick="date" value="${escape(quick.date)}"${limit}${disabled||quick.status==='unplanned'?' disabled':''}></label><small>${quick.status==='unplanned'?(row.plantingId?'Retoma a previsão calculada. Se estiver vencida, ficará vermelha automaticamente.':'Limpa a data e o planejamento desta aplicação.'):quick.status==='completed'?'Sem data, mantém a confirmação como OK. Ao informar a data, as próximas etapas são recalculadas.':quick.status==='in_progress'?'A data informa quando a execução começou. Permanece amarela até concluir.':'O vermelho indica uma data vencida sem execução.'}</small><p class="spray-validation" role="alert">${escape(quick.error||'')}</p><div><button type="button" data-spray-action="quick-save" data-spray-key="${escape(row.key)}"${disabled?' disabled':''}>${busy?'Salvando…':'Salvar'}</button><button type="button" data-spray-action="quick-cancel" data-spray-key="${escape(row.key)}"${disabled?' disabled':''}>Cancelar</button></div></div>`;
+    }
+    function openQuick(row) {
+        if(!canEdit()||busy||loading||error||row.deleted)return;
+        if(grid.size){message='Salve ou descarte as alterações pendentes antes de editar outra célula.';render();return;}
+        quick={key:row.key,status:O.tableStatus(row),date:row.completedWithoutDate&&!row.actual?'':row.actual||row.started||(row.optional?'':row.planned)||'',error:''};
+        editing=null;el('form').hidden=true;quietSelect(row);render();
+        el('quick-status').focus?.({preventScroll:true});
+    }
+    function closeQuick() {
+        const key=quick?.key;quick=null;render();
+        Array.from(el('table').querySelectorAll?.('[data-spray-action="quick"]')||[]).find(button=>button.dataset.sprayKey===key)?.focus?.({preventScroll:true});
+    }
+    async function saveQuick() {
+        if(!quick||!canEdit()||busy||loading||error)return;
+        const row=all.find(item=>item.key===quick.key),field=fields.find(item=>item.key===row?.fieldKey);
+        if(!row||row.deleted)return;
+        quick.status=el('quick-status').value;quick.date=el('quick-date').value;
+        if(quick.status==='unplanned'&&row.optional){closeQuick();return;}
+        let updated;
+        try { updated=O.quickUpdate(row,quick.status,quick.date,field);if(updated.plantingId)linkedPreview(updated,field); }
+        catch(failure){quick.error=failure.message;render();return;}
+        return persist(updated);
+    }
     function matrixTable(){
         const matrix=O.matrix(visible);
         const heading=column=>([...O.independentSteps,...S.steps].find(step=>step.id===column.key)?.short||column.label)+(column.key==='fung4'?' (opcional)':'');
         const applicationCell=row=>{
+            if(quick&&quick.key===row.key)return quickEditor(row);
             const status=O.tableStatus(row),value=row.actual||row.started||(row.optional?'':row.planned);
             const label=row.completedWithoutDate&&!row.actual?'OK':value?date(value).slice(0,6)+value.slice(2,4):'';
             const title=`${row.field} · ${row.name} · ${tableNames[status]}${row.autoDate?' · Data calculada':''}\nPrevista: ${date(row.optional?'':row.planned)}\nInício: ${date(row.started)}\nRealizada: ${row.completedWithoutDate&&!row.actual?'OK · sem data informada':date(row.actual)}`;
             const editable=canEdit()&&!busy&&!loading&&!error&&!row.deleted;
-            return `<div class="spray-compact-cell ${status}${grid.has(row.key)?' has-draft':''}" data-spray-row="${escape(row.key)}" title="${escape(title)}">${editable?`<button type="button" class="spray-date-button" data-spray-action="edit" data-spray-key="${escape(row.key)}" aria-label="${escape(title+' · Editar aplicação')}">${escape(label)||'&nbsp;'}</button>`:`<span class="spray-date-value" aria-label="${escape(title)}">${escape(label)||'&nbsp;'}</span>`}</div>`;
+            return `<div class="spray-compact-cell ${status}${grid.has(row.key)?' has-draft':''}" data-spray-row="${escape(row.key)}" title="${escape(title)}">${editable?`<button type="button" class="spray-date-button" data-spray-action="quick" data-spray-key="${escape(row.key)}" aria-label="${escape(title+' · Editar data e cor')}">${escape(label)||'&nbsp;'}</button>`:`<span class="spray-date-value" aria-label="${escape(title)}">${escape(label)||'&nbsp;'}</span>`}</div>`;
         };
         return `<table class="spray-matrix spray-compact-table"><thead><tr><th scope="col"><button type="button" data-spray-sort="field">Talhão / Fazenda</button></th><th scope="col">Variedade</th><th scope="col">Hectares</th><th scope="col">Plantio</th><th scope="col" title="Dias após o plantio">DAP</th>${matrix.columns.map(column=>`<th scope="col">${escape(heading(column))}</th>`).join('')}</tr></thead><tbody>`+matrix.rows.map(field=>{
             const info=fields.find(item=>item.key===field.key)||{};
@@ -185,6 +214,7 @@
         el('next').textContent=next?`Próxima pendência: ${next.name} · ${next.farm} / ${next.field} · ${date(next.planned)}`:'Nenhuma aplicação pendente neste filtro.';
         el('permission').textContent=canEdit() ? 'Edite as datas na grade ou os demais campos na lista. Salve todas as alterações juntas. Limpar a data programada de uma etapa do plantio retoma o cálculo automático.' : 'Modo de consulta. Seu perfil não permite alterar aplicações.';
         el('table').innerHTML=visible.length?(mode==='grid'?matrixTable():listTable()):'<p class="spray-empty">Nenhuma aplicação neste filtro. Os talhões cadastrados continuam visíveis no mapa.</p>';
+        if(quick){el('quick-status').value=quick.status;el('quick-date').value=quick.date;}
         const options=O.applicationOptions(all).map(option=>'<option value="'+escape(option.key)+'">'+escape(option.label)+'</option>').join('');
         el('application').innerHTML=options;el('application').value=filters.application;
         el('map-application').innerHTML=options;el('map-application').value=mapApplication;
@@ -237,7 +267,7 @@
     function openForm(row) {
         if(!canEdit()||busy||loading||error)return;
         if(grid.size){message='Salve ou descarte as alterações da grade antes de abrir detalhes individuais.';render();return;}
-        editing=row?{...row}:{};
+        quick=null;editing=row?{...row}:{};
         el('form').hidden=false;el('form-error').textContent='';
         el('form-title').textContent=row?'Editar aplicação':'Adicionar aplicação';
         el('input-field').innerHTML=fields.map(field=>`<option value="${escape(field.key)}">${escape(field.farm)} · ${escape(field.field)}</option>`).join('');
@@ -259,8 +289,8 @@
         if(grid.size){message='Salve ou descarte as alterações da grade antes de usar ações individuais.';render();return;}
         const field=fields.find(field=>field.farm===row.farm&&field.field===row.field);
         busy=true;message='';render();
-        try { await repo().save(row,field);el('form').hidden=true;editing=null;message='Alteração salva e confirmada.';loadedKey='';await load(); }
-        catch(failure){ message=failure.message;el('form-error').textContent=failure.message; }
+        try { await repo().save(row,field);el('form').hidden=true;editing=null;quick=null;message='Alteração salva e confirmada.';loadedKey='';await load(); }
+        catch(failure){ message=failure.message;if(quick)quick.error=failure.message;el('form-error').textContent=failure.message; }
         finally{busy=false;el('submit').disabled=false;render();}
     }
     async function load() {
@@ -280,14 +310,14 @@
         el('map-toggle').onclick=()=>{mapDashboardCollapsed=!mapDashboardCollapsed;renderMapDashboard();};
         el('add').onclick=()=>openForm(null);
         el('map-jump').onclick=()=>{root.dispatchEvent?.(new root.CustomEvent('geoportal:spray-view',{detail:{view:'mapa-pulverizacao'}}));state.map?.invalidateSize?.();};
-        el('reload').onclick=()=>{if(busy)return;if(grid.size){message='Suas alterações da grade foram mantidas. Salve ou descarte antes de recarregar.';render();return;}el('form').hidden=true;editing=null;loadedKey='';load();};
+        el('reload').onclick=()=>{if(busy)return;if(grid.size){message='Suas alterações da grade foram mantidas. Salve ou descarte antes de recarregar.';render();return;}quick=null;el('form').hidden=true;editing=null;loadedKey='';load();};
         for(const name of ['farm','field','application','status','from','to','search']){
-            const handler=()=>{filters[name]=el(name).value;if(name==='farm')filters.field='';if(name==='status'){filters.deleted=filters.status==='deleted';if(filters.deleted)filters.status='';}render();};
+            const handler=()=>{quick=null;filters[name]=el(name).value;if(name==='farm')filters.field='';if(name==='status'){filters.deleted=filters.status==='deleted';if(filters.deleted)filters.status='';}render();};
             el(name)[name==='search'?'oninput':'onchange']=handler;
         }
-        el('clear').onclick=()=>{for(const name of ['farm','field','status','from','to','search']){filters[name]='';el(name).value='';}filters.application='all';filters.deleted=false;selectedField='';selectedRow='';render();};
+        el('clear').onclick=()=>{quick=null;for(const name of ['farm','field','status','from','to','search']){filters[name]='';el(name).value='';}filters.application='all';filters.deleted=false;selectedField='';selectedRow='';render();};
         el('map-application').onchange=()=>{mapApplication=el('map-application').value;selectedField='';selectedRow='';render();};
-        el('grid-mode').onclick=()=>{mode='grid';render();};el('list-mode').onclick=()=>{mode='list';render();};
+        el('grid-mode').onclick=()=>{quick=null;mode='grid';render();};el('list-mode').onclick=()=>{quick=null;mode='list';render();};
         el('check-visible').onchange=()=>{for(const row of visible.filter(row=>!row.deleted&&!row.optional))if(el('check-visible').checked)checked.add(row.key);else checked.delete(row.key);render();};
         el('bulk-field').onchange=()=>{const key=el('bulk-field').value;el('bulk-value').type=['actual','planned'].includes(key)?'date':['dose','area'].includes(key)?'number':'text';el('bulk-value').value='';};
         el('bulk-apply').onclick=()=>{
@@ -301,6 +331,15 @@
         el('batch-discard').onclick=()=>{if(busy)return;grid.clear();autoError='';message='Alteração descartada.';render();};
         el('batch-save').onclick=savePending;
         el('table').onchange=event=>{
+            if(event.target.dataset?.sprayQuick){
+                if(!quick||!canEdit()||busy||loading||error)return;
+                quick[event.target.dataset.sprayQuick]=event.target.value;quick.error='';
+                if(event.target.dataset.sprayQuick==='status'){
+                    if(quick.status==='unplanned'){const row=all.find(row=>row.key===quick.key);quick.date=row?.plantingId&&!row.optional?row.planned||'':'';}
+                    render();
+                }
+                return;
+            }
             const key=event.target.dataset?.sprayKey,column=event.target.dataset?.sprayCell;
             if(event.target.dataset?.sprayCheck){const id=event.target.dataset.sprayCheck;if(event.target.checked)checked.add(id);else checked.delete(id);batchControls();return;}
             const row=visible.find(item=>item.key===key);if(!row||!column)return;
@@ -309,6 +348,12 @@
         };
         el('table').onfocusin=event=>{const row=visible.find(item=>item.key===event.target.dataset?.sprayKey);if(row)quietSelect(row);};
         el('table').onkeydown=event=>{
+            if(event.target.dataset?.sprayQuick){
+                if(busy)return;
+                if(event.key==='Escape'){event.preventDefault();closeQuick();}
+                if(event.key==='Enter'&&event.target.dataset.sprayQuick==='date'){event.preventDefault();return saveQuick();}
+                return;
+            }
             if(event.key!=='Tab'||!event.target.dataset?.sprayCell||!canEdit()||busy)return;
             const inputs=Array.from(el('table').querySelectorAll?.('[data-spray-cell]')||[]),index=inputs.indexOf(event.target),next=inputs[index+(event.shiftKey?-1:1)];
             if(index<0||!next)return;
@@ -327,6 +372,9 @@
             const sort=event.target.closest?.('[data-spray-sort]');if(sort){direction=order===sort.dataset.spraySort?-direction:1;order=sort.dataset.spraySort;render();return;}
             const button=event.target.closest?.('[data-spray-action]');if(!button){const element=event.target.closest?.('[data-spray-row]');const row=visible.find(item=>item.key===element?.dataset.sprayRow);if(row)quietSelect(row);return;}
             const row=visible.find(item=>item.key===button.dataset.sprayKey);if(!row)return;
+            if(button.dataset.sprayAction==='quick'){openQuick(row);return;}
+            if(button.dataset.sprayAction==='quick-cancel'){if(!busy)closeQuick();return;}
+            if(button.dataset.sprayAction==='quick-save')return saveQuick();
             if(button.dataset.sprayAction==='map'){locate(row);return;}
             if(!canEdit()||busy)return;
             if(grid.size){message='Salve ou descarte as alterações da grade antes de usar ações individuais.';render();return;}
@@ -347,15 +395,15 @@
                 autoDate:!!editing?.plantingId&&el('input-auto').checked,responsible:el('input-responsible').value,notes:el('input-notes').value,deleted:false};
             if(!editing?.key&&el('input-type').value==='fung4'&&!row.plantingId){el('form-error').textContent='Escolha um talhão com plantio registrado para incluir o 4º fungicida.';return;}
             try{O.validate(row,field);if(row.plantingId)linkedPreview(row,field);}catch(failure){el('form-error').textContent=failure.message;return;}
-            el('submit').disabled=true;persist(row);
+            el('submit').disabled=true;return persist(row);
         };
     }
     function refresh(nextState,nextFeatures=features) {
         state=nextState;features=nextFeatures;
         if(state.currentTab!=='pulverizacao'||!el('table'))return;
         const context=JSON.stringify([state.currentAno,state.currentCultura,state.currentFazenda,state.currentGleba]);
-        if(context!==scope){scope=context;selectedField='';selectedRow='';filters.farm='';filters.field='';filters.application='all';mapApplication='all';editing=null;el('form').hidden=true;}
-        if(!canEdit()){el('form').hidden=true;editing=null;}
+        if(context!==scope){scope=context;quick=null;selectedField='';selectedRow='';filters.farm='';filters.field='';filters.application='all';mapApplication='all';editing=null;el('form').hidden=true;}
+        if(!canEdit()){quick=null;el('form').hidden=true;editing=null;}
         initialize();render();load();
         if(state.currentSubTab!=='mapa-pulverizacao'&&selectedField)scrollSelection();
     }

@@ -20,6 +20,32 @@
         if (row.planned && !row.autoDate) return 'planned';
         return 'unplanned';
     }
+    function quickUpdate(row, choice, value, field, current = S.today()) {
+        const next = {...row};
+        if (!['completed','in_progress','planned','overdue','unplanned'].includes(choice)) throw Error('Escolha uma legenda.');
+        if (choice !== 'unplanned' && (choice !== 'completed' || value) && S.time(value) === null) throw Error('Informe uma data válida.');
+        if (choice === 'completed') {
+            next.actual = value || null;
+            next.completedWithoutDate = !value;
+            if (next.started && value && next.started > value) throw Error('A conclusão não pode ser anterior ao início.');
+        } else {
+            next.actual = null; next.completedWithoutDate = false;
+            next.started = choice === 'in_progress' ? value : null;
+            if (choice === 'planned' || choice === 'overdue') {
+                if (choice === 'planned' && value < current) throw Error('Essa data já venceu. Escolha Atrasada (vermelho) ou ajuste a data.');
+                if (choice === 'overdue' && value >= current) throw Error('Uma aplicação atrasada precisa ter uma data anterior a hoje.');
+                next.planned = value; next.autoDate = false;
+            }
+            if (choice === 'unplanned') {
+                // Linked stages resume their calculated forecast; independent stages become empty.
+                if (!row.plantingId && !isIndependent(row.stage)) throw Error('Aplicações adicionais precisam de uma data planejada.');
+                next.planned = row.plantingId ? row.planned : null;
+                next.autoDate = !!row.plantingId;
+            }
+        }
+        validate(next, field, current);
+        return next;
+    }
     const status = (planned, actual, current = S.today(), completedWithoutDate = false) => actual || completedWithoutDate ? 'completed' : !planned?'unplanned':
         planned < current ? 'overdue' : (S.time(planned) - S.time(current)) / 86400000 <= 2 ? 'attention' : 'scheduled';
     function build(features, plantingRecords, schedules, saved, context, current = S.today()) {
@@ -151,7 +177,7 @@
         if (String(row.product || '').length > 150 || String(row.responsible || '').length > 150 || String(row.notes || '').length > 2000) throw Error('Confira o tamanho dos textos informados.');
         return true;
     }
-    const api = Object.freeze({ fieldKey, rowKey, status, tableStatus, isCompleted, build, filter, sort, summarize, areaSummary, mapStatus, validate, applicationKey, matchesApplication, applicationOptions, matrix,independentSteps,isIndependent,independentKey });
+    const api = Object.freeze({ fieldKey, rowKey, status, tableStatus, quickUpdate, isCompleted, build, filter, sort, summarize, areaSummary, mapStatus, validate, applicationKey, matchesApplication, applicationOptions, matrix,independentSteps,isIndependent,independentKey });
     root.SprayOperations = api;
     if (typeof module !== 'undefined') module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

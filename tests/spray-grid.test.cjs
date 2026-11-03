@@ -23,10 +23,12 @@ function independent(stage,extra={}) {
 test('drafts editam campos permitidos, ignoram colunas somente leitura, expõem size/has/rows e limpam',()=>{
     const grid=Grid.create(),row=app('p1','post1'),farmField=field();
     grid.edit(row,farmField,schedule(), 'product','Herbicida X');
+    grid.edit(row,farmField,schedule(), 'started','2026-11-15');
     grid.edit(row,farmField,schedule(), 'status','overdue');
     grid.edit(row,farmField,schedule(), 'name','Nome alterado');
     assert.equal(grid.size,1);assert.equal(grid.has(row.key),true);
     assert.equal(grid.rows()[0].product,'Herbicida X');
+    assert.equal(grid.rows()[0].started,'2026-11-15');
     assert.equal(grid.rows()[0].name,row.name);assert.equal(grid.rows()[0].status,undefined);
     grid.clear();assert.equal(grid.size,0);assert.equal(grid.has(row.key),false);assert.deepEqual(grid.rows(),[]);
 });
@@ -136,4 +138,33 @@ test('informar data real em uma célula limpa completedWithoutDate do draft e da
     assert.equal(projected.saved[0].completedWithoutDate,false);
     assert.equal(projected.saved[0].actual,'2026-10-20');
     assert.equal(projected.schedules.length,0);
+});
+
+test('quickUpdate mapeia status para datas e preserva metadados',()=>{
+    const row=app('p1','post1',{planned:'2026-11-16',actual:'2026-11-18',started:'2026-11-17',responsible:'Ana',notes:'Nota',autoDate:false});
+    const completed=Operations.quickUpdate(row,'completed','2026-11-19',field(),'2026-11-20');
+    assert.deepEqual([completed.actual,completed.started,completed.completedWithoutDate,completed.planned,completed.responsible,completed.notes],
+        ['2026-11-19','2026-11-17',false,'2026-11-16','Ana','Nota']);
+    const running=Operations.quickUpdate(row,'in_progress','2026-11-19',field(),'2026-11-20');
+    assert.deepEqual([running.actual,running.started,running.completedWithoutDate], [null,'2026-11-19',false]);
+    const planned=Operations.quickUpdate(row,'planned','2026-11-21',field(),'2026-11-20');
+    assert.deepEqual([planned.planned,planned.autoDate,planned.actual,planned.started],['2026-11-21',false,null,null]);
+    const overdue=Operations.quickUpdate(row,'overdue','2026-11-19',field(),'2026-11-20');
+    assert.deepEqual([overdue.planned,overdue.autoDate],['2026-11-19',false]);
+    const noPlan=Operations.quickUpdate(row,'unplanned','',field(),'2026-11-20');
+    assert.deepEqual([noPlan.planned,noPlan.autoDate,noPlan.actual],['2026-11-16',true,null]);
+    assert.equal(row.actual,'2026-11-18');
+});
+
+test('quickUpdate valida limites de data e permite conclusão sem data e independente sem plano',()=>{
+    const row=app('p1','post1',{planned:'2026-11-16',autoDate:true}),farmField=field();
+    assert.equal(Operations.quickUpdate(row,'completed','',farmField,'2026-11-20').completedWithoutDate,true);
+    assert.throws(()=>Operations.quickUpdate(row,'completed','2026-11-21',farmField,'2026-11-20'),/não pode estar no futuro/i);
+    assert.throws(()=>Operations.quickUpdate(row,'planned','2026-11-19',farmField,'2026-11-20'),/venceu/i);
+    assert.throws(()=>Operations.quickUpdate(row,'overdue','2026-11-20',farmField,'2026-11-20'),/anterior a hoje/i);
+    assert.throws(()=>Operations.quickUpdate({...row,started:'2026-11-18'},'completed','2026-11-17',farmField,'2026-11-20'),/anterior ao início/i);
+    const independentRow=independent('pre',{planned:null,unplanned:true});
+    const cleared=Operations.quickUpdate(independentRow,'unplanned','',farmField,'2026-11-20');
+    assert.equal(cleared.planned,null);assert.equal(cleared.unplanned,true);
+    assert.throws(()=>Operations.quickUpdate(app(null,'manual',{id:'m1',key:'m1',name:'Extra',planned:'2026-11-16'}),'unplanned','',farmField,'2026-11-20'),/precisam de uma data planejada/i);
 });
