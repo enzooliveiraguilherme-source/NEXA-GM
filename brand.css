@@ -597,6 +597,9 @@ body.spraying .spray-compact-cell input:focus { background:#fff; outline:2px sol
 .member-form legend { color:#496158; padding:0 6px; font-size:13px; }
 .member-farm-option { font-size:13px; }
 .member-actions { display:flex; gap:10px; }
+.members-dialog button.member-remove { color:#a61b1b; border-color:#e7b4b4; background:#fff5f5; }
+.members-dialog .member-removal button.member-remove[type="submit"] { background:#a61b1b; color:white; border-color:#a61b1b; }
+.member-removal>strong { overflow-wrap:anywhere; }
 @media(max-width:680px) {
  .members-dialog { padding:16px; width:calc(100vw - 24px); box-sizing:border-box; max-height:92dvh; }
  .members-header h2 { font-size:25px; }
@@ -620,3 +623,29 @@ body.spraying .spray-compact-cell input:focus { background:#fff; outline:2px sol
 .seed-cycles-form{margin:20px 0;padding:20px;border:1px solid #dce5e2;border-radius:10px;background:#f8fbf9}.seed-cycles-form[hidden]{display:none}.seed-cycles-form>p{font-size:12px;line-height:1.6;color:#63796c}.seed-cycles-form input:disabled{background:#edf2ee;color:#597062}.seed-cycles-dialog #seed-cycles-add{background:#087b5a;color:white;border-color:#087b5a}
 .seed-cycles-show-archived{display:flex;align-items:center;gap:9px;margin:16px 0;font-size:12px;color:#63796c}.seed-cycles-show-archived input{width:17px;height:17px;accent-color:#087b5a}.seed-cycles-dialog .seed-cycle-delete{color:#a13232;border-color:#e5c6c6;margin-left:8px}
 .seed-delete-confirm{width:min(480px,calc(100vw - 32px));padding:26px;border:1px solid #dce5e2;border-radius:12px;background:#fff;color:#244638;box-shadow:0 12px 48px #102d5040}.seed-delete-confirm::backdrop{background:#102d5070}.seed-delete-confirm h2{font-size:19px;margin:0 0 16px}.seed-delete-confirm p{font-size:13px;line-height:1.6}.seed-delete-confirm #seed-delete-name{font-weight:700}.seed-delete-confirm button{padding:10px 14px;border:1px solid #d2ded9;border-radius:7px;background:white;font:inherit;font-size:12px;cursor:pointer}.seed-delete-confirm #seed-delete-confirm{background:#a13232;color:white;border-color:#a13232}
+
+/* One cell per application, using the field sheet's visual language. */
+body.spraying .spray-compact-table { border-collapse:collapse; width:max-content; min-width:100%; }
+body.spraying .spray-compact-table th,body.spraying .spray-compact-table td { border:1px solid #9baaa0; padding:0; text-align:center; }
+body.spraying .spray-compact-table thead th { background:#c9ead7; color:#145443; padding:5px 6px; font-size:11px; }
+body.spraying .spray-compact-table thead th:first-child { background:#c9ead7; }
+body.spraying .spray-compact-table tbody th { background:#f3f5f3; }
+body.spraying .spray-compact-table td { min-width:99px; }
+body.spraying .spray-compact-table td.spray-field-info { min-width:48px; padding:3px 6px; background:white; }
+body.spraying .spray-compact-table th small { display:block; margin:0; font-size:9px; }
+body.spraying .spray-compact-cell { min-height:28px; border:0; border-radius:0; color:#102018; }
+body.spraying .spray-compact-cell.completed,.spray-excel-key i.completed { background:#00b050; }
+body.spraying .spray-compact-cell.planned,.spray-excel-key i.planned { background:#00b0f0; }
+body.spraying .spray-compact-cell.in_progress,.spray-excel-key i.in_progress { background:#ffeb00; }
+body.spraying .spray-compact-cell.overdue,.spray-excel-key i.overdue { background:#f36b63; }
+body.spraying .spray-compact-cell.unplanned,.spray-excel-key i.unplanned { background:#fff; }
+body.spraying .spray-compact-cell .spray-date-button,body.spraying .spray-compact-cell .spray-date-value { display:block; width:100%; min-height:28px; padding:4px 7px; color:inherit; font:inherit; text-align:center; border:0; border-radius:0; background:transparent; }
+body.spraying .spray-date-button:hover { box-shadow:inset 0 0 0 2px #256148; }
+body.spraying .spray-date-button:focus-visible { outline:2px solid #183e6f; outline-offset:-2px; }
+.spray-excel-key { display:flex; align-items:center; flex-wrap:wrap; gap:8px 16px; padding:9px 0 2px; font-size:11px; color:#304b40; }
+.spray-excel-key span { display:inline-flex; align-items:center; gap:5px; }
+.spray-excel-key i { display:inline-block; width:13px; height:13px; border:1px solid #82988b; }
+.spray-excel-key small { flex-basis:100%; color:#5e7167; }
+.spray-status.planned { background:#c7efff; color:#064b69; }
+.spray-status.in_progress { background:#fff5a0; color:#574700; }
+@media(max-width:820px) { body.spraying .spray-compact-cell .spray-date-button { min-height:40px; font-size:13px; } }

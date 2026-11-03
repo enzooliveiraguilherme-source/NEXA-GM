@@ -45,7 +45,7 @@ function dbRow(overrides = {}) {
         id: 'application-1', fazenda: 'FE', campo: 'FE 01', ano: '2026', cultura: 'Soja',
         planting_record_id: 'plant-1', stage_id: 'post1', application_name: '1ª Pós-Emergente',
         product: 'Produto de teste', dose: 2.5, dose_unit: 'L/ha', area: 30, planned_date: null,
-        actual_date: '2026-10-18', completed_without_date: false, responsible: 'Operador de teste', notes: 'Observação de teste',
+        actual_date: '2026-10-18', started_date: null, completed_without_date: false, responsible: 'Operador de teste', notes: 'Observação de teste',
         deleted: false, version: 4, ...overrides
     };
 }
@@ -88,7 +88,7 @@ test('save converts numeric dose, preserves actual date, versions, and linked au
         id: 'application-1', fazenda: 'FE', campo: 'FE 01', ano: '2026', cultura: 'Soja',
         planting_record_id: 'plant-1', stage_id: 'post1', application_name: '1ª Pós-Emergente',
         product: 'Produto de teste', dose: 2.5, dose_unit: 'L/ha', area: 30, planned_date: null,
-        actual_date: '2026-10-18', completed_without_date: false, responsible: 'Operador de teste', notes: 'Observação de teste', deleted: false
+        actual_date: '2026-10-18', started_date: null, completed_without_date: false, responsible: 'Operador de teste', notes: 'Observação de teste', deleted: false
     });
     assert.equal(saved.dose, 2.5);
     assert.equal(saved.actual, '2026-10-18');

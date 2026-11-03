@@ -113,6 +113,16 @@ test('independentes são três por talhão, reconciliadas sem duplicar e persist
     assert.equal(afterPlanting.applications.find(row=>row.stage==='post1').planned,'2026-11-16');
 });
 
+test('independente com início informado sem previsão ou conclusão está em execução, não sem planejamento',()=>{
+    const result=Spray.build([feature('FE','FE 01',100)],[],[],[
+        {farm:'FE',field:'FE 01',year:'2026',culture:'Soja',stage:'pre',planned:null,actual:null,started:'2026-10-20'}
+    ],{year:'2026',culture:'Soja'},'2026-11-01');
+    const row=result.applications.find(item=>item.stage==='pre');
+    assert.equal(row.started,'2026-10-20');
+    assert.equal(row.unplanned,false);
+    assert.equal(Spray.tableStatus(row,'2026-11-01'),'in_progress');
+});
+
 test('OK sem data conclui pré sem previsão, soma área aplicada e pinta o talhão concluído',()=>{
     const features=[feature('FE','FE 01',100)];
     const saved=[{farm:'FE',field:'FE 01',year:'2026',culture:'Soja',stage:'pre',planned:null,actual:null,
@@ -251,6 +261,18 @@ test('matrix mantém aplicações duplicadas do mesmo tipo no mesmo talhão e re
     assert.equal(fe01.cells.get('manual:FUNGICIDA FOLIAR').length,2);
     assert.deepEqual(fe01.cells.get('manual:FUNGICIDA FOLIAR').map(row=>row.key),['manual:a','manual:b']);
     assert.equal(result.rows.find(row=>row.key==='FE02').cells.get('fung1').length,1);
+});
+
+test('tableStatus distingue conclusão, início, previsão manual, atraso e etapas sem plano',()=>{
+    const current='2026-11-10';
+    assert.equal(Spray.tableStatus({actual:'2026-11-09',started:'2026-11-08',planned:'2026-11-01'},current),'completed');
+    assert.equal(Spray.tableStatus({completedWithoutDate:true},current),'completed');
+    assert.equal(Spray.tableStatus({started:'2026-11-09',planned:'2026-11-01'},current),'in_progress');
+    assert.equal(Spray.tableStatus({planned:'2026-11-09',autoDate:false},current),'overdue');
+    assert.equal(Spray.tableStatus({planned:'2026-11-10',autoDate:false},current),'planned');
+    assert.equal(Spray.tableStatus({planned:'2026-11-20',autoDate:true},current),'unplanned');
+    assert.equal(Spray.tableStatus({planned:'2026-11-20',autoDate:false},current),'planned');
+    assert.equal(Spray.tableStatus({optional:true,planned:'2026-11-01'},current),'unplanned');
 });
 
 test('filter combina funções fungicida/inseticida, etapas e aplicação manual definida pelo nome',()=>{

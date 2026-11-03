@@ -6,13 +6,14 @@
     const date = value => value ? value.split('-').reverse().join('/') : '—';
     const ha = value => Number(value || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + ' ha';
     const names = { completed:'Realizada', scheduled:'No prazo', attention:'Atenção', overdue:'Atrasada', optional:'Opcional', unplanned:'Sem data' };
+    const tableNames = {completed:'Concluída', in_progress:'Em execução', planned:'Planejada', overdue:'Atrasada', unplanned:'Sem planejamento'};
     const colors = { completed:'#1673d1', scheduled:'#169447', attention:'#f5c542', pending:'#df3838', empty:'#94a3b8' };
     const grid=root.SprayGrid.create(),checked=new Set();
     let mode='grid',mapApplication='all',mapRows=[],mapDashboardCollapsed=false;
     let autoError='',focusAfterSave=null;
     let state, features = [], schedules = [], saved = [], fields = [], all = [], visible = [], selectedField = '', selectedRow = '',
         loadedKey = '', scope = '', request = 0, loading = false, busy = false, error = '', message = '', editing = null, order = 'planned', direction = 1;
-    const filters = { farm:'', field:'', application:'all', status:'', from:'', to:'', search:'', deleted:false };
+    const filters = { farm:'', field:'', application:'all', status:'', from:'', to:'', search:'', deleted:false, table:true };
     const canEdit = () => state?.userRole === 'editor' && ['admin','projetista'].includes(root.portalAccessRole);
     const repo = () => root.SprayApplications.create(root.supabaseClient);
     function prepare() {
@@ -71,19 +72,30 @@
     function cell(row,column){
         const value=row.optional&&column==='planned'?'':row[column]??'',editable=canEdit()&&!busy&&!loading&&!error&&!row.deleted;
         const completedLabel=column==='actual'&&row.completedWithoutDate&&!row.actual?'<small>Aplicada · sem data</small>':'';
-        if(!editable)return completedLabel||(column==='planned'||column==='actual'?date(value):escape(value||'—'));
-        const type=['planned','actual'].includes(column)?'date':['dose','area'].includes(column)?'number':'text';
-        return `${completedLabel}<input type="${type}" data-spray-cell="${column}" data-spray-key="${escape(row.key)}" aria-label="${escape(row.field+' · '+row.name+' · '+({planned:'Data programada',actual:'Data realizada',product:'Produto',dose:'Dose',doseUnit:'Unidade da dose',area:'Área',responsible:'Responsável',notes:'Observações'}[column]||column))}" value="${escape(value)}"${type==='number'?' min="0" step="any"':''}${column==='actual'?` max="${S.today()}"`:''}${column==='notes'?' maxlength="2000"':type==='text'?` maxlength="${column==='doseUnit'?30:150}"`:''} class="${grid.has(row.key)?'spray-cell-draft':''}">`;
+        if(!editable)return completedLabel||(['planned','actual','started'].includes(column)?date(value):escape(value||'—'));
+        const type=['planned','actual','started'].includes(column)?'date':['dose','area'].includes(column)?'number':'text';
+        return `${completedLabel}<input type="${type}" data-spray-cell="${column}" data-spray-key="${escape(row.key)}" aria-label="${escape(row.field+' · '+row.name+' · '+({planned:'Data programada',actual:'Data realizada',started:'Início da execução',product:'Produto',dose:'Dose',doseUnit:'Unidade da dose',area:'Área',responsible:'Responsável',notes:'Observações'}[column]||column))}" value="${escape(value)}"${type==='number'?' min="0" step="any"':''}${['actual','started'].includes(column)?` max="${S.today()}"`:''}${column==='notes'?' maxlength="2000"':type==='text'?` maxlength="${column==='doseUnit'?30:150}"`:''} class="${grid.has(row.key)?'spray-cell-draft':''}">`;
     }
     function selection(row){return canEdit()&&!row.deleted?`<input type="checkbox" data-spray-check="${escape(row.key)}" aria-label="Selecionar ${escape(row.field+' · '+row.name)}"${checked.has(row.key)?' checked':''}${busy?' disabled':''}>`:'';}
     function matrixTable(){
         const matrix=O.matrix(visible);
         const heading=column=>([...O.independentSteps,...S.steps].find(step=>step.id===column.key)?.short||column.label)+(column.key==='fung4'?' (opcional)':'');
-        return `<table class="spray-matrix spray-compact-table"><thead><tr><th scope="col" rowspan="2"><button type="button" data-spray-sort="field">Talhão / Fazenda</button></th>${matrix.columns.map(column=>`<th scope="colgroup" colspan="2">${escape(heading(column))}</th>`).join('')}</tr><tr>${matrix.columns.map(()=>'<th scope="col">Prevista</th><th scope="col">Realizada</th>').join('')}</tr></thead><tbody>`+matrix.rows.map(field=>`<tr data-spray-field-key="${escape(field.key)}" class="spray-field-row"><th scope="row"><button type="button" data-spray-field-select="${escape(field.key)}">${escape(field.field)}<small>${escape(field.farm)}</small></button></th>`+matrix.columns.map(column=>['planned','actual'].map(kind=>`<td>${(field.cells.get(column.key)||[]).map(row=>`<div class="spray-compact-cell ${row.status}${grid.has(row.key)?' has-draft':''}" data-spray-row="${escape(row.key)}" title="${escape(row.name+' · '+names[row.status])}">${cell(row,kind)}</div>`).join('')||'—'}</td>`).join('')).join('')+'</tr>').join('')+'</tbody></table>';
+        const applicationCell=row=>{
+            const status=O.tableStatus(row),value=row.actual||row.started||(row.optional?'':row.planned);
+            const label=row.completedWithoutDate&&!row.actual?'OK':value?date(value).slice(0,6)+value.slice(2,4):'';
+            const title=`${row.field} · ${row.name} · ${tableNames[status]}${row.autoDate?' · Data calculada':''}\nPrevista: ${date(row.optional?'':row.planned)}\nInício: ${date(row.started)}\nRealizada: ${row.completedWithoutDate&&!row.actual?'OK · sem data informada':date(row.actual)}`;
+            const editable=canEdit()&&!busy&&!loading&&!error&&!row.deleted;
+            return `<div class="spray-compact-cell ${status}${grid.has(row.key)?' has-draft':''}" data-spray-row="${escape(row.key)}" title="${escape(title)}">${editable?`<button type="button" class="spray-date-button" data-spray-action="edit" data-spray-key="${escape(row.key)}" aria-label="${escape(title+' · Editar aplicação')}">${escape(label)||'&nbsp;'}</button>`:`<span class="spray-date-value" aria-label="${escape(title)}">${escape(label)||'&nbsp;'}</span>`}</div>`;
+        };
+        return `<table class="spray-matrix spray-compact-table"><thead><tr><th scope="col"><button type="button" data-spray-sort="field">Talhão / Fazenda</button></th><th scope="col">Variedade</th><th scope="col">Hectares</th><th scope="col">Plantio</th><th scope="col" title="Dias após o plantio">DAP</th>${matrix.columns.map(column=>`<th scope="col">${escape(heading(column))}</th>`).join('')}</tr></thead><tbody>`+matrix.rows.map(field=>{
+            const info=fields.find(item=>item.key===field.key)||{};
+            const dap=info.plantingDate?Math.round((S.time(S.today())-S.time(info.plantingDate))/86400000):null;
+            return `<tr data-spray-field-key="${escape(field.key)}" class="spray-field-row"><th scope="row"><button type="button" data-spray-field-select="${escape(field.key)}">${escape(field.field)}<small>${escape(field.farm)}</small></button></th><td class="spray-field-info">${escape(info.variety)}</td><td class="spray-field-info">${Number(info.area||0).toLocaleString('pt-BR',{maximumFractionDigits:2})}</td><td class="spray-field-info">${info.plantingDate?date(info.plantingDate).slice(0,6)+info.plantingDate.slice(2,4):''}</td><td class="spray-field-info">${dap===null?'':dap}</td>`+matrix.columns.map(column=>`<td>${(field.cells.get(column.key)||[]).map(applicationCell).join('')}</td>`).join('')+'</tr>';
+        }).join('')+'</tbody></table>';
     }
     function listTable(){
-        const columns=[['farm','Fazenda'],['field','Talhão'],['culture','Cultura'],['name','Aplicação'],['product','Produto'],['dose','Dose'],['doseUnit','Unidade'],['area','Área (ha)'],['planned','Programada'],['actual','Realizada'],['responsible','Responsável'],['status','Status'],['notes','Observações']];
-        return `<table class="spray-operations-table"><caption>Lista editável · selecione células ou registros para atualizar em conjunto</caption><thead><tr><th>Selecionar</th>`+columns.map(([key,label])=>`<th scope="col" aria-sort="${order===key?direction===1?'ascending':'descending':'none'}"><button type="button" data-spray-sort="${key}">${label}${order===key?direction===1?' ↑':' ↓':''}</button></th>`).join('')+'<th scope="col">Ações</th></tr></thead><tbody>'+visible.map(row=>`<tr data-spray-field-key="${escape(row.fieldKey)}" data-spray-row="${escape(row.key)}" class="${grid.has(row.key)?'has-draft ':''}${row.deleted?'deleted':''}"><td>${selection(row)}</td>`+columns.map(([key])=>`<td>${key==='status'?`<span class="spray-status ${row.status}">${row.deleted?'Excluída':names[row.status]}</span>`:['product','dose','doseUnit','area','planned','actual','responsible','notes'].includes(key)?cell(row,key):escape(row[key])}</td>`).join('')+`<td><button type="button" data-spray-action="map" data-spray-key="${escape(row.key)}">Mapa</button>${canEdit()?`<button type="button" data-spray-action="${row.deleted?'restore':'edit'}" data-spray-key="${escape(row.key)}"${busy||grid.size?' disabled':''}>${row.deleted?'Restaurar':'Detalhes'}</button>${row.deleted?'':`<button type="button" data-spray-action="delete" data-spray-key="${escape(row.key)}"${busy||grid.size?' disabled':''}>Excluir</button>`}`:''}</td></tr>`).join('')+'</tbody></table>';
+        const columns=[['farm','Fazenda'],['field','Talhão'],['culture','Cultura'],['name','Aplicação'],['product','Produto'],['dose','Dose'],['doseUnit','Unidade'],['area','Área (ha)'],['planned','Programada'],['started','Início'],['actual','Realizada'],['responsible','Responsável'],['status','Status'],['notes','Observações']];
+        return `<table class="spray-operations-table"><caption>Lista editável · selecione células ou registros para atualizar em conjunto</caption><thead><tr><th>Selecionar</th>`+columns.map(([key,label])=>`<th scope="col" aria-sort="${order===key?direction===1?'ascending':'descending':'none'}"><button type="button" data-spray-sort="${key}">${label}${order===key?direction===1?' ↑':' ↓':''}</button></th>`).join('')+'<th scope="col">Ações</th></tr></thead><tbody>'+visible.map(row=>`<tr data-spray-field-key="${escape(row.fieldKey)}" data-spray-row="${escape(row.key)}" class="${grid.has(row.key)?'has-draft ':''}${row.deleted?'deleted':''}"><td>${selection(row)}</td>`+columns.map(([key])=>`<td>${key==='status'?`<span class="spray-status ${O.tableStatus(row)}">${row.deleted?'Excluída':tableNames[O.tableStatus(row)]}</span>`:['product','dose','doseUnit','area','planned','started','actual','responsible','notes'].includes(key)?cell(row,key):escape(row[key])}</td>`).join('')+`<td><button type="button" data-spray-action="map" data-spray-key="${escape(row.key)}">Mapa</button>${canEdit()?`<button type="button" data-spray-action="${row.deleted?'restore':'edit'}" data-spray-key="${escape(row.key)}"${busy||grid.size?' disabled':''}>${row.deleted?'Restaurar':'Detalhes'}</button>${row.deleted?'':`<button type="button" data-spray-action="delete" data-spray-key="${escape(row.key)}"${busy||grid.size?' disabled':''}>Excluir</button>`}`:''}</td></tr>`).join('')+'</tbody></table>';
     }
     function editCell(row,column,value){
         if(!canEdit()||busy||loading||error||row.deleted)return;
@@ -231,12 +243,13 @@
         el('input-field').innerHTML=fields.map(field=>`<option value="${escape(field.key)}">${escape(field.farm)} · ${escape(field.field)}</option>`).join('');
         el('input-field').value=row?.fieldKey||selectedField||fields[0]?.key||'';el('input-field').disabled=!!row;
         el('type-label').hidden=!!row;el('input-type').value='manual';
-        for(const [name,value]of Object.entries({name:row?.name||'',product:row?.product||'',dose:row?.dose??'',unit:row?.doseUnit||'L/ha',area:row?.area||'',planned:row?.planned||'',actual:row?.actual||'',responsible:row?.responsible||'',notes:row?.notes||''}))el('input-'+name).value=value;
+        for(const [name,value]of Object.entries({name:row?.name||'',product:row?.product||'',dose:row?.dose??'',unit:row?.doseUnit||'L/ha',area:row?.area||'',planned:row?.planned||'',actual:row?.actual||'',started:row?.started||'',responsible:row?.responsible||'',notes:row?.notes||''}))el('input-'+name).value=value;
+        el('input-started').max=S.today();
         el('input-actual').max=S.today();el('input-auto').checked=!!row?.autoDate;el('auto-label').hidden=!row?.plantingId;
         el('input-planned').disabled=!!row?.autoDate;el('input-name').readOnly=!!row?.plantingId;
         el('input-planned').required=!O.isIndependent(row?.stage);
         if(O.isIndependent(row?.stage))el('input-name').readOnly=true;
-        el('stage-note').textContent=O.isIndependent(row?.stage)?'Datas informadas manualmente. A realização pode ser anterior ao plantio e não depende das outras aplicações.':'As próximas etapas usam a realização anterior quando registrada. Datas realizadas são preservadas.';
+        el('stage-note').textContent=(O.isIndependent(row?.stage)?'Datas manuais e independentes do plantio. ':'Desmarque a data calculada para confirmar o planejamento. ')+ 'Informe o início para marcar em execução e a data realizada ao concluir.'+(row?.plantingId?' A conclusão recalcula as próximas datas automáticas.':'');
         if(!row)configureNew();
         previewForm();
         el('form').scrollIntoView?.({behavior:'smooth',block:'nearest'});
@@ -330,7 +343,7 @@
             const field=formField();if(!field)return;
             const row={...editing,farm:field.farm,field:field.field,fieldKey:field.key,year:state.currentAno,culture:state.currentCultura,
                 name:el('input-name').value,product:el('input-product').value,dose:el('input-dose').value,doseUnit:el('input-unit').value,
-                area:el('input-area').value,planned:el('input-planned').value,actual:el('input-actual').value,
+                area:el('input-area').value,planned:el('input-planned').value,actual:el('input-actual').value,started:el('input-started').value,
                 autoDate:!!editing?.plantingId&&el('input-auto').checked,responsible:el('input-responsible').value,notes:el('input-notes').value,deleted:false};
             if(!editing?.key&&el('input-type').value==='fung4'&&!row.plantingId){el('form-error').textContent='Escolha um talhão com plantio registrado para incluir o 4º fungicida.';return;}
             try{O.validate(row,field);if(row.plantingId)linkedPreview(row,field);}catch(failure){el('form-error').textContent=failure.message;return;}

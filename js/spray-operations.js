@@ -11,6 +11,15 @@
     const fieldKey = (farm, field) => JSON.stringify([farm, field]);
     const rowKey = row => row.plantingId ? `${row.plantingId}:${row.stage}` : isIndependent(row.stage)?independentKey(row.farm,row.field,row.year,row.culture,row.stage):row.id;
     const isCompleted = row => !!(row.actual || row.completedWithoutDate);
+    // Calculated dates are a reference, not a confirmed work plan.
+    function tableStatus(row, current = S.today()) {
+        if (isCompleted(row)) return 'completed';
+        if (row.started) return 'in_progress';
+        if (row.optional) return 'unplanned';
+        if (row.planned && row.planned < current) return 'overdue';
+        if (row.planned && !row.autoDate) return 'planned';
+        return 'unplanned';
+    }
     const status = (planned, actual, current = S.today(), completedWithoutDate = false) => actual || completedWithoutDate ? 'completed' : !planned?'unplanned':
         planned < current ? 'overdue' : (S.time(planned) - S.time(current)) / 86400000 <= 2 ? 'attention' : 'scheduled';
     function build(features, plantingRecords, schedules, saved, context, current = S.today()) {
@@ -27,14 +36,14 @@
             const projected = F.project(feature, record, context.culture);
             const field = { key, farm: p.Fazenda, field: p.Campo, area: Number(p.Area) || 0,
                 culture: context.culture, year: context.year, plantingId: record?.id || null,
-                plantingDate: projected.plantingDate, plantedArea: projected.plantedArea };
+                plantingDate: projected.plantingDate, plantedArea: projected.plantedArea, variety: record?.variedadeSemente || '' };
             fields.set(key, field);
             for(const step of independentSteps){
                 const id=independentKey(field.farm,field.field,context.year,context.culture,step.id),extra=independentMetadata.get(id)||{};
                 applications.push({...extra,key:id,plantingId:null,stage:step.id,independent:true,
                     farm:field.farm,field:field.field,fieldKey:key,year:context.year,culture:context.culture,
                     name:step.name,area:extra.area??field.area,planned:extra.planned||null,actual:extra.actual||null,
-                    unplanned:!extra.planned&&!extra.actual&&!extra.completedWithoutDate,autoDate:false,provisional:false,
+                    unplanned:!extra.planned&&!extra.actual&&!extra.started&&!extra.completedWithoutDate,autoDate:false,provisional:false,
                     product:extra.product||'',dose:extra.dose??null,doseUnit:extra.doseUnit||'L/ha',responsible:extra.responsible||'',notes:extra.notes||'',
                     status:status(extra.planned,extra.actual,current,extra.completedWithoutDate)});
             }
@@ -94,7 +103,7 @@
         const query = normalize(filters.search);
         return rows.filter(row => (filters.deleted ? row.deleted : !row.deleted) &&
             (!filters.farm || row.farm === filters.farm) && (!filters.field || row.fieldKey === filters.field) &&
-            (!filters.status || row.status === filters.status) && (!filters.from || row.planned >= filters.from) &&
+            (!filters.status || (filters.table ? tableStatus(row) : row.status) === filters.status) && (!filters.from || row.planned >= filters.from) &&
             matchesApplication(row, filters.application) &&
             (!filters.to || row.planned <= filters.to) && (!query || normalize([row.farm, row.field, row.culture, row.name, row.product, row.responsible, row.notes].join(' ')).includes(query)));
     }
@@ -133,13 +142,16 @@
         if (!String(row.name || '').trim()) throw Error('Informe a aplicação.');
         if ((!isIndependent(row.stage)||row.planned) && S.time(row.planned) === null) throw Error('Informe uma data programada válida.');
         if (row.actual && (S.time(row.actual) === null || row.actual > current)) throw Error('A data realizada deve ser válida e não pode estar no futuro.');
+        if (row.started && (S.time(row.started) === null || row.started > current)) throw Error('A data de início deve ser válida e não pode estar no futuro.');
+        if (row.started && row.plantingId && row.started < field.plantingDate) throw Error('O início não pode ser anterior ao plantio.');
+        if (row.started && row.actual && row.actual < row.started) throw Error('A conclusão não pode ser anterior ao início.');
         if (!Number.isFinite(Number(row.area)) || Number(row.area) <= 0 || Number(row.area) > field.area) throw Error('A área deve ser maior que zero e não pode ultrapassar o talhão.');
         if (row.dose !== null && row.dose !== '' && row.dose !== undefined && (!Number.isFinite(Number(row.dose)) || Number(row.dose) < 0 || Number(row.dose)>1000000)) throw Error('Informe uma dose válida entre zero e 1.000.000.');
         if(row.doseUnit===''||String(row.doseUnit||'L/ha').length>30)throw Error('Informe uma unidade de dose com até 30 caracteres.');
         if (String(row.product || '').length > 150 || String(row.responsible || '').length > 150 || String(row.notes || '').length > 2000) throw Error('Confira o tamanho dos textos informados.');
         return true;
     }
-    const api = Object.freeze({ fieldKey, rowKey, status, isCompleted, build, filter, sort, summarize, areaSummary, mapStatus, validate, applicationKey, matchesApplication, applicationOptions, matrix,independentSteps,isIndependent,independentKey });
+    const api = Object.freeze({ fieldKey, rowKey, status, tableStatus, isCompleted, build, filter, sort, summarize, areaSummary, mapStatus, validate, applicationKey, matchesApplication, applicationOptions, matrix,independentSteps,isIndependent,independentKey });
     root.SprayOperations = api;
     if (typeof module !== 'undefined') module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -1,7 +1,7 @@
 (function(root){
     'use strict';
     const O=root.SprayOperations,S=root.SpraySchedule;
-    const allowed=new Set(['planned','actual','product','dose','doseUnit','area','responsible','notes']);
+    const allowed=new Set(['planned','actual','started','product','dose','doseUnit','area','responsible','notes']);
     function create(){
         const drafts=new Map(),baselines=new Map();
         function edit(row,field,schedule,column,value){

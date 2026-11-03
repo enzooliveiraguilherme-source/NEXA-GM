@@ -158,7 +158,7 @@ test('map dashboard load error replaces KPIs and map scope ignores unsaved draft
     assert.doesNotMatch(broken.el('map-content').innerHTML,/ÁREA PROGRAMADA|progress-bar|status-summary/);
 
     const h=harness({batchFailure:Error('Conflito'),secondPlanned:'2026-11-20'});h.state.currentSubTab='mapa-pulverizacao';
-    h.api.refresh(h.state,h.features);await h.tick();h.el('map-application').value='post1';h.el('map-application').onchange();
+    h.api.refresh(h.state,h.features);await h.tick();listMode(h);h.el('map-application').value='post1';h.el('map-application').onchange();
     const confirmed=h.el('map-content').innerHTML;
     await h.el('table').onchange({target:{dataset:{sprayKey:'plant-3:post1',sprayCell:'actual'},value:'2026-10-20'}});
     assert.equal(h.el('save-status').textContent,'Não salvo');
@@ -169,9 +169,11 @@ test('independent pre-planting rows appear first and never alter the linked post
     const h = harness();
     h.api.refresh(h.state, h.features); await h.tick();
     let html = h.el('table').innerHTML;
-    const pre = html.indexOf('Pré-emergente'), boro = html.indexOf('Boro'), desiccation = html.indexOf('Dessecação pré-plantio');
-    const firstPost = html.indexOf('1ª Pós');
+    const header = html.slice(0, html.indexOf('</thead>'));
+    const pre = header.indexOf('Pré-emergente'), boro = header.indexOf('Boro'), desiccation = header.indexOf('Dessecação pré-plantio');
+    const firstPost = header.indexOf('1ª Pós');
     assert.ok(pre >= 0 && boro > pre && desiccation > boro && firstPost > desiccation);
+    listMode(h); html=h.el('table').innerHTML;
     assert.match(html, /data-spray-cell="planned" data-spray-key="independent:/);
     assert.match(h.el('summary').innerHTML, /<strong>10<\/strong>/); // only the two planted five-step schedules count
     assert.equal(h.api.style(h.features[1]).fillColor, '#94a3b8'); // unplanned independent rows do not color the map
@@ -238,6 +240,7 @@ test('editing preserves the form after rejection and closes then reloads after s
 test('one inline date edit autosaves once and recalculates following dates', async () => {
     const h = harness();
     h.api.refresh(h.state, h.features); await h.tick();
+    listMode(h);
     assert.equal(h.el('batch-save').hidden, true);
     await h.el('table').onchange({ target: { dataset: { sprayKey: 'plant-1:post1', sprayCell: 'actual' }, value: '2026-10-20' } });
     await h.tick();
@@ -253,6 +256,7 @@ test('one inline date edit autosaves once and recalculates following dates', asy
 test('completed without date contributes to summary/map, is skipped as next, and clears when date is entered', async () => {
     const h=harness({completedWithoutDate:true});
     h.api.refresh(h.state,h.features);await h.tick();
+    listMode(h);
     assert.match(h.el('table').innerHTML,/Aplicada · sem data/);
     assert.match(h.el('summary').innerHTML,/<span>Realizadas<\/span><strong>2<\/strong>/);
     assert.match(h.el('summary').innerHTML,/<span>Área aplicada<\/span><strong>70 ha<\/strong>/);
@@ -282,6 +286,7 @@ test('details resave without a date preserves completed-without-date state', asy
 test('autosave failure preserves the draft and exposes an explicit retry', async () => {
         const h = harness({ batchFailure: Error('Conflito do lote') });
         h.api.refresh(h.state, h.features); await h.tick();
+        listMode(h);
         await h.el('table').onchange({ target: { dataset: { sprayKey: 'plant-1:post1', sprayCell: 'product' }, value: 'Herbicida revisado' } });
         assert.equal(h.calls.batch.length, 1);
         assert.equal(h.calls.batch[0].rows.length, 1);
@@ -306,6 +311,7 @@ test('autosave failure preserves the draft and exposes an explicit retry', async
 test('busy autosave locks cells and ignores reentrant edits until confirmed and reloaded', async () => {
     const h = harness({ batchDelay: true });
     h.api.refresh(h.state, h.features); await h.tick();
+    listMode(h);
     const save = h.el('table').onchange({ target: { dataset: { sprayKey: 'plant-1:post1', sprayCell: 'actual' }, value: '2026-10-20' } });
     assert.equal(h.calls.batch.length, 1);
     assert.equal(h.el('save-status').textContent, 'Salvando…');
@@ -333,15 +339,36 @@ test('selecting visible applications applies a bulk value only to selected rows'
     assert.equal(h.el('save-status').textContent, 'Salvo');
 });
 
-test('compact matrix has planned and actual columns without repeated status chips or selectors', async () => {
+test('compact matrix shows field context and one application button per cell', async () => {
     const h = harness();
     h.api.refresh(h.state, h.features); await h.tick();
     const html = h.el('table').innerHTML;
     assert.match(html, /spray-compact-table/);
-    assert.match(html, /Prevista/);
-    assert.match(html, /Realizada/);
-    assert.doesNotMatch(html, /spray-status|data-spray-check|type="checkbox"/);
+    assert.match(html, /Variedade/);
+    assert.match(html, /Plantio/);
+    assert.match(html, /DAP/);
+    assert.match(html, /data-spray-action="edit"/);
+    assert.match(html, /spray-date-button/);
+    assert.doesNotMatch(html, /data-spray-cell=|spray-status|data-spray-check|type="checkbox"/);
     assert.doesNotMatch(html, /spray-kpi/);
+});
+
+test('matrix button opens details and saves start plus completion dates with recalculated next steps', async () => {
+    const h = harness({ scheduleActuals: {} });
+    h.api.refresh(h.state, h.features); await h.tick();
+    clickAction(h, 'edit', 'plant-1:post1');
+    assert.equal(h.el('form').hidden, false);
+    h.el('input-started').value = '2026-10-17';
+    h.el('input-actual').value = '2026-10-18';
+    h.el('input-actual').onchange();
+    assert.match(h.el('preview').innerHTML, /2ª Pós-Emergente: 28\/10\/2026/);
+    await h.el('form').onsubmit({ preventDefault() {} });
+    await h.tick();
+    assert.equal(h.calls.save.length, 1);
+    assert.equal(h.calls.save[0].row.started, '2026-10-17');
+    assert.equal(h.calls.save[0].row.actual, '2026-10-18');
+    assert.equal(h.el('form').hidden, true);
+    assert.equal(h.saved.find(row => row.id === 'app-1').started, '2026-10-17');
 });
 
 test('application table filter and independent map filter can show different scopes', async () => {
@@ -428,6 +455,7 @@ test('linked planting date edit immediately recalculates following dates without
 test('clearing an earlier realization preserves and autosaves later known dates', async () => {
     const h = harness({ scheduleActuals: { post1: '2026-10-16', post2: '2026-10-26' } });
     h.api.refresh(h.state, h.features); await h.tick();
+    listMode(h);
     await h.el('table').onchange({ target: { dataset: { sprayKey: 'plant-1:post1', sprayCell: 'actual' }, value: '' } });
     assert.match(h.el('save-status').textContent, /Salvo/);
     assert.equal(h.calls.batch.length, 1);
@@ -547,7 +575,8 @@ test('optional fourth step is visible, autosaves with schedule version, and stay
         post1: '2026-10-16', post2: '2026-10-26', fung1: '2026-10-27', fung2: '2026-10-28', fung3: '2026-10-29'
     } });
     h.api.refresh(h.state, h.features); await h.tick();
-    assert.match(h.el('table').innerHTML, /4º Fungicida \(opcional\)/);
+    listMode(h);
+    assert.match(h.el('table').innerHTML, /fung4/);
     assert.match(h.el('table').innerHTML, /data-spray-cell="planned" data-spray-key="plant-3:fung4"[^>]*value=""/);
     await h.el('table').onchange({ target: { dataset: { sprayKey: 'plant-1:fung4', sprayCell: 'actual' }, value: '2026-11-01' } });
     assert.equal(h.calls.batch.length, 1);

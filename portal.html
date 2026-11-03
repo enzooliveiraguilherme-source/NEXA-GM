@@ -16,7 +16,7 @@
     
     <!-- Custom CSS -->
     <link rel="stylesheet" href="style.css?v=savecloud-rate-1">
-    <link rel="stylesheet" href="brand.css?v=spray-dashboard-20261102">
+    <link rel="stylesheet" href="brand.css?v=spray-single-cell-20261103">
     <link rel="stylesheet" href="js/savefarm-connection.css?v=20261102">
 </head>
 <body data-page="portal">
@@ -336,7 +336,7 @@
                     <label>Fazenda<select id="spray-op-farm"><option value="">Todas</option></select></label>
                     <label>Talhão<select id="spray-op-field"><option value="">Todos</option></select></label>
                     <label>Aplicação<select id="spray-op-application"><option value="all">Todas</option></select></label>
-                    <label>Status<select id="spray-op-status"><option value="">Todos</option><option value="scheduled">No prazo</option><option value="attention">Próximas</option><option value="overdue">Atrasadas</option><option value="completed">Realizadas</option><option value="deleted">Excluídas</option></select></label>
+                    <label>Status<select id="spray-op-status"><option value="">Todos</option><option value="planned">Planejadas</option><option value="in_progress">Em execução</option><option value="overdue">Atrasadas</option><option value="completed">Concluídas</option><option value="unplanned">Sem planejamento</option><option value="deleted">Excluídas</option></select></label>
                     <label>Programada de<input id="spray-op-from" type="date"></label><label>Até<input id="spray-op-to" type="date"></label>
                     <label class="spray-search">Pesquisa rápida<input id="spray-op-search" type="search" placeholder="Talhão, produto, responsável…"></label><button id="spray-op-clear" type="button">Limpar</button>
                 </div>
@@ -351,9 +351,10 @@
                         <label>Unidade da dose<input id="spray-op-input-unit" maxlength="30" value="L/ha" required></label>
                         <label>Área (ha)<input id="spray-op-input-area" type="number" min="0.0001" step="any" required></label>
                         <label>Data programada<input id="spray-op-input-planned" type="date" required></label>
-                        <label>Data realizada<input id="spray-op-input-actual" type="date"></label>
+                        <label>Início da execução<input id="spray-op-input-started" type="date"><small>Preencha ao começar. A célula fica amarela até concluir.</small></label>
+                        <label>Data realizada / conclusão<input id="spray-op-input-actual" type="date"></label>
                         <label>Responsável<input id="spray-op-input-responsible" maxlength="150"></label>
-                        <label id="spray-op-auto-label" class="spray-auto-date"><input id="spray-op-input-auto" type="checkbox"> Usar data automática do plantio</label>
+                        <label id="spray-op-auto-label" class="spray-auto-date"><input id="spray-op-input-auto" type="checkbox"> Usar data calculada · sem planejamento confirmado</label>
                         <label class="spray-form-notes">Observações<textarea id="spray-op-input-notes" maxlength="2000" rows="2"></textarea></label>
                     </fieldset>
                     <p id="spray-op-stage-note" class="spray-note">As etapas do plantio mantêm a sequência já cadastrada. Quando a realização anterior ainda não foi informada, a data automática é provisória. A data realizada recalcula as próximas etapas ao salvar.</p>
@@ -370,6 +371,7 @@
                 </details>
                 <div class="spray-save-recovery"><div class="spray-grid-actions editor-control"><button id="spray-op-batch-save" type="button">Tentar novamente</button><button id="spray-op-batch-discard" type="button">Descartar alteração</button></div></div>
                 <div id="spray-op-table" class="spray-table-scroll" tabindex="0" aria-label="Tabela de controle de pulverização"></div>
+                <div class="spray-excel-key" aria-label="Legenda da tabela"><span><i class="completed"></i>Concluída</span><span><i class="planned"></i>Planejada</span><span><i class="in_progress"></i>Em execução · data de início</span><span><i class="overdue"></i>Atrasada</span><span><i class="unplanned"></i>Sem planejamento confirmado</span><small>Branco pode conter data calculada. Não significa que está em dia. Clique na célula para atualizar.</small></div>
             </section>
 
             <!-- Container do Mapa -->
@@ -1119,10 +1121,10 @@
     <script src="js/planting-report.js?v=5"></script>
     <script src="js/spray-schedule.js?v=spray-import-20261102"></script>
     <script src="js/spray-repository.js?v=1"></script>
-    <script src="js/spray-operations.js?v=spray-dashboard-20261102"></script>
-    <script src="js/spray-applications.js?v=spray-import-20261102"></script>
-    <script src="js/spray-grid.js?v=spray-import-20261102"></script>
-    <script src="js/spray-control.js?v=spray-dashboard-20261102"></script>
+    <script src="js/spray-operations.js?v=spray-single-cell-20261103"></script>
+    <script src="js/spray-applications.js?v=spray-single-cell-20261103"></script>
+    <script src="js/spray-grid.js?v=spray-single-cell-20261103"></script>
+    <script src="js/spray-control.js?v=spray-single-cell-20261103"></script>
     <script src="js/spray-report.js?v=spray-area-pdf-20261102"></script>
     <script src="js/savefarm-rate.js?v=1"></script>
     <script src="js/savefarm-view.js?v=connection-20261102"></script>
