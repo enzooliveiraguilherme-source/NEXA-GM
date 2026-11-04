@@ -23,14 +23,14 @@ test('início mantém em andamento mesmo com data planejada vencida', () => {
     assert.equal(Summary.classify(row('post1', { planned: '2026-11-01', started: '2026-11-02' }), today), 'in_progress');
 });
 
-test('planejado para hoje ou antes fica não aplicado; data futura fica cinza e sem data fica vazio', () => {
+test('datas vencidas, futuras ou ausentes ficam não aplicadas no resumo', () => {
     assert.equal(Summary.classify(row('post1', { planned: today }), today), 'not_applied');
     assert.equal(Summary.classify(row('post1', { planned: '2026-11-19' }), today), 'not_applied');
-    assert.equal(Summary.classify(row('post1', { planned: '2026-11-21' }), today), 'future');
-    assert.equal(Summary.classify(row('post1', { planned: null }), today), 'empty');
+    assert.equal(Summary.classify(row('post1', { planned: '2026-11-21' }), today), 'not_applied');
+    assert.equal(Summary.classify(row('post1', { planned: null }), today), 'not_applied');
 });
 
-test('resumo exclui registros apagados e opcionais, e não conta área sem programação no denominador', () => {
+test('resumo exclui apagados e opcionais e inclui áreas futuras ou sem data nos três totais', () => {
     const totals = Summary.summarize([
         row('post1', { area: 10, actual: today }),
         row('post2', { area: 20, planned: '2026-11-21' }),
@@ -38,10 +38,15 @@ test('resumo exclui registros apagados e opcionais, e não conta área sem progr
         row('fung2', { area: 200, deleted: true }),
         row('fung3', { area: 300, optional: true })
     ], today);
-    assert.equal(totals.plannedArea, 30);
+    assert.equal(totals.plannedArea, 130);
     assert.equal(totals.appliedArea, 10);
-    assert.equal(totals.progress, 100 / 3);
-    assert.deepEqual(totals.buckets.empty, { area: 100, count: 1 });
+    assert.equal(totals.progress, 100 * 10 / 130);
+    assert.deepEqual(totals.buckets, {
+        applied: { area: 10, count: 1 },
+        in_progress: { area: 0, count: 0 },
+        not_applied: { area: 120, count: 2 }
+    });
+    assert.deepEqual(Object.keys(totals.buckets), ['applied', 'in_progress', 'not_applied']);
 });
 
 test('opções individuais preservam pós e fungicidas, sem agregados gerais', () => {
@@ -67,16 +72,44 @@ test('build filtra o estágio selecionado e não duplica feições do mesmo talh
     assert.deepEqual(rows, before);
 });
 
-test('prioridade de status do talhão: em andamento, não aplicado, futuro, vazio; todos concluídos ficam aplicados', () => {
+test('status do talhão prioriza em andamento; sem registro ou só status vermelhos fica não aplicado', () => {
     assert.equal(Summary.fieldStatus([
         row('post1', { actual: today }), row('post2', { started: today, planned: '2026-11-01' })
     ], today), 'in_progress');
     assert.equal(Summary.fieldStatus([
         row('post1', { planned: '2026-11-21' }), row('post2', { planned: today })
     ], today), 'not_applied');
-    assert.equal(Summary.fieldStatus([row('post1', { planned: '2026-11-21' })], today), 'future');
-    assert.equal(Summary.fieldStatus([row('post1', { planned: null })], today), 'empty');
+    assert.equal(Summary.fieldStatus([row('post1', { planned: '2026-11-21' })], today), 'not_applied');
+    assert.equal(Summary.fieldStatus([row('post1', { planned: null })], today), 'not_applied');
+    assert.equal(Summary.fieldStatus([], today), 'not_applied');
+    assert.equal(Summary.fieldStatus([row('post1', { deleted: true }), row('fung1', { optional: true })], today), 'not_applied');
     assert.equal(Summary.fieldStatus([row('post1', { actual: today })], today), 'applied');
+});
+
+test('nomes de exibição cobrem os oito prefixos e não alteram o cadastro', () => {
+    const names = {
+        FE: 'Fazenda Esperança', FBLA: 'Fazenda Beleza', FBAG: 'Fazenda Barra Grande',
+        FSTV: 'Fazenda Santa Vitória', FPAR: 'Fazenda Paraiso', FEAR: 'Fazenda Encanto do Araguaia',
+        FPER: 'Fazenda Perdizes', FSAL: 'Fazenda São Luis'
+    };
+    const farms = Object.entries(names).map(([code, name]) => ({ code, name: `Cadastro ${code}` }));
+    const before = structuredClone(farms);
+    for (const [code, expected] of Object.entries(names)) {
+        assert.deepEqual(Summary.scopeDetails({ currentFazenda: code, currentGleba: 'ALL' }, farms),
+            { scope: code, scopeName: expected });
+    }
+    assert.deepEqual(farms, before);
+});
+
+test('fazenda tem prioridade sobre gleba; gleba FE mostra Fazenda Esperança e ALL mostra escopo geral', () => {
+    const farms = [{ code: 'FE', name: 'Nome cadastrado' }];
+    assert.deepEqual(Summary.scopeDetails({ currentFazenda: 'FBLA', currentGleba: 'FE' }, farms),
+        { scope: 'FBLA', scopeName: 'Fazenda Beleza' });
+    assert.deepEqual(Summary.scopeDetails({ currentFazenda: 'ALL', currentGleba: 'FE' }, farms),
+        { scope: 'FE', scopeName: 'Fazenda Esperança' });
+    assert.deepEqual(Summary.scopeDetails({ currentFazenda: 'ALL', currentGleba: 'ALL' }, farms),
+        { scope: 'Todas as fazendas', scopeName: 'Todas as fazendas' });
+    assert.deepEqual(farms, [{ code: 'FE', name: 'Nome cadastrado' }]);
 });
 
 test('status de mapa operacional prioriza atraso e considera somente etapas individuais elegíveis', () => {
