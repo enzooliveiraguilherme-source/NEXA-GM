@@ -16,8 +16,8 @@
     
     <!-- Custom CSS -->
     <link rel="stylesheet" href="style.css?v=savecloud-rate-1">
-    <link rel="stylesheet" href="brand.css?v=spray-quick-edit-20261103">
-    <link rel="stylesheet" href="js/spray-mobile.css?v=spray-mobile-20261103">
+    <link rel="stylesheet" href="brand.css?v=spray-summary-20261104">
+    <link rel="stylesheet" href="js/spray-mobile.css?v=spray-summary-20261104">
     <link rel="stylesheet" href="js/spray-dashboard.css?v=spray-overview-20261103">
     <link rel="stylesheet" href="js/savefarm-connection.css?v=20261102">
 </head>
@@ -95,6 +95,7 @@
                             <div class="sub-nav-menu" id="sub-nav-pulverizacao">
                                 <button type="button" class="sub-nav-item" data-spray-view="tabela-pulverizacao"><i class="fa-solid fa-table"></i><span>Tabela</span></button>
                                 <button type="button" class="sub-nav-item" data-spray-view="mapa-pulverizacao"><i class="fa-solid fa-map"></i><span>Mapa</span></button>
+                                <button type="button" class="sub-nav-item" data-spray-view="resumo-aplicacao"><i class="fa-solid fa-map-location-dot"></i><span>Atualizar Mapa Aplicação</span></button>
                             </div>
                         </div>
                         
@@ -260,6 +261,11 @@
                     <div class="select-wrapper"><select id="spray-op-map-application"><option value="all">Todas</option></select></div>
                 </div>
 
+                <div class="filter-group hidden spray-map-application-filter" id="spray-summary-filter-group">
+                    <label for="spray-summary-application">Aplicação:</label>
+                    <div class="select-wrapper"><select id="spray-summary-application" aria-label="Aplicação do resumo"><option value="">Carregando…</option></select></div>
+                </div>
+
                 <div class="filter-group filter-group-product" id="operation-product-filter-group">
                     <label for="filter-produto">Produto:</label>
                     <div class="select-wrapper">
@@ -326,7 +332,7 @@
             </div>
 
             <div id="operation-workspace" class="operation-workspace">
-            <nav class="spray-mobile-views" aria-label="Visualização da pulverização"><button type="button" data-spray-view="tabela-pulverizacao"><i class="fa-solid fa-table" aria-hidden="true"></i> Tabela</button><button type="button" data-spray-view="mapa-pulverizacao"><i class="fa-solid fa-map" aria-hidden="true"></i> Mapa</button></nav>
+            <nav class="spray-mobile-views" aria-label="Visualização da pulverização"><button type="button" data-spray-view="tabela-pulverizacao"><i class="fa-solid fa-table" aria-hidden="true"></i> Tabela</button><button type="button" data-spray-view="mapa-pulverizacao"><i class="fa-solid fa-map" aria-hidden="true"></i> Mapa</button><button type="button" data-spray-view="resumo-aplicacao"><i class="fa-solid fa-map-location-dot" aria-hidden="true"></i> Atualizar Mapa Aplicação</button></nav>
             <section id="spray-panel" class="spray-panel spray-control-panel" aria-label="Controle de pulverização" hidden>
                 <header class="spray-heading"><div><h2>Aplicações</h2></div><div class="spray-control-actions"><div id="spray-table-export-actions"></div><span id="spray-op-save-status" class="spray-save-state" role="status" aria-live="polite">Salvamento automático</span><button id="spray-op-add" type="button">Adicionar aplicação</button><button id="spray-op-reload" type="button">Recarregar</button><button id="spray-op-map-jump" class="spray-mobile-map" type="button">Ver mapa</button></div></header>
                 <p id="spray-op-message" class="spray-message" role="status" aria-live="polite"></p>
@@ -391,6 +397,14 @@
                         <div id="spray-map-export-actions"><div id="spray-report-actions" class="spray-report-actions"><button type="button" id="spray-report-button" class="operation-export-trigger" hidden><i class="fa-solid fa-file-pdf" aria-hidden="true"></i> Exportar PDF</button><span id="spray-report-status" role="status" aria-live="polite"></span></div></div>
                     </header>
                     <div id="spray-op-map-content" class="dashboard-content" aria-live="polite"></div>
+                </section>
+                <section id="spray-summary-dashboard" class="calcario-dashboard-panel spray-map-dashboard spray-summary-dashboard hidden" aria-label="Resumo de aplicação">
+                    <header class="dashboard-header-toggle">
+                        <div class="dashboard-title-box"><i class="fa-solid fa-map-location-dot" aria-hidden="true"></i><h3 id="spray-summary-title">Resumo de aplicação</h3><span class="badge-farm" id="spray-summary-scope"></span></div>
+                        <button type="button" id="spray-summary-toggle" class="btn-toggle-dash" aria-expanded="true" aria-controls="spray-summary-content" aria-label="Recolher resumo"><i class="fa-solid fa-chevron-up" aria-hidden="true"></i></button>
+                        <div class="spray-summary-actions"><button type="button" id="spray-summary-export" class="operation-export-trigger" hidden><i class="fa-solid fa-file-pdf" aria-hidden="true"></i> Exportar PDF</button><span id="spray-summary-export-status" role="status" aria-live="polite"></span></div>
+                    </header>
+                    <div id="spray-summary-content" class="dashboard-content" aria-live="polite"></div>
                 </section>
                 <details id="planting-label-controls" class="planting-label-controls hidden">
                     <summary>Rótulos do plantio</summary>
@@ -1130,11 +1144,12 @@
     <script src="js/spray-operations.js?v=spray-overview-20261103"></script>
     <script src="js/spray-applications.js?v=spray-single-cell-20261103"></script>
     <script src="js/spray-grid.js?v=spray-single-cell-20261103"></script>
-    <script src="js/spray-control.js?v=spray-overview-20261103"></script>
+    <script src="js/spray-control.js?v=spray-summary-20261104"></script>
+    <script src="js/spray-summary.js?v=spray-summary-20261104"></script>
     <script src="js/spray-report.js?v=spray-area-pdf-20261102"></script>
     <script src="js/savefarm-rate.js?v=1"></script>
     <script src="js/savefarm-view.js?v=connection-20261102"></script>
-    <script src="app.js?v=spray-dashboard-20261102"></script>
+    <script src="app.js?v=spray-summary-20261104"></script>
     <script src="js/mobile-layout.js?v=3"></script>
 </body>
 </html>

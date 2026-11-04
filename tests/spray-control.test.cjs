@@ -81,9 +81,17 @@ function harness({ role = 'editor', accessRole = 'admin', saveFailure = null, sa
         }
     };
     const mediaListeners = [];
+    const summaryCalls=[];
+    const summaryStyles=[],summaryPopups=[];
+    const spraySummary={
+        refresh(state,data){summaryCalls.push({state,data});},
+        style(feature){summaryStyles.push(feature);return{fillColor:'summary-style'};},
+        popup(feature){summaryPopups.push(feature);return'<div>summary popup</div>';}
+    };
     const media = { matches: mobile, addEventListener(event, handler) { if (event === 'change') mediaListeners.push(handler); } };
     const window = {
         SpraySchedule, PlantingForecast, SprayOperations, SprayGrid,
+        SpraySummary:spraySummary,
         SprayApplications: { create: () => appsRepo }, SprayRepository: { create: () => scheduleRepo },
         portalAccessRole: accessRole, confirm() { return true; }, setInterval() { return 1; }, addEventListener() {},
         matchMedia() { return media; }
@@ -109,7 +117,7 @@ function harness({ role = 'editor', accessRole = 'admin', saveFailure = null, sa
     const tick = () => new Promise(resolve => setImmediate(resolve));
     const el = name => document.getElementById('spray-op-' + name);
     el('form').hidden = true;
-    return { api: window.SprayControl, state, features, layers, calls, el, document, tick, saved, domRows, scheduleRows, media, mediaListeners,
+    return { api: window.SprayControl, state, features, layers, calls, el, document, tick, saved, domRows, scheduleRows, media, mediaListeners, summaryCalls, summaryStyles, summaryPopups,
         releaseBatch() { releaseBatch?.(); }, releaseSave() { releaseSave?.(); }, setBatchFailure(value) { batchReject = value; } };
 }
 
@@ -343,6 +351,28 @@ test('spray overview stays on confirmed data during pending saves and excludes d
     assert.equal(failed.el('overview-progress').textContent,'Excluídas');
     assert.match(failed.el('overview-content').innerHTML,/Registros excluídos não entram nos indicadores/);
     assert.doesNotMatch(failed.el('overview-content').innerHTML,/data-spray-overview-area=|progressbar/);
+});
+
+test('summary receives confirmed rows and pending state; map style and popup delegate only in summary mode', async () => {
+    const h=harness({batchDelay:true});h.api.refresh(h.state,h.features);await h.tick();
+    const latest=()=>h.summaryCalls.at(-1).data;
+    assert.equal(latest().pending,false);
+    assert.ok(latest().rows.some(row=>row.actual==='2026-10-16'));
+    assert.ok(!latest().rows.some(row=>row.actual==='2026-10-20'));
+    h.state.currentSubTab='mapa-pulverizacao';
+    assert.notDeepEqual(h.api.style(h.features[0]),{fillColor:'summary-style'});
+    assert.notEqual(h.api.popup(h.features[0]),'<div>summary popup</div>');
+    h.state.currentSubTab='resumo-aplicacao';
+    assert.deepEqual(h.api.style(h.features[0]),{fillColor:'summary-style'});
+    assert.equal(h.api.popup(h.features[0]),'<div>summary popup</div>');
+    assert.deepEqual(h.summaryStyles,[h.features[0]]);assert.deepEqual(h.summaryPopups,[h.features[0]]);
+
+    const saving=h.el('table').onchange({target:{dataset:{sprayKey:'plant-3:post1',sprayCell:'actual'},value:'2026-10-20'}});
+    assert.equal(latest().pending,true);
+    assert.ok(!latest().rows.some(row=>row.actual==='2026-10-20'));
+    h.releaseBatch();await saving;await h.tick();
+    assert.equal(latest().pending,false);
+    assert.ok(latest().rows.some(row=>row.actual==='2026-10-20'));
 });
 
 test('independent pre-planting rows appear first and never alter the linked post/fungicide schedule', async () => {
@@ -771,7 +801,8 @@ test('map selection is only a visual focus and keeps confirmed application color
 });
 
 test('attention and overdue application colors keep the stronger map opacity', async () => {
-    for (const [planned,color] of [['2026-11-03','#f5c542'],['2026-10-18','#df3838']]) {
+    const today=SpraySchedule.today();
+    for (const [planned,color] of [[today,'#f5c542'],[SpraySchedule.addDays(today,-1),'#df3838']]) {
         const h = harness({ secondPlanned: planned });
         h.api.refresh(h.state, h.features); await h.tick();
         h.el('map-application').value = 'post1'; h.el('map-application').onchange();

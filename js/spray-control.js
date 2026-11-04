@@ -32,6 +32,7 @@
         state?.geojsonLayer?.eachLayer(layer => { if (layer.feature) layer.setStyle(style(layer.feature)); });
     }
     function style(feature) {
+        if(state?.currentSubTab==='resumo-aplicacao'&&root.SpraySummary)return root.SpraySummary.style(feature);
         const p = feature.properties || {}, status = O.mapStatus(loading || error ? [] : mapRows, O.fieldKey(p.Fazenda,p.Campo));
         return { color:'#283b50', weight:.9,
             fillColor:colors[status], fillOpacity:status === 'empty' ? .18 : .95, opacity:1 };
@@ -46,6 +47,7 @@
         render();if(state.currentSubTab!=='mapa-pulverizacao')scrollSelection();
     }
     function popup(feature) {
+        if(state?.currentSubTab==='resumo-aplicacao'&&root.SpraySummary)return root.SpraySummary.popup(feature);
         const p = feature.properties || {}, key = O.fieldKey(p.Fazenda,p.Campo);
         let apps = mapRows.filter(row => row.fieldKey === key && !row.deleted && !row.optional && !row.unplanned);
         const chosen = apps.find(row => row.key === selectedRow);
@@ -249,6 +251,8 @@
         const exportActions=document.getElementById('spray-report-actions');
         if(exportActions){exportActions.hidden=!canEdit();if(exportHost&&exportActions.parentElement!==exportHost)exportHost.appendChild?.(exportActions);}
         renderMapDashboard();
+        root.SpraySummary?.refresh(state,{features,rows:overviewConfirmed(),loading:loading||!loadedKey,error,
+            pending:busy||!!grid.size||!!autoError});
         renderOverview();
         el('add').disabled = !canEdit() || loading || busy || !!error || !fields.length || !!grid.size;
         el('inputs').disabled = busy || !canEdit();
@@ -463,12 +467,16 @@
         if(state.currentTab!=='pulverizacao'||!el('table'))return;
         const context=JSON.stringify([state.currentAno,state.currentCultura,state.currentFazenda,state.currentGleba]);
         if(context!==scope){scope=context;quick=null;selectedField='';selectedRow='';filters.farm='';filters.field='';filters.application='all';mapApplication='all';editing=null;el('form').hidden=true;}
-        if(state.currentSubTab==='mapa-pulverizacao')quick=null;
+        if(['mapa-pulverizacao','resumo-aplicacao'].includes(state.currentSubTab))quick=null;
         if(!canEdit()){quick=null;el('form').hidden=true;editing=null;}
         initialize();render();load();
         if(state.currentSubTab!=='mapa-pulverizacao'&&selectedField)scrollSelection();
     }
     let day=S.today();root.setInterval?.(()=>{if(state?.currentTab==='pulverizacao'&&day!==S.today()){day=S.today();render();}},60000);
+    function overviewConfirmed(){
+        return grid.size?O.build(features,Object.values(state.cloudStore?.getRecords()||{}),schedules,saved,
+            {year:state.currentAno,culture:state.currentCultura}).applications:all;
+    }
     root.addEventListener?.('beforeunload',event=>{if(grid.size){event.preventDefault();event.returnValue='';}});
     function reportData({wholeFarm=false}={}) {
         if(!canEdit()||state?.currentTab!=='pulverizacao')throw Error('Abra a Pulverização no modo Editor para exportar.');

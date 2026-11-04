@@ -10,6 +10,8 @@
     body.spraying .spray-mobile-views { display:flex; flex:0 0 auto; gap:6px; padding:6px 10px; background:white; border-bottom:1px solid #d5e0eb; }
     body.spraying .spray-mobile-views button { display:flex; align-items:center; justify-content:center; gap:8px; flex:1; min-height:44px; border:1px solid #c9d8d1; border-radius:8px; background:#fff; color:#153c35; font:inherit; font-size:14px; font-weight:600; line-height:1.3; }
     body.spray-table-view .spray-mobile-views [data-spray-view="tabela-pulverizacao"],body.spray-map-view .spray-mobile-views [data-spray-view="mapa-pulverizacao"] { background:#176743; border-color:#176743; color:white; }
+    body.spraying .spray-mobile-views button[aria-pressed="false"] { background:white; border-color:#c9d8d1; color:#153c35; }
+    body.spraying .spray-mobile-views button[aria-pressed="true"] { background:#176743; border-color:#176743; color:white; }
     body.spraying.spray-table-view .spray-control-panel { flex:1; min-height:0; min-width:0; width:100%; padding:8px 10px max(8px,env(safe-area-inset-bottom)); gap:7px; overflow:auto; }
     body.spraying .spray-heading { flex-direction:column; align-items:stretch; gap:0; }
     body.spraying .spray-heading h2 { font-size:17px; }

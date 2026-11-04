@@ -740,14 +740,17 @@ function updateOperationUI() {
     const harvest = state.currentTab === 'colheita';
     const operational = isOperationalMapMode();
     const spraying = state.currentTab === 'pulverizacao';
-    const sprayMap = spraying && state.currentSubTab === 'mapa-pulverizacao';
+    const spraySummary = spraying && state.currentSubTab === 'resumo-aplicacao';
+    const sprayMap = spraying && ['mapa-pulverizacao','resumo-aplicacao'].includes(state.currentSubTab);
     document.body.classList.toggle('spraying', spraying);
     document.body.classList.toggle('spray-map-view', sprayMap);
     document.body.classList.toggle('spray-table-view', spraying && !sprayMap);
     document.getElementById('map-container')?.classList.toggle('hidden', spraying && !sprayMap);
-    document.getElementById('spray-map-filter-group')?.classList.toggle('hidden', !sprayMap);
-    document.getElementById('spray-map-dashboard')?.classList.toggle('hidden', !sprayMap);
-    document.querySelectorAll('[data-spray-view]').forEach(button=>button.classList.toggle('active',spraying&&button.dataset.sprayView===(sprayMap?'mapa-pulverizacao':'tabela-pulverizacao')));
+    document.getElementById('spray-map-filter-group')?.classList.toggle('hidden', !sprayMap || spraySummary);
+    document.getElementById('spray-map-dashboard')?.classList.toggle('hidden', !sprayMap || spraySummary);
+    document.getElementById('spray-summary-filter-group')?.classList.toggle('hidden', !spraySummary);
+    document.getElementById('spray-summary-dashboard')?.classList.toggle('hidden', !spraySummary);
+    document.querySelectorAll('[data-spray-view]').forEach(button=>button.classList.toggle('active',spraying&&button.dataset.sprayView===state.currentSubTab));
     const sprayPanel = document.getElementById('spray-panel');
     if (sprayPanel) sprayPanel.hidden = !spraying || sprayMap;
     const operation = OPERACOES_CONFIG[state.currentTab];
@@ -1135,7 +1138,7 @@ function renderMap(shouldFitBounds = true) {
         document.getElementById('planning-banner-bar')?.classList.add('hidden');
         const count = document.getElementById('stats-count');
         if (count) count.textContent = filteredFeatures.length;
-        if (state.currentSubTab !== 'mapa-pulverizacao') return;
+        if (!['mapa-pulverizacao','resumo-aplicacao'].includes(state.currentSubTab)) return;
     }
     
     const filteredData = {
@@ -2413,7 +2416,7 @@ function setupEventListeners() {
     });
     document.querySelectorAll('[data-spray-view]').forEach(button=>button.addEventListener('click',event=>{event.stopPropagation();switchMainTab('pulverizacao',button.dataset.sprayView);}));
     window.addEventListener('geoportal:spray-view',event=>{
-        if(['tabela-pulverizacao','mapa-pulverizacao'].includes(event.detail?.view))switchMainTab('pulverizacao',event.detail.view);
+        if(['tabela-pulverizacao','mapa-pulverizacao','resumo-aplicacao'].includes(event.detail?.view))switchMainTab('pulverizacao',event.detail.view);
     });
 
     // Alternância de Modos (Aplicação vs Planejamento)

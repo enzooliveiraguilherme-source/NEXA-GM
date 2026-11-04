@@ -6,7 +6,7 @@ const vm=require('node:vm');
 function harness({tileSize=256}={}){
     const elements=new Map(),geoJSONCalls=[],refreshCalls=[],addedLayers=[],removedLayers=[];
     function classList(){const names=new Set();return{add(name){names.add(name);},remove(name){names.delete(name);},contains(name){return names.has(name);},toggle(name,force){if(force??!names.has(name))names.add(name);else names.delete(name);return names.has(name);}};}
-    const sprayNavButtons=['tabela-pulverizacao','mapa-pulverizacao'].map(view=>({dataset:{sprayView:view},classList:classList()}));
+    const sprayNavButtons=['tabela-pulverizacao','mapa-pulverizacao','resumo-aplicacao'].map(view=>({dataset:{sprayView:view},classList:classList()}));
     const sprayHeaderButtons=[];
     const document={body:{classList:classList()},addEventListener(){},querySelector(){return null;},querySelectorAll(selector){return selector==='[data-spray-view]'?[...sprayNavButtons,...sprayHeaderButtons]:[];},getElementById(id){
         if(!elements.has(id)) elements.set(id,{id,hidden:false,textContent:'',innerHTML:'',disabled:false,style:{},closest(){return{classList:classList()};},classList:classList()});
@@ -132,7 +132,7 @@ test('subaba Tabela atualiza o controle sem criar camada GIS e a subaba Mapa cri
 
 test('updateOperationUI mostra exclusivamente tabela ou mapa e marca todos os botões da subaba ativa',()=>{
     const h=harness();h.state.currentSubTab='tabela-pulverizacao';h.updateOperationUI();
-    const map=h.elements.get('map-container'),panel=h.elements.get('spray-panel'),mapFilter=h.elements.get('spray-map-filter-group'),dashboard=h.elements.get('spray-map-dashboard');
+    const map=h.elements.get('map-container'),panel=h.elements.get('spray-panel'),mapFilter=h.elements.get('spray-map-filter-group'),dashboard=h.elements.get('spray-map-dashboard'),summaryFilter=h.elements.get('spray-summary-filter-group'),summary=h.elements.get('spray-summary-dashboard');
     assert.equal(panel.hidden,false);assert.equal(map.classList.contains('hidden'),true);
     assert.equal(h.document.body.classList.contains('spray-table-view'),true);
     assert.equal(h.document.body.classList.contains('spray-map-view'),false);
@@ -144,6 +144,15 @@ test('updateOperationUI mostra exclusivamente tabela ou mapa e marca todos os bo
     assert.equal(h.document.body.classList.contains('spray-map-view'),true);
     assert.equal(mapFilter.classList.contains('hidden'),false);assert.equal(dashboard.classList.contains('hidden'),false);
     for(const button of h.sprayNavButtons)assert.equal(button.classList.contains('active'),button.dataset.sprayView==='mapa-pulverizacao');
+    h.state.currentSubTab='resumo-aplicacao';h.updateOperationUI();
+    assert.equal(panel.hidden,true);assert.equal(map.classList.contains('hidden'),false);
+    assert.equal(mapFilter.classList.contains('hidden'),true);assert.equal(dashboard.classList.contains('hidden'),true);
+    assert.equal(summaryFilter.classList.contains('hidden'),false);assert.equal(summary.classList.contains('hidden'),false);
+    for(const button of h.sprayNavButtons)assert.equal(button.classList.contains('active'),button.dataset.sprayView==='resumo-aplicacao');
+    h.state.currentSubTab='tabela-pulverizacao';h.updateOperationUI();
+    assert.equal(panel.hidden,false);assert.equal(map.classList.contains('hidden'),true);
+    assert.equal(summaryFilter.classList.contains('hidden'),true);assert.equal(summary.classList.contains('hidden'),true);
+    for(const button of h.sprayNavButtons)assert.equal(button.classList.contains('active'),button.dataset.sprayView==='tabela-pulverizacao');
     h.state.currentTab='adubacao';h.state.currentSubTab='calcario';h.updateOperationUI();
     assert.equal(panel.hidden,true);assert.equal(map.classList.contains('hidden'),false);
     assert.equal(mapFilter.classList.contains('hidden'),true);assert.equal(dashboard.classList.contains('hidden'),true);
