@@ -928,7 +928,11 @@ function getTalhaoTooltipHtml(feature) {
 }
 
 function bindTalhaoTooltip(layer, feature) {
-    if (isCalcarioMode() || isPlantingAnalysisMode()) {
+    if (isPlantingAnalysisMode()) {
+        layer.unbindTooltip();
+        return;
+    }
+    if (isCalcarioMode()) {
         const content = getTalhaoTooltipHtml(feature);
         const existingTooltip = layer.getTooltip();
         if (existingTooltip) {
