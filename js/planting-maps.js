@@ -2,7 +2,12 @@
     'use strict';
     const F = root.PlantingForecast;
     const palette = Object.freeze(['#009640', '#005eea', '#f07800', '#8b26d9', '#00a4c4', '#e32a3a', '#d61698', '#007f76', '#b88000', '#4938c7', '#68a500', '#a44918']);
-    const varietyPalette = Object.freeze(['#FFD000', '#003B8E', '#A31515', '#D49F00', '#2474E5', '#F04A3A', '#FFE033', '#123A70', '#C92A2A']);
+    const varietyPalette = Object.freeze(['#9435E8', '#FF7900', '#00C9D9', '#38C447', '#F000B8', '#9AD900']);
+    const varietyColors = Object.freeze({
+        OLIMPO: '#0057D9', NEO790: '#E52222', M7601: '#FFD000',
+        DAGMA7921: '#9435E8', NEO780: '#FF7900', NEO802: '#00C9D9',
+        ITAUBA: '#38C447', TESTES: '#F000B8', NEO700: '#9AD900'
+    });
     let groups = [], indexed = new Map(), highlightContext = '', ungroupedArea = 0;
     const selectedGroups = new Set();
     const labelOptions = { dap: false, planting: false, harvest: false };
@@ -16,8 +21,7 @@
     function varietyColor(variety) {
         const key = F.normalize(variety).replace(/\s/g, '');
         if (!key || key === 'NAOINFORMADA') return '#94a3b8';
-        if (key === 'OLIMPO') return '#0057D9';
-        if (key === 'NEO790') return '#E52222';
+        if (Object.hasOwn(varietyColors, key)) return varietyColors[key];
         // Derive the color from the variety itself, independent of farms and filters.
         let hash = 2166136261;
         for (const char of key) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619) >>> 0;

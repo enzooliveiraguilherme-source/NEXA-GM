@@ -181,6 +181,19 @@ test('cores de variedade são estáveis por nome, independente de fazenda, filtr
     assert.equal(h.maps.style(h.state,feature).fillColor,h.maps.palette[0]);
 });
 
+test('nove variedades principais têm cores únicas, pins e normalização estáveis', () => {
+    const maps=harness().maps;
+    const varieties=['Olimpo','NEO790','M7601','DAGMA7921','NEO780','NEO802','ITAUBA','TESTES','NEO700'];
+    const colors=varieties.map(name=>maps.varietyColor(name));
+    assert.deepEqual(colors,['#0057D9','#E52222','#FFD000','#9435E8','#FF7900','#00C9D9','#38C447','#F000B8','#9AD900']);
+    assert.equal(new Set(colors).size,9);
+    assert.equal(maps.varietyColor(' Ólimpo '),'#0057D9');
+    assert.equal(maps.varietyColor(' neo 790 '),'#E52222');
+    assert.equal(maps.varietyColor(' m 7601 '),'#FFD000');
+    assert.equal(maps.varietyColor('Dágma 7921'),maps.varietyColor('DAGMA7921'));
+    assert.deepEqual(varieties.map(name=>maps.varietyColor(name)),colors);
+});
+
 test('legenda de variedades ordena por hectares agregados, inclui parciais e mantém cores ao filtrar', () => {
     const h=harness(); h.state.currentSubTab='variedades-plantadas';
     const second={properties:{Fazenda:'FE',Campo:'FE 02',Area:100}},neo={properties:{Fazenda:'FE',Campo:'FE 03',Area:100}},other={properties:{Fazenda:'FE',Campo:'FE 04',Area:100}};
