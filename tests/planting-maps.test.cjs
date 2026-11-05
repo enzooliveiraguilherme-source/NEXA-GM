@@ -162,7 +162,9 @@ test('cores de variedade são estáveis por nome, independente de fazenda, filtr
     const records = { a:record('FE','FE 01'), b:record('PA','PA 01'), c:record('FE','FE 02','NEO 790') };
     h.state.currentSubTab='variedades-plantadas'; h.setRecords(records); h.maps.refresh(h.state,[feature,other]);
     const color = h.maps.style(h.state,feature).fillColor;
-    assert.match(color,/^hsl\(\d+, \d+%, \d+%\)$/);
+    assert.equal(h.maps.varietyColor('Olimpo'),'#0057D9');
+    assert.equal(h.maps.varietyColor('NEO 790'),'#E52222');
+    assert.equal(color,'#0057D9');
     assert.equal(h.maps.style(h.state,other).fillColor,color);
     h.state.currentFazenda='PA'; h.maps.refresh(h.state,[other]); assert.equal(h.maps.style(h.state,other).fillColor,color);
     h.state.currentFazenda='ALL'; h.maps.refresh(h.state,[other,feature]); assert.equal(h.maps.style(h.state,feature).fillColor,color);
@@ -170,16 +172,29 @@ test('cores de variedade são estáveis por nome, independente de fazenda, filtr
     assert.equal(reloaded.maps.style(reloaded.state,feature).fillColor,color);
     assert.equal(h.maps.varietyColor(' ÓLIMPO '),h.maps.varietyColor('olimpo'));
     assert.equal(h.maps.varietyColor('Neo 790'),h.maps.varietyColor('NEO790'));
-    for (const variety of ['Olimpo','NEO 790','Safira']) {
-        const vivid=h.maps.varietyColor(variety);
-        assert.match(vivid,/^hsl\(\d+, 100%, 40%\)$/);
-    }
+    assert.equal(h.maps.varietyColor('Safira'),h.maps.varietyColor('SAFIRA'));
     const legend=h.elements.get('planting-map-legend').innerHTML;
-    assert.match(legend,new RegExp(`background:${color.replace(/[()%,]/g,'\\$&')}`));
+    assert.match(legend,/background:#0057D9/);
     assert.equal(h.maps.varietyColor(''), '#94a3b8');
     assert.equal(h.maps.varietyColor('Não informada'), '#94a3b8');
     h.state.currentSubTab='data-estimada-colheita'; h.maps.refresh(h.state,[feature,other]);
     assert.equal(h.maps.style(h.state,feature).fillColor,h.maps.palette[0]);
+});
+
+test('legenda de variedades ordena por hectares agregados, inclui parciais e mantém cores ao filtrar', () => {
+    const h=harness(); h.state.currentSubTab='variedades-plantadas';
+    const second={properties:{Fazenda:'FE',Campo:'FE 02',Area:100}},neo={properties:{Fazenda:'FE',Campo:'FE 03',Area:100}},other={properties:{Fazenda:'FE',Campo:'FE 04',Area:100}};
+    const make=(field,area,variety,status='concluido')=>({produto:'Plantio',fazenda:'FE',campo:field,ano:'2026',cultura:'Soja',status,areaRealizada:area,variedadeSemente:variety,dataPlantio:'2026-10-15'});
+    h.setRecords({a:make('FE 01',20,'Olimpo','em_andamento'),b:make('FE 02',30,'OLIMPO'),c:make('FE 03',50,'NEO790'),d:make('FE 04',10,'Safira')});
+    h.maps.refresh(h.state,[feature,second,neo,other]);
+    const keys=()=>[...h.elements.get('planting-map-legend').innerHTML.matchAll(/data-planting-group="([^"]*)"/g)].map(m=>m[1]);
+    assert.deepEqual(keys(),['NEO790','OLIMPO','SAFIRA','']);
+    assert.match(h.elements.get('planting-map-legend').innerHTML,/data-planting-group="OLIMPO"[^>]*><i style="background:#0057D9"/);
+    assert.match(h.elements.get('planting-map-legend').innerHTML,/data-planting-group="NEO790"[^>]*><i style="background:#E52222"/);
+    assert.equal(h.maps.style(h.state,feature).fillColor,'#0057D9');
+    h.maps.refresh(h.state,[feature,neo,other]);
+    assert.deepEqual(keys(),['NEO790','OLIMPO','SAFIRA','']);
+    assert.equal(h.maps.style(h.state,feature).fillColor,'#0057D9');
 });
 
 test('clique na legenda destaca a data, suaviza os outros talhões e pode ser desfeito', () => {

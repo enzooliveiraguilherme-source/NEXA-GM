@@ -30,7 +30,7 @@
         for(const day of sortedDays){accumulated+=day.area;day.accumulated=accumulated;}
         return {plantedArea,estimatedArea,withoutForecast:Math.max(0,plantedArea-estimatedArea),
             plantedFields:rows.filter(r=>r.planted).length,unplantedFields:rows.filter(r=>!r.planted).length,
-            varieties:[...varieties.values()].sort((a,b)=>a.key.localeCompare(b.key)),days:sortedDays,
+            varieties:[...varieties.values()].sort((a,b)=>b.area-a.area||a.key.localeCompare(b.key)),days:sortedDays,
             first:sortedDays[0]?.key,last:sortedDays.at(-1)?.key};
     }
 

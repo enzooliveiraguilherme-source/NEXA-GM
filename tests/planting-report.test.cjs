@@ -31,6 +31,22 @@ test('previsões ordenadas têm área acumulada e mantêm pendências sem data/c
     assert.equal(data.rows.find(r=>r.farm==='PA').reason,'Data de plantio não informada');
     records.a.status='nao_iniciado';assert.equal(api.snapshot(state).totals.plantedArea,70);
 });
+test('PDF ordena variedades por área global e por fazenda, mas preserva dias cronológicos',()=>{
+    const {api,state,records}=setup();
+    records.b.variedadeSemente='NEO790';records.b.dataPlantio='2026-10-10';
+    records.c.variedadeSemente='NEO790';records.c.dataPlantio='2026-10-11';
+    const data=api.snapshot(state);
+    assert.deepEqual(Array.from(data.totals.varieties,v=>[v.key,v.area]),[['OLIMPO',100],['NEO790',70]]);
+    assert.deepEqual(Array.from(data.farms.find(f=>f.code==='RM').totals.varieties,v=>[v.key,v.area]),[['OLIMPO',100],['NEO790',30]]);
+    assert.deepEqual(Array.from(data.farms.find(f=>f.code==='PA').totals.varieties,v=>[v.key,v.area]),[['NEO790',40]]);
+    assert.deepEqual(Array.from(data.totals.days,d=>d.key),['2027-01-31','2027-02-01','2027-02-02']);
+    const tied=api.aggregate([
+        {planted:true,plantedArea:50,variety:'Olimpo',estimatedDate:'2027-02-03'},
+        {planted:true,plantedArea:50,variety:'NEO790',estimatedDate:'2027-02-01'}
+    ]);
+    assert.deepEqual(Array.from(tied.varieties,v=>v.key),['NEO790','OLIMPO']);
+    assert.deepEqual(Array.from(tied.days,d=>d.key),['2027-02-01','2027-02-03']);
+});
 test('as duas abas geram os mesmos dados e visualizadores não exportam',()=>{
     const {api,state}=setup();const a=api.snapshot(state);state.currentSubTab='variedades-plantadas';
     assert.equal(api.snapshot(state).totals.plantedArea,a.totals.plantedArea);
