@@ -18,7 +18,7 @@
         // Derive the color from the variety itself, independent of farms and filters.
         let hash = 2166136261;
         for (const char of key) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619) >>> 0;
-        return `hsl(${hash % 360}, ${70 + (hash >>> 9) % 16}%, ${38 + (hash >>> 17) % 9}%)`;
+        return `hsl(${hash % 360}, 100%, 40%)`;
     }
     function row(state, feature) { return F.project(feature, indexed.get(fieldKey(state, feature)), state.currentCultura); }
     function daysAfterPlanting(value, today = new Date()) {
@@ -167,7 +167,7 @@
             color: '#0f172a', weight: 3, opacity: 1, fillColor: group?.color || '#94a3b8', fillOpacity: 1, dashArray: value.partial ? '5 4' : null
         };
         return { color: '#1e293b', weight: value.partial ? 1.5 : .8, opacity: 1, fillColor: group?.color || '#94a3b8',
-            fillOpacity: group ? .88 : .16, dashArray: value.partial ? '5 4' : null };
+            fillOpacity: group ? harvesting(state) ? .88 : 1 : .16, dashArray: value.partial ? '5 4' : null };
     }
     function tooltip(state, feature) {
         const value = row(state, feature);

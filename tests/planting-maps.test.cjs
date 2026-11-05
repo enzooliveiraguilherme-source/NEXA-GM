@@ -151,7 +151,7 @@ test('cores fortes são compartilhadas e exportação aparece uma vez na legenda
             assert.equal((html.match(/Exportar relatório PDF/g)||[]).length,role==='visualizador'?0:1);
             if(role!=='visualizador') {h.elements.get('planting-report-button').onclick();assert.ok(exported);}
             assert.equal(h.maps.style(h.state,feature).fillColor,tab==='variedades-plantadas'?h.maps.varietyColor('Olimpo'):h.maps.palette[0]);
-            assert.equal(h.maps.style(h.state,feature).fillOpacity,.88);
+            assert.equal(h.maps.style(h.state,feature).fillOpacity,tab==='variedades-plantadas'?1:.88);
         }
     }
 });
@@ -170,6 +170,12 @@ test('cores de variedade são estáveis por nome, independente de fazenda, filtr
     assert.equal(reloaded.maps.style(reloaded.state,feature).fillColor,color);
     assert.equal(h.maps.varietyColor(' ÓLIMPO '),h.maps.varietyColor('olimpo'));
     assert.equal(h.maps.varietyColor('Neo 790'),h.maps.varietyColor('NEO790'));
+    for (const variety of ['Olimpo','NEO 790','Safira']) {
+        const vivid=h.maps.varietyColor(variety);
+        assert.match(vivid,/^hsl\(\d+, 100%, 40%\)$/);
+    }
+    const legend=h.elements.get('planting-map-legend').innerHTML;
+    assert.match(legend,new RegExp(`background:${color.replace(/[()%,]/g,'\\$&')}`));
     assert.equal(h.maps.varietyColor(''), '#94a3b8');
     assert.equal(h.maps.varietyColor('Não informada'), '#94a3b8');
     h.state.currentSubTab='data-estimada-colheita'; h.maps.refresh(h.state,[feature,other]);
