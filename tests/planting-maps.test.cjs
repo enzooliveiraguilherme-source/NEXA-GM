@@ -150,10 +150,30 @@ test('cores fortes são compartilhadas e exportação aparece uma vez na legenda
             assert.equal(html.includes('Exportar relatório PDF'),role!=='visualizador');
             assert.equal((html.match(/Exportar relatório PDF/g)||[]).length,role==='visualizador'?0:1);
             if(role!=='visualizador') {h.elements.get('planting-report-button').onclick();assert.ok(exported);}
-            assert.equal(h.maps.style(h.state,feature).fillColor,h.maps.palette[0]);
+            assert.equal(h.maps.style(h.state,feature).fillColor,tab==='variedades-plantadas'?h.maps.varietyColor('Olimpo'):h.maps.palette[0]);
             assert.equal(h.maps.style(h.state,feature).fillOpacity,.88);
         }
     }
+});
+
+test('cores de variedade são estáveis por nome, independente de fazenda, filtros, ordem e sessão', () => {
+    const h = harness(), other = { properties: { Fazenda: 'PA', Campo: 'PA 01', Area: 100 } };
+    const record = (farm, field, variety='Olimpo') => ({ produto:'Plantio', fazenda:farm, campo:field, ano:'2026', cultura:'Soja', status:'concluido', areaRealizada:100, variedadeSemente:variety, dataPlantio:'2026-10-15' });
+    const records = { a:record('FE','FE 01'), b:record('PA','PA 01'), c:record('FE','FE 02','NEO 790') };
+    h.state.currentSubTab='variedades-plantadas'; h.setRecords(records); h.maps.refresh(h.state,[feature,other]);
+    const color = h.maps.style(h.state,feature).fillColor;
+    assert.match(color,/^hsl\(\d+, \d+%, \d+%\)$/);
+    assert.equal(h.maps.style(h.state,other).fillColor,color);
+    h.state.currentFazenda='PA'; h.maps.refresh(h.state,[other]); assert.equal(h.maps.style(h.state,other).fillColor,color);
+    h.state.currentFazenda='ALL'; h.maps.refresh(h.state,[other,feature]); assert.equal(h.maps.style(h.state,feature).fillColor,color);
+    const reloaded=harness(); reloaded.state.currentSubTab='variedades-plantadas'; reloaded.setRecords(records); reloaded.maps.refresh(reloaded.state,[feature,other]);
+    assert.equal(reloaded.maps.style(reloaded.state,feature).fillColor,color);
+    assert.equal(h.maps.varietyColor(' ÓLIMPO '),h.maps.varietyColor('olimpo'));
+    assert.equal(h.maps.varietyColor('Neo 790'),h.maps.varietyColor('NEO790'));
+    assert.equal(h.maps.varietyColor(''), '#94a3b8');
+    assert.equal(h.maps.varietyColor('Não informada'), '#94a3b8');
+    h.state.currentSubTab='data-estimada-colheita'; h.maps.refresh(h.state,[feature,other]);
+    assert.equal(h.maps.style(h.state,feature).fillColor,h.maps.palette[0]);
 });
 
 test('clique na legenda destaca a data, suaviza os outros talhões e pode ser desfeito', () => {

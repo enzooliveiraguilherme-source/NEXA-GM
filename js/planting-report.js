@@ -122,7 +122,7 @@
 
     async function render(data,onProgress=()=>{}) {
         if(document.fonts)await document.fonts.ready;
-        const pages=[],images=[],varietyColors=colors(data.totals.varieties),dayColors=colors(data.totals.days);
+        const pages=[],images=[],varietyColors=new Map(data.totals.varieties.map(value=>[value.key,root.PlantingMaps.varietyColor(value.key)])),dayColors=colors(data.totals.days);
         varietyColors.set('NAOINFORMADA','#94a3b8');
         const tablePages=(count,start)=>1+Math.ceil(Math.max(0,count-Math.floor((bottom-start-45)/43))/Math.floor((bottom-350-45)/43));
         const pageCount=tablePages(data.totals.varieties.length,540)+tablePages(data.totals.days.length,540)+data.farms.reduce((total,farm)=>{

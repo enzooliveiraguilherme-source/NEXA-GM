@@ -1,18 +1,21 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const F=require('../js/planting-forecast.js');
-const feature=(farm,field,area)=>({properties:{Fazenda:farm,Campo:field,Area:area,Gleba:'FE'}});
+const feature=(farm,field,area)=>({properties:{Fazenda:farm,Campo:field,Area:area,Gleba:'FE'},geometry:{type:'Polygon',coordinates:[[[-50,-20],[-49.9,-20],[-49.9,-19.9],[-50,-19.9],[-50,-20]]]}});
 function setup(role='admin'){
+    const document={};
     const root={PlantingForecast:F,portalAccessRole:role,portalFarms:[{code:'RM',name:'Fazenda RM'},{code:'PA',name:'Fazenda PA'}],
-        PlantingMaps:{active:s=>s.currentTab==='plantio'&&['data-estimada-colheita','variedades-plantadas'].includes(s.currentSubTab),palette:['#009640','#005eea']},
+        palette:['#009640','#005eea'],
         featureMatchesFilters:f=>f.properties.Fazenda!=='OUT',SeedCycleCatalog:{available:true}};
-    vm.runInNewContext(fs.readFileSync(require.resolve('../js/planting-report.js'),'utf8'),{window:root,Intl,Date,Map,Set,Blob,TextEncoder,Uint8Array,setTimeout,document:{}});
+    const context=vm.createContext({window:root,Intl,Date,Map,Set,Blob,TextEncoder,Uint8Array,setTimeout,document});
+    vm.runInContext(fs.readFileSync(require.resolve('../js/planting-maps.js'),'utf8'),context);
+    vm.runInContext(fs.readFileSync(require.resolve('../js/planting-report.js'),'utf8'),context);
     const base={operationType:'plantio',produto:'Plantio',ano:'2026',cultura:'Soja',status:'concluido',variedadeSemente:'Olimpo',dataPlantio:'2026-10-09'};
     const features=[feature('RM','RM 01',100),feature('RM','RM 02',80),feature('PA','PA 01',40),feature('OUT','O1',900)];
     const records={a:{...base,fazenda:'RM',campo:'RM 01',areaRealizada:100},b:{...base,fazenda:'RM',campo:'RM 02',status:'em_andamento',areaRealizada:30},
         c:{...base,fazenda:'PA',campo:'PA 01',areaRealizada:40,variedadeSemente:'Sem ciclo'},
         wrongYear:{...base,ano:'2027',fazenda:'RM',campo:'RM 01',areaRealizada:1},wrongCulture:{...base,cultura:'Milho',fazenda:'RM',campo:'RM 02',areaRealizada:1}};
     const state={userRole:'editor',currentTab:'plantio',currentSubTab:'data-estimada-colheita',currentAno:'2026',currentCultura:'Soja',currentFazenda:'ALL',currentGleba:'FE',geojsonData:{features:[...features,features[0]]},cloudStore:{getRecords:()=>records}};
-    return {api:root.PlantingReport,state,records,root};
+    return {api:root.PlantingReport,state,records,root,features,document};
 }
 test('relatório soma talhões por dia, variedade e fazenda usando somente execução filtrada',()=>{
     const {api,state,records}=setup(),before=JSON.stringify(records),data=api.snapshot(state);
@@ -54,4 +57,16 @@ test('PDF multipágina contém catálogo, páginas e offsets válidos para cada 
     assert.match(source,/\/Count 2/);assert.equal((source.match(/\/Type \/Page\b/g)||[]).length,2);
     const offset=Number(source.match(/startxref\n(\d+)/)[1]);assert.equal(source.slice(offset,offset+4),'xref');
     const entries=source.slice(offset).split('\n').slice(3,11);entries.forEach((line,i)=>assert.equal(source.slice(Number(line.slice(0,10)),Number(line.slice(0,10))+String(i+1).length+6),`${i+1} 0 obj`));
+});
+
+test('render do relatório usa as cores compartilhadas para variedades no mapa e na legenda',async()=>{
+    const {api,state,root,document}=setup(),data=api.snapshot(state),painted=[];
+    const ctx=new Proxy({measureText:value=>({width:String(value).length*10}),fill(){painted.push(this.fillStyle);},toString(){}},{get(target,key){if(key in target)return target[key];return (...args)=>{};},set(target,key,value){target[key]=value;return true;}});
+    document.createElement=()=>({width:0,height:0,getContext(){return ctx;},toBlob(callback){callback(new Blob([new Uint8Array([255,216,255,217])],{type:'image/jpeg'}));}});
+    const rendered=await api.render(data);
+    assert.ok(rendered.pageCount>0);
+    for(const variety of data.totals.varieties){
+        const expected=root.PlantingMaps.varietyColor(variety.key);
+        assert.ok(painted.includes(expected),`cor ${expected} de ${variety.key} não apareceu no render`);
+    }
 });

@@ -12,6 +12,14 @@
     const active = state => state.currentTab === 'plantio' && ['data-estimada-colheita', 'variedades-plantadas'].includes(state.currentSubTab);
     const harvesting = state => state.currentSubTab === 'data-estimada-colheita';
     const fieldKey = (state, feature) => F.key(feature.properties.Fazenda, feature.properties.Campo, state.currentAno, state.currentCultura);
+    function varietyColor(variety) {
+        const key = F.normalize(variety).replace(/\s/g, '');
+        if (!key || key === 'NAOINFORMADA') return '#94a3b8';
+        // Derive the color from the variety itself, independent of farms and filters.
+        let hash = 2166136261;
+        for (const char of key) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619) >>> 0;
+        return `hsl(${hash % 360}, ${70 + (hash >>> 9) % 16}%, ${38 + (hash >>> 17) % 9}%)`;
+    }
     function row(state, feature) { return F.project(feature, indexed.get(fieldKey(state, feature)), state.currentCultura); }
     function daysAfterPlanting(value, today = new Date()) {
         const planted = F.dateValue(value);
@@ -92,8 +100,8 @@
             const current = collected.get(key) || { key, label, area: 0 };
             current.area += value.plantedArea; collected.set(key, current);
         }
-        groups = [...collected.values()].sort((a, b) => a.key.localeCompare(b.key)).map((value, index, all) => ({ ...value,
-            color: palette[index % palette.length] }));
+        groups = [...collected.values()].sort((a, b) => a.key.localeCompare(b.key)).map((value, index) => ({ ...value,
+            color: harvesting(state) ? palette[index % palette.length] : varietyColor(value.key) }));
         for (const key of selectedGroups) {
             if (key !== '' && !groups.some(group => group.key === key)) selectedGroups.delete(key);
         }
@@ -175,5 +183,5 @@
             (value.reason ? `<div>${escape(value.reason)}</div>` : `<div>Ciclo: ${value.days} dias</div>`) +
             (value.partial ? '<div>Plantio parcial: previsão somente da área realizada.</div>' : '') + '</div>';
     }
-    root.PlantingMaps = Object.freeze({ active, refresh, style, tooltip, palette, selectGroup, daysAfterPlanting, label, setLabelOption, refreshLabels, clearLabels });
+    root.PlantingMaps = Object.freeze({ active, refresh, style, tooltip, palette, varietyColor, selectGroup, daysAfterPlanting, label, setLabelOption, refreshLabels, clearLabels });
 })(typeof window !== 'undefined' ? window : globalThis);
