@@ -8,7 +8,9 @@
 // ==========================================================================
 const state = {
     map: null,
-    geojsonData: null,
+    fieldData: null,
+    get geojsonData() { return contextualFieldData(this.fieldData, this); },
+    set geojsonData(data) { this.fieldData = data; },
     harvestData: null,
     harvestSummary: null,
     harvestRenderer: null,
@@ -54,6 +56,20 @@ const state = {
     // Modo Operacional ('aplicacao' | 'planejamento')
     operationalMode: 'aplicacao'
 };
+
+// Os limites de uma safra/operação não substituem o cadastro das demais.
+function contextualFieldData(data, context) {
+    if (!data) return data;
+    const matches = scope => scope.operationType === context.currentTab && String(scope.ano) === String(context.currentAno);
+    return { ...data, features: data.features.flatMap(feature => {
+        const properties = feature.properties || {};
+        if (properties.MapOnlyContexts && !properties.MapOnlyContexts.some(matches)) return [];
+        const override = properties.MapContexts?.find(matches);
+        if (override?.hidden) return [];
+        if (!override?.geometry) return [feature];
+        return [{ ...feature, geometry: override.geometry, properties: { ...properties, Area: override.area } }];
+    }) };
+}
 
 // Cores Oficiais de Status (RGB Especificado)
 const STATUS_COLORS = {
@@ -2548,3 +2564,4 @@ function setupEventListeners() {
         });
     });
 }
+
