@@ -1,0 +1,19 @@
+#fertilizer-logistics-panel { position:absolute; z-index:800; left:16px; top:16px; width:min(340px, calc(100% - 80px)); max-height:calc(100% - 32px); overflow:auto; padding:16px; background:rgba(255,255,255,.97); border:1px solid #dbe4dc; border-radius:14px; box-shadow:0 6px 24px #0002; color:#1e293b; font-size:13px; }
+#fertilizer-logistics-panel[hidden] { display:none; }
+#fertilizer-logistics-panel h2, #fertilizer-logistics-panel summary { font-size:16px; font-weight:700; margin:0; cursor:pointer; }
+.logistics-content p { margin:12px 0; line-height:1.5; }
+.logistics-total { display:flex; gap:12px; justify-content:space-between; align-items:center; }
+.logistics-total strong { color:#166534; font-size:18px; }
+.logistics-note { background:#f1f5f9; border-radius:8px; padding:10px; color:#475569; }
+.logistics-toggles { display:grid; gap:8px; margin:14px 0; }
+.logistics-toggles label { display:flex; align-items:center; gap:8px; }
+.logistics-select { display:grid; gap:6px; }
+.logistics-select select, #fertilizer-logistics-panel button { width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; background:#fff; color:#1e293b; font:inherit; }
+#fertilizer-logistics-panel button { margin-top:12px; cursor:pointer; }
+.logistics-marker span { display:grid; place-items:center; width:26px; height:26px; border:2px solid white; border-radius:50%; color:white; box-shadow:0 2px 5px #0008; }
+.logistics-label { font-weight:700; font-size:11px; }
+.logistics-popup h3 { margin:8px 0; }
+.logistics-popup p { margin:8px 0; }
+.logistics-stock { background:#f1f5f9; padding:10px; border-radius:8px; }
+body.fertilizer-logistics .planning-banner-bar { display:none; }
+@media(max-width:640px) { #fertilizer-logistics-panel { left:8px; top:8px; padding:12px; max-height:42%; width:calc(100% - 64px); } }

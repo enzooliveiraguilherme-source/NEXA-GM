@@ -20,6 +20,7 @@
     <link rel="stylesheet" href="js/spray-mobile.css?v=spray-summary-20261104">
     <link rel="stylesheet" href="js/spray-dashboard.css?v=spray-overview-20261103">
     <link rel="stylesheet" href="js/savefarm-connection.css?v=20261102">
+    <link rel="stylesheet" href="js/fertilizer-logistics.css?v=20261110">
 </head>
 <body data-page="portal">
     <div id="auth-loading-overlay" class="loading-overlay"><div class="spinner"></div><p>Validando seu acesso…</p></div>
@@ -60,6 +61,9 @@
                                 <i class="fa-solid fa-chevron-down nav-chevron"></i>
                             </button>
                             <div class="sub-nav-menu" id="sub-nav-adubacao">
+                                <button type="button" class="sub-nav-item" data-subtab="logistica" id="subtab-logistica-btn">
+                                    <i class="fa-solid fa-route"></i><span>Logística</span>
+                                </button>
                                 <button type="button" class="sub-nav-item active" data-subtab="calcario" id="subtab-calcario-btn">
                                     <i class="fa-solid fa-map-location-dot"></i>
                                     <span>Atualizar Mapa de Calcário</span>
@@ -388,6 +392,7 @@
 
             <!-- Container do Mapa -->
             <div id="map-container" class="map-container">
+                <aside id="fertilizer-logistics-panel" aria-label="Logística dos montes de adubo" aria-live="polite" hidden></aside>
                 <div id="savefarm-legend" class="savefarm-rate-legend" aria-label="Legenda da taxa de aplicação" hidden></div>
                 <div id="map"></div>
                 <section id="spray-map-dashboard" class="calcario-dashboard-panel spray-map-dashboard hidden" aria-label="Acompanhamento da pulverização">
@@ -1149,8 +1154,8 @@
     <script src="js/spray-report.js?v=spray-area-pdf-20261102"></script>
     <script src="js/savefarm-rate.js?v=1"></script>
     <script src="js/savefarm-view.js?v=connection-20261102"></script>
-    <script src="app.js?v=fbag-plantio-20261106"></script>
+    <script src="js/fertilizer-logistics.js?v=gleba-20261110"></script>
+    <script src="app.js?v=logistics-gleba-20261110"></script>
     <script src="js/mobile-layout.js?v=3"></script>
 </body>
 </html>
-

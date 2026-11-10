@@ -262,7 +262,7 @@ window.addEventListener?.('geoportal:seed-cycles-changed', () => {
 });
 
 function isOperationalMapMode() {
-    return state.currentTab === 'adubacao' || (state.currentTab === 'plantio' && !isPlantingAnalysisMode());
+    return (state.currentTab === 'adubacao' && state.currentSubTab !== 'logistica') || (state.currentTab === 'plantio' && !isPlantingAnalysisMode());
 }
 
 function isPlantingAnalysisMode() {
@@ -751,6 +751,8 @@ function isCalcarioMode() {
 }
 
 function updateOperationUI() {
+    const logistics = !!window.FertilizerLogistics?.active(state);
+    document.body.classList.toggle('fertilizer-logistics', logistics);
     const plantio = isPlantioMode();
     const analysis = isPlantingAnalysisMode();
     const harvest = state.currentTab === 'colheita';
@@ -771,10 +773,10 @@ function updateOperationUI() {
     if (sprayPanel) sprayPanel.hidden = !spraying || sprayMap;
     const operation = OPERACOES_CONFIG[state.currentTab];
     const heading = document.querySelector('.portal-heading h1');
-    if (heading && operation) heading.textContent = operation.name;
+    if (heading && operation) heading.textContent = logistics ? 'Adubação · Logística' : operation.name;
     document.getElementById('calcario-dashboard')?.classList.toggle('hidden', !operational);
     document.getElementById('calcario-filter-bar')?.classList.toggle('hidden', !operational && !analysis && !spraying);
-    document.getElementById('generic-op-bar')?.classList.toggle('hidden', operational || analysis || spraying || state.currentTab === 'savefarm');
+    document.getElementById('generic-op-bar')?.classList.toggle('hidden', logistics || operational || analysis || spraying || state.currentTab === 'savefarm');
     document.body.classList.toggle('planting-analysis', analysis);
     if (operation) {
         const name = document.getElementById('generic-op-name');
@@ -1104,6 +1106,7 @@ function onEachFeature(feature, layer) {
 
 // Atualização de estilos e KPIs sem destruir o GeoJSON Layer
 function updateMapStylesAndKPIs() {
+    if (window.FertilizerLogistics?.active(state)) { renderMap(false); return; }
     if (state.currentTab === 'pulverizacao') { renderMap(false); return; }
     if (isPlantingAnalysisMode()) { renderMap(false); return; }
     TalhaoSelection.updateUI();
@@ -1131,6 +1134,7 @@ function updateMapStylesAndKPIs() {
 }
 
 function renderMap(shouldFitBounds = true) {
+    window.FertilizerLogistics?.clear();
     window.PlantingMaps?.clearLabels();
     window.SaveFarmView?.refresh(state);
     state.selectedFeatures.clear();
@@ -1151,6 +1155,13 @@ function renderMap(shouldFitBounds = true) {
     const filteredFeatures = activeData.features.filter(featureMatchesFilters);
     window.PlantingMaps?.refresh(state, filteredFeatures);
     window.SprayControl?.refresh(state, filteredFeatures);
+    if (window.FertilizerLogistics?.active(state)) {
+        ['calcario-filter-bar', 'calcario-dashboard', 'generic-op-bar', 'planning-banner-bar', 'info-panel'].forEach(id => document.getElementById(id)?.classList.add('hidden'));
+        const count = document.getElementById('stats-count');
+        if (count) count.textContent = filteredFeatures.length;
+        window.FertilizerLogistics.refresh(state, filteredFeatures, shouldFitBounds);
+        return;
+    }
     if (state.currentTab === 'pulverizacao') {
         document.getElementById('calcario-filter-bar')?.classList.remove('hidden');
         document.getElementById('calcario-dashboard')?.classList.add('hidden');
@@ -2341,7 +2352,7 @@ function setupEventListeners() {
 
         if (tabKey === 'adubacao') {
             state.currentSubTab = subtabKey || 'calcario';
-            if (subtabCalcario) subtabCalcario.classList.add('active');
+            if (subtabCalcario) subtabCalcario.classList.toggle('active', state.currentSubTab === 'calcario');
             if (subtabPlantio) subtabPlantio.classList.remove('active');
             if (adubacaoGroup) adubacaoGroup.classList.add('expanded');
             if (plantioGroup) plantioGroup.classList.remove('expanded');
@@ -2374,6 +2385,9 @@ function setupEventListeners() {
         }
 
         // Atualiza imediatamente o estado visual dos botões da sidebar
+        document.querySelectorAll('#sub-nav-adubacao [data-subtab]').forEach(button => {
+            button.classList.toggle('active', tabKey === 'adubacao' && button.dataset.subtab === state.currentSubTab);
+        });
         document.querySelectorAll('#sub-nav-plantio [data-subtab]').forEach(button => {
             button.classList.toggle('active', tabKey === 'plantio' && button.dataset.subtab === state.currentSubTab);
         });
@@ -2387,7 +2401,7 @@ function setupEventListeners() {
         window.dispatchEvent(new CustomEvent('geoportal:operation-change'));
 
         try {
-            renderMap(tabKey === 'colheita' && previousTab !== 'colheita');
+            renderMap((tabKey === 'colheita' && previousTab !== 'colheita') || state.currentSubTab === 'logistica');
         } catch (e) {
             console.error('Erro ao renderizar mapa ao trocar de aba:', e);
         }
@@ -2421,6 +2435,11 @@ function setupEventListeners() {
     });
 
     // Subitem Atualizar Mapa de Calcário
+    document.getElementById('subtab-logistica-btn')?.addEventListener('click', event => {
+        event.stopPropagation();
+        AdubacaoModal.close();
+        switchMainTab('adubacao', 'logistica');
+    });
     if (subtabCalcario) {
         subtabCalcario.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -2564,4 +2583,3 @@ function setupEventListeners() {
         });
     });
 }
-
