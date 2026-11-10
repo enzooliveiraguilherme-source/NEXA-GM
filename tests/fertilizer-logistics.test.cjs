@@ -18,7 +18,7 @@ function harness({ result, error, farms = [{ code: 'FE' }, { code: 'GM' }, { cod
         return elements.get(id);
     } };
     const groups = [], markers = [], popups = [];
-    const map = { fits: [], closed: 0, pans: [], closePopup() { this.closed++; }, fitBounds(bounds, opts) { this.fits.push([bounds, opts]); }, panTo(point) { this.pans.push(point); } };
+    const map = { fits: [], closed: 0, pans: [], invalidations: [], container: { clientWidth: 800, clientHeight: 600 }, getContainer() { return this.container; }, invalidateSize(opts) { this.invalidations.push(opts); }, closePopup() { this.closed++; }, fitBounds(bounds, opts) { this.fits.push([bounds, opts]); }, panTo(point) { this.pans.push(point); } };
     const layer = (feature) => ({ feature, styles: [], events: {}, addTo(group) { group.items.push(this); return this; }, bindTooltip(content, opts) { this.tooltip = content; this.tooltipOptions = opts; return this; }, getTooltip() { return { getContent: () => this.tooltip }; }, unbindTooltip() { this.tooltip = null; return this; }, on(name, fn) { this.events[name] = fn; return this; }, bindPopup(content) { this.popup = content; return this; }, openPopup() { return this; }, setStyle(style) { this.styles.push(style); return this; } });
     const L = {
         DomEvent: { disableClickPropagation() {}, disableScrollPropagation() {}, stopPropagation() {} },
@@ -138,6 +138,20 @@ test('FE fornecedor atende RM destino e load aplica whitelist também aos destin
     assert.deepEqual(rmView.zones.map(zone => zone.properties.farm_code), ['RM']);
     const feOnly = await h.api.load(h.client, 2026, ['FE']);
     assert.equal(feOnly.zones.features.some(zone => zone.properties.farm_code === 'RM'), false);
+});
+
+test('refresh e clear invalidam o tamanho apenas quando o mapa está visível', async () => {
+    const h = harness({ result: response() });
+    await h.api.refresh(h.state, h.fields);
+    assert.equal(h.map.invalidations.length, 1);
+    h.api.clear();
+    assert.equal(h.map.invalidations.length, 2);
+
+    await h.api.refresh(h.state, h.fields);
+    h.map.container = { clientWidth: 0, clientHeight: 0 };
+    h.state.currentTab = 'colheita';
+    await h.api.refresh(h.state, h.fields);
+    assert.equal(h.map.invalidations.length, 3);
 });
 
 test('resposta atrasada após sair da aba não repõe painel ou camadas', async () => {

@@ -52,9 +52,11 @@
         layers?.remove(); layers = null;
         link?.remove(); link = null;
         if (lastMap) lastMap.closePopup();
-        lastMap = null;
         const panel = document.getElementById('fertilizer-logistics-panel');
         if (panel) panel.hidden = true;
+        const container = lastMap?.getContainer?.();
+        if (container?.clientWidth && container.clientHeight) lastMap.invalidateSize?.({ pan: false });
+        lastMap = null;
     }
     function moundDetails(mound) {
         return `<h3>${escape(mound.name)}</h3><p>Fazenda <strong>${escape(mound.farm_code)}</strong> · Gleba ${escape(mound.gleba)}</p>` +
@@ -64,6 +66,7 @@
     async function refresh(state, fields, shouldFitBounds = false) {
         clear();
         if (!active(state) || !state.map) return;
+        state.map.invalidateSize?.({ pan: false });
         const token = generation, panel = document.getElementById('fertilizer-logistics-panel');
         if (!panel) return;
         lastMap = state.map;
