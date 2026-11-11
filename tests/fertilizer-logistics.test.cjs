@@ -11,26 +11,26 @@ function deferred() {
     return { promise, resolve, reject };
 }
 
-function harness({ result, error, farms = [{ code: 'FE' }, { code: 'GM' }, { code: 'RM' }] } = {}) {
+function harness({ result, error, farms = [{ code: 'FE' }, { code: 'GM' }, { code: 'RM' }], routing } = {}) {
     const elements = new Map();
     const document = { getElementById(id) {
         if (!elements.has(id)) elements.set(id, { id, hidden: true, innerHTML: '', value: '', onchange: null, onclick: null, offsetTop: 8, offsetHeight: 20, details: { open: true }, querySelector(selector) { return selector === 'details' ? this.details : null; } });
         return elements.get(id);
     } };
-    const groups = [], markers = [], popups = [];
+    const groups = [], markers = [], popups = [], polylines = [];
     const map = { fits: [], closed: 0, pans: [], invalidations: [], container: { clientWidth: 800, clientHeight: 600 }, getContainer() { return this.container; }, invalidateSize(opts) { this.invalidations.push(opts); }, closePopup() { this.closed++; }, fitBounds(bounds, opts) { this.fits.push([bounds, opts]); }, panTo(point) { this.pans.push(point); } };
     const layer = (feature) => ({ feature, styles: [], events: {}, addTo(group) { group.items.push(this); return this; }, bindTooltip(content, opts) { this.tooltip = content; this.tooltipOptions = opts; return this; }, getTooltip() { return { getContent: () => this.tooltip }; }, unbindTooltip() { this.tooltip = null; return this; }, on(name, fn) { this.events[name] = fn; return this; }, bindPopup(content) { this.popup = content; return this; }, openPopup() { return this; }, setStyle(style) { this.styles.push(style); return this; } });
     const L = {
         DomEvent: { disableClickPropagation() {}, disableScrollPropagation() {}, stopPropagation() {} },
         featureGroup() { const g = { items: [], removed: false, addTo() { groups.push(this); return this; }, remove() { this.removed = true; }, removeLayer(item) { this.items = this.items.filter(x => x !== item); }, getBounds() { return { isValid: () => true }; } }; return g; },
-        geoJSON(collection, opts = {}) { const g = { items: [], collection, opts, addTo(parent) { this.parent = parent; if (parent.items) parent.items.push(this); return this; }, getBounds() { return { isValid: () => true }; } }; for (const f of collection.features || []) { const item = layer(f); g.items.push(item); opts.onEachFeature?.(f, item); } return g; },
+        geoJSON(collection, opts = {}) { const g = { items: [], collection, opts, addTo(parent) { this.parent = parent; if (parent.items) parent.items.push(this); return this; }, getLayers() { return this.items; }, getBounds() { return { isValid: () => true }; } }; for (const f of collection.features || []) { const item = layer(f); g.items.push(item); opts.onEachFeature?.(f, item); } return g; },
         marker(point, opts) { const item = layer(null); item.point = point; item.options = opts; markers.push(item); return item; },
         divIcon: opts => opts,
-        polyline(points, opts) { return { points, opts, addTo(parent) { parent.items.push(this); return this; }, remove() {} }; },
+        polyline(points, opts) { const item = { points, opts, addTo(parent) { parent.items.push(this); return this; }, remove() {} }; polylines.push(item); return item; },
         popup(opts) { const p = { opts, setLatLng(point) { this.point = point; return this; }, setContent(content) { this.content = content; return this; }, openOn() { popups.push(this); return this; } }; return p; }
     };
     const client = { calls: [], async rpc(name, args) { this.calls.push([name, args]); if (error) return { error }; return { data: result, error: null }; } };
-    const window = { portalFarms: farms, supabaseClient: client };
+    const window = { portalFarms: farms, supabaseClient: client, FertilizerRouting: routing };
     vm.runInNewContext(source, vm.createContext({ window, document, console, L, Intl, Map, Set, JSON, Math, String, Number }));
     const api = window.FertilizerLogistics;
     const state = { currentTab: 'adubacao', currentSubTab: 'logistica', currentAno: '2026', currentFazenda: 'ALL', currentGleba: 'ALL', map };
@@ -39,7 +39,7 @@ function harness({ result, error, farms = [{ code: 'FE' }, { code: 'GM' }, { cod
         { type: 'Feature', properties: { Fazenda: 'GM', Campo: 'GM 02' }, geometry: null },
         { type: 'Feature', properties: { Fazenda: 'RM', Campo: 'RM 02' }, geometry: null }
     ];
-    return { api, client, state, fields, elements, element: id => document.getElementById(id), groups, markers, popups, map };
+    return { api, client, state, fields, elements, element: id => document.getElementById(id), groups, markers, popups, polylines, map };
 }
 
 const response = () => ({
@@ -183,4 +183,77 @@ test('erro de RPC oferece retry e mantém outlines neutros', async () => {
 test('distance uses great-circle distance in meters', () => {
     const { api } = harness();
     assert.ok(Math.abs(api.distance([0, 0], [1, 0]) - 111195) < 100);
+});
+
+function routingFor(rank) {
+    return {
+        async load() { return { data: { roads: { type: 'FeatureCollection', features: [] } }, graph: { rank } }; },
+        clearCache() {}
+    };
+}
+function findGeoGroup(group, predicate) {
+    return group.items.find(item => item.collection?.features?.some(predicate));
+}
+
+test('clique na zona seleciona o monte calculado mesmo diferente do monte Voronoi', async () => {
+    const data = response();
+    data.mounds[2].gleba = 'FE 01';
+    data.mounds[2].name = 'Monte Alternativo FE';
+    data.zones.features[2].properties.gleba = 'FE 01';
+    const h = harness({ result: data, routing: routingFor(async (_origin, candidates) => {
+        const selected = candidates.find(m => m.id === 'm3');
+        return { routes: [{ mound: selected, meters: 1250, shortcutMeters: 0, accessMeters: 0, coordinates: [[-50, -20], [-49, -19]] }], unreachable: 0 };
+    }) });
+    await h.api.refresh(h.state, h.fields);
+    const zoneGroup = findGeoGroup(h.groups[0], f => f.properties.mound_id === 'm1');
+    zoneGroup.items.find(item => item.feature.properties.mound_id === 'm1').events.click({ latlng: { lng: -50, lat: -20 } });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.match(h.popups.at(-1).content, /Monte Alternativo FE/);
+    assert.equal(h.element('logistics-mound').value, 'm3');
+    assert.equal(h.polylines.length, 1);
+    assert.deepEqual(Array.from(h.polylines[0].points, point => Array.from(point)), [[-20, -50], [-19, -49]]);
+});
+
+test('limpar/trocar filtro invalida resposta de roteamento atrasada', async () => {
+    const pending = deferred();
+    const h = harness({ result: response(), routing: { load: () => pending.promise, clearCache() {} } });
+    await h.api.refresh(h.state, h.fields);
+    const zoneGroup = findGeoGroup(h.groups[0], f => f.properties.mound_id === 'm1');
+    zoneGroup.items.find(item => item.feature.properties.mound_id === 'm1').events.click({ latlng: { lng: -50, lat: -20 } });
+    h.state.currentGleba = 'FE 02';
+    await h.api.refresh(h.state, h.fields);
+    pending.resolve({ data: { roads: { type: 'FeatureCollection', features: [] } }, graph: { rank: async () => ({ routes: [], unreachable: 1 }) } });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(h.polylines.length, 0);
+});
+
+test('erro de roteamento não desenha linha reta como rota', async () => {
+    const h = harness({ result: response(), routing: { async load() { throw new Error('offline'); }, clearCache() {} } });
+    const errors = [], originalError = console.error;
+    await h.api.refresh(h.state, h.fields);
+    const zoneGroup = findGeoGroup(h.groups[0], f => f.properties.mound_id === 'm1');
+    console.error = (...args) => errors.push(args);
+    try {
+        zoneGroup.items.find(item => item.feature.properties.mound_id === 'm1').events.click({ latlng: { lng: -50, lat: -20 } });
+        await new Promise(resolve => setImmediate(resolve));
+    } finally { console.error = originalError; }
+    assert.equal(h.polylines.length, 0);
+    assert.match(h.popups.at(-1).content, /N[aã]o foi poss[ií]vel calcular o percurso/);
+    assert.equal(errors.length, 1);
+});
+
+test('outline continua calculando rota com áreas de atendimento desligadas', async () => {
+    let ranked = 0;
+    const h = harness({ result: response(), farms: [{ code: 'FE', gleba: 'FE 01' }, { code: 'GM', gleba: 'GM 02' }, { code: 'RM', gleba: 'RM 02' }], routing: routingFor(async (_origin, candidates) => {
+        ranked++;
+        return { routes: [{ mound: candidates[0], meters: 100, shortcutMeters: 0, accessMeters: 0, coordinates: [[-50, -20], [-50.1, -20.1]] }], unreachable: 0 };
+    }) });
+    await h.api.refresh(h.state, h.fields);
+    const zones = h.element('logistics-zones');
+    zones.onchange({ target: { checked: false } });
+    const outlines = findGeoGroup(h.groups[0], f => Boolean(f.properties.Fazenda));
+    outlines.items[0].events.click({ latlng: { lng: -50, lat: -20 } });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(ranked, 1);
+    assert.equal(h.polylines.length, 1);
 });

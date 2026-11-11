@@ -5,7 +5,7 @@
     const number = value => Number(value).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
     const palette = ['#f97316', '#06b6d4', '#a78bfa', '#eab308', '#ec4899', '#22c55e', '#3b82f6', '#f43f5e'];
     const cache = new Map();
-    let generation = 0, layers = null, link = null, lastMap = null, showZones = true, showLabels = true;
+    let generation = 0, routeRequest = 0, layers = null, link = null, roadLayer = null, lastMap = null, showZones = true, showLabels = true;
     function color(id) {
         let hash = 0;
         for (const char of id) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
@@ -32,7 +32,7 @@
     }
     async function load(client, year, farms) {
         if (!client) throw new Error('Conexão indisponível.');
-        const key = JSON.stringify([year, [...farms].sort()]);
+        const key = JSON.stringify([root.portalUser?.id || '', year, [...farms].sort()]);
         if (!cache.has(key)) {
             const pending = (async () => {
                 const { data, error } = await client.rpc('fertilizer_logistics', { map_year: String(year) });
@@ -49,6 +49,8 @@
     }
     function clear() {
         generation++;
+        routeRequest++;
+        roadLayer?.remove(); roadLayer = null;
         layers?.remove(); layers = null;
         link?.remove(); link = null;
         if (lastMap) lastMap.closePopup();
@@ -81,7 +83,6 @@
             style: { color: '#e2e8f0', weight: 1.2, fillColor: '#64748b', fillOpacity: 0.06 },
             onEachFeature(feature, layer) {
                 layer.bindTooltip(escape(feature.properties?.Campo || 'Talhão'));
-                layer.on('click', () => layer.bindPopup('Consulte os montes no painel. Ative as áreas de atendimento para selecionar uma origem no mapa. Talhões sem cobertura aparecem somente com contorno.').openPopup());
             }
         }).addTo(group);
         if (shouldFitBounds && outlines.getBounds().isValid()) state.map.fitBounds(outlines.getBounds(), { padding: [40, 40] });
@@ -90,11 +91,64 @@
             const data = await load(root.supabaseClient, state.currentAno, farms);
             if (token !== generation || !active(state)) return;
             const { mounds, zones, missing } = view(data, state, fields);
+            async function routeFrom(origin, gleba) {
+                const request = ++routeRequest;
+                link?.remove(); link = null;
+                const disclosure = panel.querySelector?.('details');
+                if (disclosure) disclosure.open = false;
+                const popupTop = Number(panel.offsetTop || 0) + Number(panel.offsetHeight || 0) + 12;
+                const popup = L.popup({ maxWidth: 350, className: 'logistics-popup', autoPanPaddingTopLeft: [12, popupTop], autoPanPaddingBottomRight: [12, 12] })
+                    .setLatLng(origin).setContent('<p role="status">Comparando caminhos até os montes…</p>').openOn(state.map);
+                try {
+                    if (!root.FertilizerRouting || !gleba) throw Error('Rede de caminhos indisponível.');
+                    const scope = `${root.portalUser?.id || ''}:${[...farms].sort().join(',')}`;
+                    const network = await root.FertilizerRouting.load(root.supabaseClient, state.currentAno, gleba, scope);
+                    if (token !== generation || request !== routeRequest || !active(state)) return;
+                    roadLayer?.remove();
+                    roadLayer = L.geoJSON(network.data.roads, { style: { color: '#facc15', weight: 3, opacity: 0.85 }, interactive: false }).addTo(group);
+                    const candidates = data.mounds.filter(m => m.gleba === gleba);
+                    const result = await network.graph.rank([origin.lng, origin.lat], candidates);
+                    if (token !== generation || request !== routeRequest || !active(state)) return;
+                    if (!result.routes.length) {
+                        popup.setContent('<strong>Sem caminho conectado aos montes</strong><p>As estradas e bordas disponíveis não confirmam um acesso a partir deste ponto. Confira as ligações no mapa.</p>');
+                        return;
+                    }
+                    const best = result.routes[0];
+                    link = L.polyline(best.coordinates.map(p => [p[1], p[0]]), { color: '#fff', weight: 4, interactive: false }).addTo(group);
+                    let html = `<strong>Menor percurso calculado: ${escape(best.mound.name)}</strong><p>${number(best.meters / 1000)} km até o monte.</p>`;
+                    if (best.shortcutMeters > 0.1) html += `<p>Atalhos curtos dentro dos talhões: ${number(best.shortcutMeters)} m.</p>`;
+                    if (best.accessMeters > 0.1) html += `<p>Acesso dentro do talhão de origem/destino: ${number(best.accessMeters)} m.</p>`;
+                    html += moundDetails(best.mound);
+                    if (result.routes.length > 1) html += '<p>Outras origens por percurso:</p><ol>' + result.routes.slice(1, 4).map(r => `<li>${escape(r.mound.name)}: ${number(r.meters / 1000)} km</li>`).join('') + '</ol>';
+                    if (result.unreachable) html += `<p>${result.unreachable} monte(s) sem ligação confirmada.</p>`;
+                    html += '<p class="logistics-note">Estimativa pela rede cadastrada. Não considera produto ou estoque.</p>';
+                    popup.setContent(html);
+                    // A supplier can serve the selected farm even when its straight-line
+                    // Voronoi cell does not overlap that farm. Include it in the selector.
+                    const select = document.getElementById('logistics-mound');
+                    if (!mounds.some(m => m.id === best.mound.id)) {
+                        mounds.push(best.mound);
+                        select.innerHTML += `<option value="${escape(best.mound.id)}">${escape(best.mound.name)} · ${escape(best.mound.farm_code)}</option>`;
+                    }
+                    select.value = best.mound.id;
+                } catch (error) {
+                    if (token !== generation || request !== routeRequest || !active(state)) return;
+                    console.error('Falha ao calcular percurso:', error);
+                    popup.setContent('<strong>Não foi possível calcular o percurso</strong><p>A rede de estradas não está disponível. Clique novamente para tentar. As cores continuam sendo referência em linha reta.</p>');
+                }
+            }
+            for (const layer of outlines.getLayers()) {
+                layer.on('click', event => {
+                    const code = layer.feature?.properties?.Fazenda;
+                    const gleba = (root.portalFarms || []).find(farm => farm.code === code)?.gleba;
+                    routeFrom(event.latlng, gleba);
+                });
+            }
             const totalArea = zones.reduce((sum, f) => sum + Number(f.properties.area_ha), 0);
             panel.innerHTML = `<details open><summary>Logística de adubação</summary><div class="logistics-content">` +
                 `<p class="logistics-total"><strong>${mounds.length} montes</strong><span>${number(totalArea)} ha atendidos</span></p><p>Limites de adubação · ${escape(state.currentAno)}</p>` +
-                '<p>As cores mostram o monte mais próximo em cada parte dos talhões, entre as origens liberadas para seu acesso na mesma gleba. Clique em uma área para consultar a origem.</p>' +
-                '<p class="logistics-note">Distância em linha reta. Não considera estradas, produto ou disponibilidade de estoque.</p>' +
+                '<p>Clique no talhão para comparar os montes pelo menor percurso: estradas, bordas e atalhos curtos dentro dos talhões, sem penalidade por pisar na lavoura.</p>' +
+                '<p class="logistics-note">As cores são referência em linha reta; a recomendação por percurso é calculada no clique e pode indicar outro monte. Estradas em amarelo e percurso em branco. Atalhos entre bordas de até 80 m. O acesso ao ponto de aplicação é informado à parte. Não considera produto ou estoque.</p>' +
                 (missing.length ? `<p class="logistics-note">Sem cobertura de montes disponíveis: ${escape(missing.join(', '))}.</p>` : '') +
                 (!mounds.length ? '<p>Nenhum monte cadastrado para os filtros atuais.</p>' : '') +
                 (mounds.length && !zones.length ? '<p>Montes cadastrados, mas sem talhões disponíveis para calcular o atendimento.</p>' : '') +
@@ -105,6 +159,7 @@
                 '</select></label><button type="button" id="logistics-reload">Atualizar montes</button></div></details>';
             const zoneLayers = [], markers = [];
             function selectMound(mound, origin, zone) {
+                routeRequest++;
                 // Keep the stock popup clear of the floating controls, including on phones.
                 const disclosure = panel.querySelector?.('details');
                 if (disclosure) disclosure.open = false;
@@ -112,15 +167,10 @@
                 for (const item of zoneLayers) item.layer.setStyle({ weight: item.feature.properties.mound_ids.includes(mound.id) ? 3 : 1, fillOpacity: item.feature.properties.mound_ids.includes(mound.id) ? 0.45 : 0.24 });
                 link?.remove(); link = null;
                 let html = '';
-                if (origin) {
-                    const meters = distance([origin.lng, origin.lat], [mound.longitude, mound.latitude]);
-                    html = `<strong>Origem mais próxima deste ponto</strong><p>${number(meters / 1000)} km em linha reta (aprox.).</p>`;
-                    link = L.polyline([origin, [mound.latitude, mound.longitude]], { color: '#fff', weight: 2, dashArray: '6 6', interactive: false }).addTo(group);
-                }
                 const peers = zone ? mounds.filter(m => zone.properties.mound_ids.includes(m.id)) : [mound];
                 html += peers.map(moundDetails).join('<hr>');
                 const servedArea = origin && zone ? zone.properties.area_ha : zones.filter(z => z.properties.mound_ids.includes(mound.id)).reduce((sum, z) => sum + Number(z.properties.area_ha), 0);
-                if (zone) html += `<p>Área de atendimento${origin ? ' nesta fazenda' : ' no filtro atual'}: ${number(servedArea)} ha.</p>`;
+                if (zone) html += `<p>Área de referência em linha reta no filtro atual: ${number(servedArea)} ha.</p>`;
                 L.popup({ maxWidth: 330, className: 'logistics-popup', autoPanPaddingTopLeft: [12, popupTop], autoPanPaddingBottomRight: [12, 12] }).setLatLng(origin || [mound.latitude, mound.longitude]).setContent(html).openOn(state.map);
                 document.getElementById('logistics-mound').value = mound.id;
             }
@@ -131,7 +181,7 @@
                     layer.bindTooltip(`<strong>${escape(feature.properties.name)}</strong><br>${number(feature.properties.area_ha)} ha de atendimento`);
                     layer.on('click', event => {
                         L.DomEvent.stopPropagation(event);
-                        selectMound(mounds.find(m => m.id === feature.properties.mound_id), event.latlng, feature);
+                        routeFrom(event.latlng, feature.properties.gleba);
                     });
                 }
             });
@@ -169,7 +219,7 @@
                 state.map.panTo([mound.latitude, mound.longitude]);
                 selectMound(mound, null, zones.find(f => f.properties.mound_ids.includes(mound.id)));
             };
-            document.getElementById('logistics-reload').onclick = () => { cache.clear(); refresh(state, fields, false); };
+            document.getElementById('logistics-reload').onclick = () => { cache.clear(); root.FertilizerRouting?.clearCache(); refresh(state, fields, false); };
             if (shouldFitBounds && group.getBounds().isValid()) state.map.fitBounds(group.getBounds(), { padding: [40, 40] });
         } catch (error) {
             if (token !== generation || !active(state)) return;
