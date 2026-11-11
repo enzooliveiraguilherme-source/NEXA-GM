@@ -1,5 +1,7 @@
 # Logística de adubação
 
+Atualização de 11/11/2026: os percursos foram integrados e as áreas coloridas de FE, PA e RM 01/RM 02 passaram a usar distância pela rede, com amostragem de 100 m. As áreas restantes conservam a referência em linha reta. O comportamento atual e os testes estão em `docs/fertilizer-routing.md` e `docs/fertilizer-service-areas.md`; as descrições abaixo registram a etapa inicial do Voronoi.
+
 Primeira etapa implementada em 10/11/2026: Adubação → Logística.
 
 - Fonte: `Montes.geojson`, 48 MultiPoints unitários em CRS84 (longitude, latitude): 35 FE e 13 FE2.

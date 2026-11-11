@@ -30,7 +30,7 @@
         const missing = [...targets].filter(farm => !zones.some(zone => zone.properties.farm_code === farm));
         return { mounds, zones, missing };
     }
-    async function load(client, year, farms) {
+    async function load(client, year, farms, progress = () => {}) {
         if (!client) throw new Error('Conexão indisponível.');
         const key = JSON.stringify([root.portalUser?.id || '', year, [...farms].sort()]);
         if (!cache.has(key)) {
@@ -40,12 +40,24 @@
                 if (!Array.isArray(data?.mounds) || !Array.isArray(data?.zones?.features)) throw new Error('Resposta de logística incompleta.');
                 const mounds = data.mounds.filter(m => farms.includes(m.farm_code));
                 const ids = new Set(mounds.map(m => m.id));
-                return { mounds, zones: { type: 'FeatureCollection', features: data.zones.features.filter(f => ids.has(f.properties?.mound_id) && farms.includes(f.properties.farm_code)) } };
+                const result = { mounds, zones: data.zones };
+                if (root.FertilizerServiceAreas) {
+                    const scope = `${root.portalUser?.id || ''}:${[...farms].sort().join(',')}`;
+                    const study = await root.FertilizerServiceAreas.calculate(client, year, farms, result, scope, progress);
+                    result.zones = study.zones; result.analysis = study.analysis;
+                }
+                result.zones = { type: 'FeatureCollection', features: result.zones.features.filter(f => ids.has(f.properties?.mound_id) && farms.includes(f.properties.farm_code)) };
+                return result;
             })();
             cache.set(key, pending);
             pending.catch(() => { if (cache.get(key) === pending) cache.delete(key); });
         }
         return cache.get(key);
+    }
+    function resetCache() {
+        cache.clear();
+        root.FertilizerServiceAreas?.invalidate();
+        root.FertilizerRouting?.clearCache();
     }
     function clear() {
         generation++;
@@ -88,7 +100,11 @@
         if (shouldFitBounds && outlines.getBounds().isValid()) state.map.fitBounds(outlines.getBounds(), { padding: [40, 40] });
         try {
             const farms = (root.portalFarms || []).map(farm => farm.code);
-            const data = await load(root.supabaseClient, state.currentAno, farms);
+            const data = await load(root.supabaseClient, state.currentAno, farms, message => {
+                if (token !== generation || !active(state)) return;
+                const status = panel.querySelector?.('[role="status"]');
+                if (status) status.textContent = message;
+            });
             if (token !== generation || !active(state)) return;
             const { mounds, zones, missing } = view(data, state, fields);
             async function routeFrom(origin, gleba) {
@@ -134,7 +150,7 @@
                 } catch (error) {
                     if (token !== generation || request !== routeRequest || !active(state)) return;
                     console.error('Falha ao calcular percurso:', error);
-                    popup.setContent('<strong>Não foi possível calcular o percurso</strong><p>A rede de estradas não está disponível. Clique novamente para tentar. As cores continuam sendo referência em linha reta.</p>');
+                    popup.setContent('<strong>Não foi possível calcular o percurso</strong><p>A rede de estradas não está disponível. Clique novamente para tentar. Confira o método indicado nas áreas coloridas.</p>');
                 }
             }
             for (const layer of outlines.getLayers()) {
@@ -145,10 +161,13 @@
                 });
             }
             const totalArea = zones.reduce((sum, f) => sum + Number(f.properties.area_ha), 0);
+            const hasNetwork = zones.some(f => f.properties.method === 'network');
             panel.innerHTML = `<details open><summary>Logística de adubação</summary><div class="logistics-content">` +
                 `<p class="logistics-total"><strong>${mounds.length} montes</strong><span>${number(totalArea)} ha atendidos</span></p><p>Limites de adubação · ${escape(state.currentAno)}</p>` +
                 '<p>Clique no talhão para comparar os montes por percurso, usando estradas, bordas e acessos locais. Dentro da lavoura, o acesso é limitado pela estrada mais próxima; atalhos locais podem encurtar o caminho.</p>' +
-                '<p class="logistics-note">As cores são referência em linha reta; a recomendação por percurso é calculada no clique e pode indicar outro monte. Estradas em amarelo e percurso em branco. O trecho de acesso dentro do talhão é informado à parte. Não considera produto ou estoque.</p>' +
+                (hasNetwork ? '<p class="logistics-note"><strong>Cores por percurso em FE, PA e RM 01/RM 02.</strong> Estimativa em malha de 100 m, recortada nos limites dos talhões. Nas demais áreas, as cores continuam em linha reta. O clique confere a rota do ponto exato e pode variar perto das divisões. Estradas em amarelo e percurso em branco.</p>' : '<p class="logistics-note">As cores são referência em linha reta; a recomendação por percurso é calculada no clique e pode indicar outro monte. Estradas em amarelo e percurso em branco.</p>') +
+                (Number(data.analysis?.unserved_area_ha) > 0.01 ? `<p class="logistics-note">${number(data.analysis.unserved_area_ha)} ha do estudo estão sem ligação aos montes e aparecem somente com contorno.</p>` : '') +
+                '<p class="logistics-note">Não considera produto ou estoque.</p>' +
                 (missing.length ? `<p class="logistics-note">Sem cobertura de montes disponíveis: ${escape(missing.join(', '))}.</p>` : '') +
                 (!mounds.length ? '<p>Nenhum monte cadastrado para os filtros atuais.</p>' : '') +
                 (mounds.length && !zones.length ? '<p>Montes cadastrados, mas sem talhões disponíveis para calcular o atendimento.</p>' : '') +
@@ -170,7 +189,7 @@
                 const peers = zone ? mounds.filter(m => zone.properties.mound_ids.includes(m.id)) : [mound];
                 html += peers.map(moundDetails).join('<hr>');
                 const servedArea = origin && zone ? zone.properties.area_ha : zones.filter(z => z.properties.mound_ids.includes(mound.id)).reduce((sum, z) => sum + Number(z.properties.area_ha), 0);
-                if (zone) html += `<p>Área de referência em linha reta no filtro atual: ${number(servedArea)} ha.</p>`;
+                if (zone) html += `<p>Área de atendimento no filtro atual: ${number(servedArea)} ha.</p>`;
                 L.popup({ maxWidth: 330, className: 'logistics-popup', autoPanPaddingTopLeft: [12, popupTop], autoPanPaddingBottomRight: [12, 12] }).setLatLng(origin || [mound.latitude, mound.longitude]).setContent(html).openOn(state.map);
                 document.getElementById('logistics-mound').value = mound.id;
             }
@@ -178,7 +197,7 @@
                 style: feature => ({ color: color(feature.properties.mound_id), fillColor: color(feature.properties.mound_id), weight: 1, fillOpacity: 0.24 }),
                 onEachFeature(feature, layer) {
                     zoneLayers.push({ feature, layer });
-                    layer.bindTooltip(`<strong>${escape(feature.properties.name)}</strong><br>${number(feature.properties.area_ha)} ha de atendimento`);
+                    layer.bindTooltip(`<strong>${escape(feature.properties.name)}</strong><br>${number(feature.properties.area_ha)} ha de atendimento<br>${feature.properties.method === 'network' ? 'Por percurso · malha de 100 m' : 'Referência em linha reta'}`);
                     layer.on('click', event => {
                         L.DomEvent.stopPropagation(event);
                         routeFrom(event.latlng, feature.properties.gleba);
@@ -219,13 +238,13 @@
                 state.map.panTo([mound.latitude, mound.longitude]);
                 selectMound(mound, null, zones.find(f => f.properties.mound_ids.includes(mound.id)));
             };
-            document.getElementById('logistics-reload').onclick = () => { cache.clear(); root.FertilizerRouting?.clearCache(); refresh(state, fields, false); };
+            document.getElementById('logistics-reload').onclick = () => { resetCache(); refresh(state, fields, false); };
             if (shouldFitBounds && group.getBounds().isValid()) state.map.fitBounds(group.getBounds(), { padding: [40, 40] });
         } catch (error) {
             if (token !== generation || !active(state)) return;
             console.error('Falha ao consultar logística:', error);
             panel.innerHTML = '<h2>Logística de adubação</h2><p role="alert">Não foi possível carregar os montes e o estudo de atendimento.</p><button type="button" id="logistics-retry">Tentar novamente</button>';
-            document.getElementById('logistics-retry').onclick = () => { cache.clear(); refresh(state, fields, shouldFitBounds); };
+            document.getElementById('logistics-retry').onclick = () => { resetCache(); refresh(state, fields, shouldFitBounds); };
         }
     }
     root.FertilizerLogistics = { active, refresh, clear, load, matches, view, distance, moundDetails };

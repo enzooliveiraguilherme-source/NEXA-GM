@@ -4,7 +4,7 @@ Implementação de 11/11/2026, autorizada para publicação pelo usuário. Schem
 
 ## Comportamento
 
-O clique em uma área de Logística compara os montes autorizados da mesma gleba canônica pelo comprimento do percurso. O fornecedor pode ser diferente daquele indicado pela cor do Voronoi. As cores e suas áreas continuam representando distância em linha reta e estão identificadas assim no painel; não são áreas recalculadas por estradas.
+O clique em uma área de Logística compara os montes autorizados da mesma gleba canônica pelo comprimento do percurso. Em FE, PA e RM 01/RM 02, as cores agora seguem o estudo por percurso em malha de 100 m; no restante, continuam como referência em linha reta. Perto das divisões de células, a consulta do ponto exato pode indicar outra origem. Detalhes e validação: `docs/fertilizer-service-areas.md`.
 
 A rede combina as estradas cadastradas com os anéis externos e internos dos talhões de adubação da safra. O PostGIS une e cria nós nas interseções antes de dividir os segmentos em trechos de até 40 m. As geometrias originais dos talhões e dos montes permanecem intactas.
 
