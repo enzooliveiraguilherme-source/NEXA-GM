@@ -95,7 +95,10 @@ test('monte no mesmo talhão usa percurso direto coberto', () => {
     assert.equal(result.routes.length, 1);
     assert.equal(result.routes[0].shortcutMeters, 0);
     assert.ok(Math.abs(result.routes[0].meters - 66.7) < 1);
-    assert.deepEqual(Array.from(result.routes[0].coordinates, point => Array.from(point)), [[0.0002, 0.0005], [0.0008, 0.0005]]);
+    const coordinates = Array.from(result.routes[0].coordinates, point => Array.from(point));
+    assert.equal(coordinates.length, 2);
+    assert.ok(Math.abs(coordinates[0][0] - 0.0002) < 1e-12 && Math.abs(coordinates[0][1] - 0.0005) < 1e-12);
+    assert.ok(Math.abs(coordinates[1][0] - 0.0008) < 1e-12 && Math.abs(coordinates[1][1] - 0.0005) < 1e-12);
 });
 
 test('interseção compartilhada na rede nodada conecta os braços', () => {

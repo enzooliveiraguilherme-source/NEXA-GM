@@ -4,11 +4,11 @@ Implementação de 11/11/2026, autorizada para publicação pelo usuário. Schem
 
 ## Comportamento
 
-O clique em uma área de Logística compara os montes autorizados da mesma gleba canônica pelo comprimento do percurso. Em FE, PA e RM 01/RM 02, as cores agora seguem o estudo por percurso em malha de 100 m; no restante, continuam como referência em linha reta. Perto das divisões de células, a consulta do ponto exato pode indicar outra origem. Detalhes e validação: `docs/fertilizer-service-areas.md`.
+O clique em uma área de Logística compara os montes autorizados da mesma gleba canônica pelo custo ponderado do perfil `machine-road-v2`, priorizando estrada, depois bordadura, e penalizando acessos no interior. A distância física é informada separadamente. Em FE, PA e RM 01/RM 02, as cores seguem esse mesmo perfil em malha de 100 m; no restante, continuam como referência em linha reta. Perto das divisões de células, a consulta do ponto exato pode indicar outra origem. Detalhes e validação: `docs/fertilizer-service-areas.md` e `docs/routing-road-priority.md`.
 
 A rede combina as estradas cadastradas com os anéis externos e internos dos talhões de adubação da safra. O PostGIS une e cria nós nas interseções antes de dividir os segmentos em trechos de até 40 m. As geometrias originais dos talhões e dos montes permanecem intactas.
 
-Atalhos de até **80 m por ligação** entre nós da rede são aceitos somente quando todo o segmento estiver dentro da união dos talhões disponíveis, incluindo suas bordas. O peso é a distância em metros, sem penalidade para lavoura. A validação subdivide o segmento em cada cruzamento de borda e verifica todos os intervalos, preservando buracos estreitos. A tolerância de posição na borda é de 5 mm.
+Atalhos de até **80 m por ligação** entre nós da rede são aceitos somente quando todo o segmento estiver dentro da união dos talhões disponíveis, incluindo suas bordas. O perfil atual pondera cada trecho pela classe: estrada 1, bordadura 2, ligação cadastral 3, interior 4. A validação subdivide o segmento em cada cruzamento de borda e verifica todos os intervalos, preservando buracos estreitos. A tolerância de posição na borda é de 5 mm.
 
 Correção após o exemplo do usuário junto ao monte FE 02 03: o acesso inicial não pode ser uma ligação livre a qualquer ponto visível da borda. Pontos a até 2 m de uma estrada cadastrada ficam vinculados a ela. Para pontos no interior, o máximo de acesso local é duas vezes a distância ao acesso válido mais próximo da estrada, mais 80 m; quando nenhuma estrada é acessível, usa-se a borda mais próxima como referência. Isso permite comparar os acessos locais à esquerda, à direita e em diagonal, sem trocar uma estrada próxima por uma diagonal longa pela lavoura. Uma reta até o monte só concorre se também respeitar esse limite local e a máscara de passagem. Os acessos são informados separadamente no popup.
 
@@ -16,7 +16,7 @@ Pontos fora dos talhões precisam estar sobre uma estrada cadastrada, com toler�
 
 O fim do acesso pode vencer um afastamento cadastral de até 40 m entre a borda de cultivo e a linha central da estrada, sem atravessar buracos. Esses pequenos afastamentos não devem ser interpretados como quilômetros de estrada ausente. Pontas de estradas separadas por até 2 m também podem se ligar se não houver um buraco entre elas. Essas tolerâncias não alteram os arquivos de entrada. Ausência de conexão produz aviso, sem substituir a rota por uma reta. Vegetação ou obstáculos sem representação nos recortes ainda não são conhecidos pelo cálculo.
 
-Dijkstra encontra o menor percurso **na rede construída**, com distância aproximada em projeção local em metros. A amostragem de 40 m e as ligações de 80 m tornam o resultado uma estimativa, não o ótimo contínuo sobre todo o terreno. O mapa permanece responsivo com cálculo em Web Worker. Pedidos antigos são descartados após troca de aba, filtro, seleção de monte ou novo clique.
+Dijkstra encontra o menor custo ponderado **na rede construída**, preservando a distância física aproximada em projeção local. A amostragem de 40 m e as ligações de 80 m tornam o resultado uma estimativa, não o ótimo contínuo sobre todo o terreno. O mapa permanece responsivo com cálculo em Web Worker. Pedidos antigos são descartados após troca de aba, filtro, seleção de monte ou novo clique.
 
 ## Dados e permissões
 

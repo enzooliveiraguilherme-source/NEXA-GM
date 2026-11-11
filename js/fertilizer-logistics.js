@@ -131,13 +131,17 @@
                     }
                     const best = result.routes[0];
                     link = L.polyline(best.coordinates.map(p => [p[1], p[0]]), { color: '#fff', weight: 4, interactive: false }).addTo(group);
-                    let html = `<strong>Menor percurso calculado: ${escape(best.mound.name)}</strong><p>${number(best.meters / 1000)} km até o monte.</p>`;
-                    if (best.shortcutMeters > 0.1) html += `<p>Atalhos curtos dentro dos talhões: ${number(best.shortcutMeters)} m.</p>`;
-                    if (best.accessMeters > 0.1) html += `<p>Acesso local ao ponto/monte: ${number(best.accessMeters)} m.</p>`;
+                    let html = `<strong>Percurso recomendado: ${escape(best.mound.name)}</strong><p>${number(best.meters / 1000)} km até o monte.</p>`;
+                    if (best.metrics) html += `<p>Estrada: ${number(best.metrics.roadMeters)} m · Bordadura: ${number(best.metrics.borderMeters)} m · Interior: ${number(best.metrics.fieldMeters)} m` +
+                        (best.metrics.approachMeters > 0.1 ? ` · Conexões: ${number(best.metrics.approachMeters)} m` : '') + '.</p>';
+                    else {
+                        if (best.shortcutMeters > 0.1) html += `<p>Atalhos curtos dentro dos talhões: ${number(best.shortcutMeters)} m.</p>`;
+                        if (best.accessMeters > 0.1) html += `<p>Acesso local ao ponto/monte: ${number(best.accessMeters)} m.</p>`;
+                    }
                     html += moundDetails(best.mound);
-                    if (result.routes.length > 1) html += '<p>Outras origens por percurso:</p><ol>' + result.routes.slice(1, 4).map(r => `<li>${escape(r.mound.name)}: ${number(r.meters / 1000)} km</li>`).join('') + '</ol>';
+                    if (result.routes.length > 1) html += '<p>Outras origens pela mesma prioridade:</p><ol>' + result.routes.slice(1, 4).map(r => `<li>${escape(r.mound.name)}: ${number(r.meters / 1000)} km</li>`).join('') + '</ol>';
                     if (result.unreachable) html += `<p>${result.unreachable} monte(s) sem ligação confirmada.</p>`;
-                    html += '<p class="logistics-note">Estimativa pela rede cadastrada. Não considera produto ou estoque.</p>';
+                    html += '<p class="logistics-note">Prioriza estradas, mesmo com distância maior. Bordadura e interior têm preferência menor. Não considera produto ou estoque.</p>';
                     popup.setContent(html);
                     // A supplier can serve the selected farm even when its straight-line
                     // Voronoi cell does not overlap that farm. Include it in the selector.
@@ -164,8 +168,8 @@
             const hasNetwork = zones.some(f => f.properties.method === 'network');
             panel.innerHTML = `<details open><summary>Logística de adubação</summary><div class="logistics-content">` +
                 `<p class="logistics-total"><strong>${mounds.length} montes</strong><span>${number(totalArea)} ha atendidos</span></p><p>Limites de adubação · ${escape(state.currentAno)}</p>` +
-                '<p>Clique no talhão para comparar os montes por percurso, usando estradas, bordas e acessos locais. Dentro da lavoura, o acesso é limitado pela estrada mais próxima; atalhos locais podem encurtar o caminho.</p>' +
-                (hasNetwork ? '<p class="logistics-note"><strong>Cores por percurso em FE, PA e RM 01/RM 02.</strong> Estimativa em malha de 100 m, recortada nos limites dos talhões. Nas demais áreas, as cores continuam em linha reta. O clique confere a rota do ponto exato e pode variar perto das divisões. Estradas em amarelo e percurso em branco.</p>' : '<p class="logistics-note">As cores são referência em linha reta; a recomendação por percurso é calculada no clique e pode indicar outro monte. Estradas em amarelo e percurso em branco.</p>') +
+                '<p>Preferência por estradas para o deslocamento. Bordadura é usada quando evita um desvio grande; interior fica restrito aos acessos e atalhos locais. O trajeto recomendado pode ter mais quilômetros e menos deslocamento na lavoura.</p>' +
+                (hasNetwork ? '<p class="logistics-note"><strong>Cores com prioridade por estradas em FE, PA e RM 01/RM 02.</strong> Estimativa em malha de 100 m, recortada nos limites dos talhões. Nas demais áreas, as cores continuam em linha reta. O clique confere a rota do ponto exato e pode variar perto das divisões. Estradas em amarelo e percurso em branco.</p>' : '<p class="logistics-note">As cores são referência em linha reta; a recomendação por percurso é calculada no clique e pode indicar outro monte. Estradas em amarelo e percurso em branco.</p>') +
                 (Number(data.analysis?.unserved_area_ha) > 0.01 ? `<p class="logistics-note">${number(data.analysis.unserved_area_ha)} ha do estudo estão sem ligação aos montes e aparecem somente com contorno.</p>` : '') +
                 '<p class="logistics-note">Não considera produto ou estoque.</p>' +
                 (missing.length ? `<p class="logistics-note">Sem cobertura de montes disponíveis: ${escape(missing.join(', '))}.</p>` : '') +

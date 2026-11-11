@@ -1,5 +1,8 @@
 (function (root) {
     'use strict';
+    const profile = Object.freeze({ version: 'machine-road-v2', factors: Object.freeze({ road: 1, border: 2, approach: 3, shortcut: 4, access: 4, snap: 1 }) });
+    const factor = kind => profile.factors[kind] ?? profile.factors.access;
+    const better = (score, meters, oldScore, oldMeters) => score < oldScore || (score === oldScore && meters < oldMeters);
     const R = 6371008.8, rad = Math.PI / 180;
     const norm = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
     const cross = (a, b) => a[0] * b[1] - a[1] * b[0];
@@ -172,6 +175,7 @@
             for (const e of adjacency[a]) if (e.to === b) e.kind = road ? 'road' : 'border';
             for (const e of adjacency[b]) if (e.to === a) e.kind = road ? 'road' : 'border';
         }
+        const segmentKinds = new Map(edges.map(([a, b]) => [`${a},${b}`, roadNodes[a] && roadNodes[b] && isRoad(mix(nodes[a], nodes[b], 0.5)) ? 'road' : 'border']));
         // Query nearby edges instead of sorting the whole gleba for every cell.
         const edgeGrid = new Map(), roadEdgeGrid = new Map(), edgeBoxes = edges.map(([a, b]) => bounds([nodes[a], nodes[b]]));
         edges.forEach((item, index) => {
@@ -210,8 +214,8 @@
                     for (const j of grid.get(`${x + dx},${y + dy}`) || []) {
                         const meters = norm(p, nodes[j]);
                         if (meters > shortcut || adjacency[i].some(e => e.to === j)) continue;
-                        if (covered(p, nodes[j], polygons)) edge(i, j, 'shortcut');
-                        else if (meters <= 2 && roadNodes[i] && roadNodes[j] && !crossesHole(p, nodes[j])) edge(i, j, 'road');
+                        if (meters <= 2 && roadNodes[i] && roadNodes[j] && !crossesHole(p, nodes[j])) edge(i, j, 'road');
+                        else if (covered(p, nodes[j], polygons)) edge(i, j, 'shortcut');
                         else if (meters <= 40 && ((roadNodes[i] && accessCovered(nodes[j], p, polygons, true)) ||
                             (roadNodes[j] && accessCovered(p, nodes[j], polygons, true)))) edge(i, j, 'approach');
                     }
@@ -221,12 +225,14 @@
                 grid.get(key).push(i);
             }
         }
+        for (const outgoing of adjacency) for (const e of outgoing) e.cost = e.meters * factor(e.kind);
         function connectors(coordinate) {
             const p = project(coordinate), containing = polygons.filter(poly => inPolygon(p, poly.rings));
             const result = new Map(), segments = [];
-            function put(id, q, kind) {
-                const meters = norm(p, q) + norm(q, nodes[id]);
-                if (!result.has(id) || result.get(id).meters > meters) result.set(id, { to: id, meters, via: q, kind });
+            function put(id, q, kind, road) {
+                const access = norm(p, q), along = norm(q, nodes[id]), meters = access + along, networkKind = road ? 'road' : 'border';
+                const score = access * factor(kind) + along * factor(networkKind), previous = result.get(id);
+                if (!previous || better(score, meters, previous.score, previous.meters)) result.set(id, { to: id, meters, score, via: q, kind, networkKind });
             }
             // First locate genuine road access; do not attach an interior point to
             // every visible edge of its field, which allowed kilometre-long cuts.
@@ -235,7 +241,7 @@
             if (pinned.length) {
                 // A mapped road remains usable even when a crop mask excludes it.
                 // This is not permission to create a new cut through that exclusion.
-                for (const c of pinned) { put(c.a, c.q, 'snap'); put(c.b, c.q, 'snap'); segments.push({ key: `${c.a},${c.b}`, q: c.q }); }
+                for (const c of pinned) { put(c.a, c.q, 'snap', true); put(c.b, c.q, 'snap', true); segments.push({ key: `${c.a},${c.b}`, q: c.q }); }
             } else {
                 let nearestRoad = Infinity, nearestBorder = Infinity;
                 // A valid straight field approach cannot end outside this box+40m.
@@ -260,13 +266,70 @@
                 limit = Number.isFinite(nearest) ? 2 * nearest + shortcut : 0;
                 for (const c of nearby(p, limit)) {
                     if (c.meters < 0.002 || accessCovered(p, c.q, containing, c.road)) {
-                        put(c.a, c.q, 'access'); put(c.b, c.q, 'access'); segments.push({ key: `${c.a},${c.b}`, q: c.q });
+                        put(c.a, c.q, 'access', c.road); put(c.b, c.q, 'access', c.road); segments.push({ key: `${c.a},${c.b}`, q: c.q });
                     }
                 }
             }
             return { p, containing, limit, onRoad: !!pinned.length, links: [...result.values()], segments: new Map(segments.map(s => [s.key, s.q])) };
         }
         const moundCache = new Map();
+        function destination(mound) {
+            const coordinate = [Number(mound.longitude), Number(mound.latitude)], key = coordinate.join(',');
+            if (!moundCache.has(key)) moundCache.set(key, connectors(coordinate));
+            return moundCache.get(key);
+        }
+        function localCandidate(start, end, bound = Infinity) {
+            let best = null;
+            const direct = norm(start.p, end.p), directKind = start.onRoad && end.onRoad ? 'shortcut' : 'access';
+            const directScore = direct * factor(directKind);
+            if (directScore <= bound && direct <= Math.max(shortcut, start.limit + end.limit) && (
+                accessCovered(start.p, end.p, start.containing, end.onRoad) ||
+                accessCovered(end.p, start.p, end.containing, start.onRoad))) {
+                best = { type: 'direct', kind: directKind, score: directScore, meters: direct };
+            }
+            for (const [segment, b] of end.segments) {
+                const a = start.segments.get(segment);
+                if (!a) continue;
+                const kind = segmentKinds.get(segment) || 'border';
+                const accessA = norm(start.p, a), along = norm(a, b), accessB = norm(b, end.p);
+                const score = accessA * factor(start.onRoad ? 'snap' : 'access') + along * factor(kind) + accessB * factor(end.onRoad ? 'snap' : 'access');
+                const meters = accessA + along + accessB;
+                if (score <= bound && (!best || better(score, meters, best.score, best.meters))) best = { type: 'segment', a, b, kind, score, meters };
+            }
+            return best;
+        }
+        function localLegs(start, end, choice) {
+            if (choice.type === 'direct') return [{ a: start.p, b: end.p, kind: choice.kind }];
+            return [
+                { a: start.p, b: choice.a, kind: start.onRoad ? 'snap' : 'access' },
+                { a: choice.a, b: choice.b, kind: choice.kind },
+                { a: choice.b, b: end.p, kind: end.onRoad ? 'snap' : 'access' }
+            ];
+        }
+        function connectionLegs(endpoint, link, reverse = false) {
+            const legs = [
+                { a: endpoint.p, b: link.via, kind: link.kind },
+                { a: link.via, b: nodes[link.to], kind: link.networkKind }
+            ];
+            return reverse ? legs.reverse().map(leg => ({ a: leg.b, b: leg.a, kind: leg.kind })) : legs;
+        }
+        function finish(mound, legs, score) {
+            const metrics = { roadMeters: 0, borderMeters: 0, fieldMeters: 0, approachMeters: 0 };
+            let meters = 0, shortcutMeters = 0, accessMeters = 0;
+            const points = [];
+            for (const leg of legs) {
+                const length = norm(leg.a, leg.b);
+                meters += length;
+                if (leg.kind === 'road' || leg.kind === 'snap') metrics.roadMeters += length;
+                else if (leg.kind === 'border') metrics.borderMeters += length;
+                else if (leg.kind === 'approach') metrics.approachMeters += length;
+                else metrics.fieldMeters += length;
+                if (leg.kind === 'shortcut') shortcutMeters += length;
+                if (leg.kind === 'access' || leg.kind === 'snap') accessMeters += length;
+                for (const p of [leg.a, leg.b]) if (!points.length || norm(p, points[points.length - 1]) > 0.001) points.push(p);
+            }
+            return { mound, score, meters, metrics, shortcutMeters, accessMeters, model: profile.version, coordinates: points.map(unproject) };
+        }
         let costCache = null;
         function serviceCosts(samples, mounds, progress = () => {}) {
             if (!Array.isArray(samples) || samples.length > 30000) throw Error('Malha de atendimento inválida.');
@@ -274,111 +337,98 @@
             const key = JSON.stringify(permitted.map(m => [m.id, m.longitude, m.latitude]));
             if (costCache?.key !== key) {
                 const destinations = permitted.map((mound, index) => {
-                    const coordinate = [Number(mound.longitude), Number(mound.latitude)], cacheKey = coordinate.join(',');
-                    if (!moundCache.has(cacheKey)) moundCache.set(cacheKey, connectors(coordinate));
+                    const end = destination(mound);
                     progress({ stage: 'mounds', done: index + 1, total: permitted.length });
-                    return { mound, end: moundCache.get(cacheKey) };
+                    return { mound, end };
                 });
-                // min_m min_node(access + distance_m) = min_node(access + min_m
-                // distance_m). A single multi-source Dijkstra gives the same winner
-                // as one distance matrix per mound, without repeating work per cell.
-                const dist = new Float64Array(nodes.length).fill(Infinity), owners = new Int32Array(nodes.length).fill(-1), heap = new Heap();
-                destinations.forEach(({ end }, owner) => {
-                    for (const c of end.links) if (c.meters < dist[c.to] || (c.meters === dist[c.to] && owner < owners[c.to])) {
-                        dist[c.to] = c.meters; owners[c.to] = owner; heap.push([c.meters, c.to, owner]);
-                    }
-                });
-                while (heap.items.length) {
-                    const [cost, id, owner] = heap.pop();
-                    if (cost !== dist[id] || owner !== owners[id]) continue;
-                    for (const e of adjacency[id]) {
-                        const value = cost + e.meters;
-                        if (value < dist[e.to] || (value === dist[e.to] && owner < owners[e.to])) {
-                            dist[e.to] = value; owners[e.to] = owner; heap.push([value, e.to, owner]);
-                        }
+                const dist = new Float64Array(nodes.length).fill(Infinity), lengths = new Float64Array(nodes.length).fill(Infinity);
+                const owners = new Int32Array(nodes.length).fill(-1), heap = new Heap();
+                function relax(id, score, meters, owner) {
+                    if (better(score, meters, dist[id], lengths[id]) || (score === dist[id] && meters === lengths[id] && owner < owners[id])) {
+                        dist[id] = score; lengths[id] = meters; owners[id] = owner; heap.push([score, id, owner, meters]);
                     }
                 }
-                costCache = { key, destinations, dist, owners };
+                destinations.forEach(({ end }, owner) => {
+                    for (const c of end.links) relax(c.to, c.score, c.meters, owner);
+                });
+                while (heap.items.length) {
+                    const [cost, id, owner, meters] = heap.pop();
+                    if (cost !== dist[id] || owner !== owners[id] || meters !== lengths[id]) continue;
+                    for (const e of adjacency[id]) relax(e.to, cost + e.cost, meters + e.meters, owner);
+                }
+                costCache = { key, destinations, dist, lengths, owners };
             }
             return samples.map((sample, index) => {
                 const start = connectors(sample.point);
-                let bestMeters = Infinity, bestOwner = -1;
-                function choose(meters, owner) {
-                    if (owner >= 0 && (meters < bestMeters || (meters === bestMeters && owner < bestOwner))) { bestMeters = meters; bestOwner = owner; }
-                }
-                for (const c of start.links) choose(c.meters + costCache.dist[c.to], costCache.owners[c.to]);
-                costCache.destinations.forEach(({ end }, owner) => {
-                    const direct = norm(start.p, end.p);
-                    if (direct <= bestMeters && direct <= Math.max(shortcut, start.limit + end.limit) && (
-                        accessCovered(start.p, end.p, start.containing, end.onRoad) || accessCovered(end.p, start.p, end.containing, start.onRoad))) choose(direct, owner);
-                    // A mound is usually pinned to one or two road segments; scan
-                    // that small set rather than all approach segments of the cell.
-                    for (const [segment, b] of end.segments) {
-                        const a = start.segments.get(segment);
-                        if (a) choose(norm(start.p, a) + norm(a, b) + norm(b, end.p), owner);
+                let bestScore = Infinity, bestMeters = Infinity, bestOwner = -1;
+                function choose(score, meters, owner) {
+                    if (owner < 0 || !Number.isFinite(score)) return;
+                    if (better(score, meters, bestScore, bestMeters) || (score === bestScore && meters === bestMeters && owner < bestOwner)) {
+                        bestScore = score; bestMeters = meters; bestOwner = owner;
                     }
+                }
+                for (const c of start.links) choose(c.score + costCache.dist[c.to], c.meters + costCache.lengths[c.to], costCache.owners[c.to]);
+                costCache.destinations.forEach(({ end }, owner) => {
+                    const local = localCandidate(start, end, bestScore);
+                    if (local) choose(local.score, local.meters, owner);
                 });
                 if (index % 50 === 0 || index + 1 === samples.length) progress({ stage: 'cells', done: index + 1, total: samples.length });
-                return { ...sample, mound_id: bestOwner < 0 ? null : costCache.destinations[bestOwner].mound.id, meters: Number.isFinite(bestMeters) ? bestMeters : null };
+                return { ...sample, mound_id: bestOwner < 0 ? null : costCache.destinations[bestOwner].mound.id,
+                    score: Number.isFinite(bestScore) ? bestScore : null, meters: Number.isFinite(bestMeters) ? bestMeters : null };
             });
         }
         function rank(origin, mounds) {
-            const start = connectors(origin), dist = Array(nodes.length).fill(Infinity), previous = [], starts = [], heap = new Heap();
-            for (const c of start.links) if (c.meters < dist[c.to]) { dist[c.to] = c.meters; starts[c.to] = c; heap.push([c.meters, c.to]); }
+            const start = connectors(origin), dist = new Float64Array(nodes.length).fill(Infinity);
+            const lengths = new Float64Array(nodes.length).fill(Infinity), previous = [], starts = [], heap = new Heap();
+            for (const c of start.links) if (better(c.score, c.meters, dist[c.to], lengths[c.to])) {
+                dist[c.to] = c.score; lengths[c.to] = c.meters; starts[c.to] = c; heap.push([c.score, c.to, c.meters]);
+            }
             while (heap.items.length) {
-                const [cost, id] = heap.pop();
-                if (cost !== dist[id]) continue;
-                for (const e of adjacency[id]) if (cost + e.meters < dist[e.to]) {
-                    dist[e.to] = cost + e.meters; previous[e.to] = { from: id, ...e }; starts[e.to] = starts[id]; heap.push([dist[e.to], e.to]);
+                const [cost, id, meters] = heap.pop();
+                if (cost !== dist[id] || meters !== lengths[id]) continue;
+                for (const e of adjacency[id]) {
+                    const score = cost + e.cost, length = meters + e.meters;
+                    if (better(score, length, dist[e.to], lengths[e.to])) {
+                        dist[e.to] = score; lengths[e.to] = length;
+                        previous[e.to] = { from: id, ...e }; starts[e.to] = starts[id]; heap.push([score, e.to, length]);
+                    }
                 }
             }
             const routes = [];
             for (const mound of mounds) {
                 if (mound.gleba !== data.gleba) continue;
-                const destination = [Number(mound.longitude), Number(mound.latitude)], key = destination.join(',');
-                if (!moundCache.has(key)) moundCache.set(key, connectors(destination));
-                const end = moundCache.get(key);
+                const end = destination(mound);
                 let best = null;
-                for (const c of end.links) if (Number.isFinite(dist[c.to]) && (!best || dist[c.to] + c.meters < best.meters)) best = { end: c, meters: dist[c.to] + c.meters };
-                let direct = norm(start.p, end.p);
-                // Only a local approach can compete with road routes; nearby roads
-                // cannot be abandoned in favour of an unlimited field diagonal.
-                const directAllowed = direct <= Math.max(shortcut, start.limit + end.limit) && (
-                    accessCovered(start.p, end.p, start.containing, end.onRoad) ||
-                    accessCovered(end.p, start.p, end.containing, start.onRoad));
-                if (directAllowed && (!best || direct < best.meters)) {
-                    routes.push({ mound, meters: direct, shortcutMeters: 0, accessMeters: direct, coordinates: [origin, destination] }); continue;
+                for (const c of end.links) {
+                    if (!Number.isFinite(dist[c.to])) continue;
+                    const score = dist[c.to] + c.score, meters = lengths[c.to] + c.meters;
+                    if (!best || better(score, meters, best.score, best.meters)) best = { end: c, score, meters };
                 }
-                let sameSegment = null;
-                for (const [key, a] of start.segments) {
-                    const b = end.segments.get(key);
-                    if (!b) continue;
-                    const accessMeters = norm(start.p, a) + norm(end.p, b), meters = accessMeters + norm(a, b);
-                    if (!sameSegment || meters < sameSegment.meters) {
-                        const points = [start.p, a, b, end.p];
-                        sameSegment = { meters, accessMeters, shortcutMeters: 0, coordinates: points.filter((p, i) => !i || norm(p, points[i - 1]) > 0.001).map(unproject) };
-                    }
+                const local = localCandidate(start, end, best?.score ?? Infinity);
+                if (local && (!best || better(local.score, local.meters, best.score, best.meters))) {
+                    routes.push(finish(mound, localLegs(start, end, local), local.score)); continue;
                 }
-                if (sameSegment && (!best || sameSegment.meters < best.meters)) { routes.push({ mound, ...sameSegment }); continue; }
                 if (!best) continue;
-                const reversed = [best.end.to]; let id = best.end.to, shortcutMeters = 0;
-                while (previous[id]) { const e = previous[id]; if (e.kind === 'shortcut') shortcutMeters += e.meters; id = e.from; reversed.push(id); }
-                reversed.reverse();
-                const initial = starts[best.end.to];
-                const path = [start.p, initial.via, ...reversed.map(i => nodes[i]), best.end.via, end.p];
-                routes.push({ mound, meters: best.meters, shortcutMeters, accessMeters: norm(start.p, initial.via) + norm(end.p, best.end.via), coordinates: path.filter((p, i) => !i || norm(p, path[i - 1]) > 0.001).map(unproject) });
+                const path = []; let id = best.end.to;
+                while (previous[id]) {
+                    const e = previous[id];
+                    path.push({ a: nodes[e.from], b: nodes[id], kind: e.kind }); id = e.from;
+                }
+                path.reverse();
+                const legs = [...connectionLegs(start, starts[best.end.to]), ...path, ...connectionLegs(end, best.end, true)];
+                routes.push(finish(mound, legs, best.score));
             }
-            routes.sort((a, b) => a.meters - b.meters || String(a.mound.id).localeCompare(String(b.mound.id)));
-            return { routes, unreachable: mounds.filter(m => m.gleba === data.gleba && !routes.some(r => r.mound.id === m.id)).length };
+            routes.sort((a, b) => a.score - b.score || a.meters - b.meters || String(a.mound.id).localeCompare(String(b.mound.id)));
+            return { routes, unreachable: mounds.filter(m => m.gleba === data.gleba && !routes.some(r => r.mound.id === m.id)).length, model: profile.version };
         }
-        return { rank, serviceCosts, nodeCount: nodes.length, shortcutMeters: shortcut };
+        return { rank, serviceCosts, nodeCount: nodes.length, shortcutMeters: shortcut, profile };
     }
     const pending = new Map();
     const workers = new Set();
     let cacheGeneration = 0;
     function backgroundGraph(data) {
         if (!root.Worker) return build(data);
-        const worker = new root.Worker('js/fertilizer-routing-worker.js?v=network-zones-20261111');
+        const worker = new root.Worker('js/fertilizer-routing-worker.js?v=machine-road-v2-20261111');
         workers.add(worker);
         let sequence = 0, failed = null;
         const requests = new Map();
@@ -402,7 +452,7 @@
             const id = ++sequence;
             return new Promise((resolve, reject) => { requests.set(id, { resolve, reject, progress }); worker.postMessage({ id, operation, ...args }); });
         }
-        return { rank: (origin, mounds) => call('rank', { origin, mounds }), serviceCosts: (samples, mounds, progress) => call('costs', { samples, mounds }, progress) };
+        return { profile, rank: (origin, mounds) => call('rank', { origin, mounds }), serviceCosts: (samples, mounds, progress) => call('costs', { samples, mounds }, progress) };
     }
     async function load(client, year, gleba, scope) {
         const key = JSON.stringify([year, gleba, scope]);
@@ -419,5 +469,5 @@
         }
         return pending.get(key);
     }
-    root.FertilizerRouting = { build, load, clearCache: () => { cacheGeneration++; pending.clear(); for (const worker of [...workers]) worker.dispose(); } };
+    root.FertilizerRouting = { build, load, profile, clearCache: () => { cacheGeneration++; pending.clear(); for (const worker of [...workers]) worker.dispose(); } };
 })(typeof window !== 'undefined' ? window : globalThis);

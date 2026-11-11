@@ -1,18 +1,20 @@
 (function (root) {
     'use strict';
+    const model = 'machine-road-v2';
     let epoch = 0;
     async function calculate(client, year, farms, base, scope, progress = () => {}) {
         const requested = [...new Set(farms.filter(farm => ['FE', 'PA', 'RM'].includes(farm)))].sort();
         if (!requested.length) return { zones: base.zones, analysis: null };
+        if (root.FertilizerRouting?.profile?.version !== model) throw Error('Perfil de rotas incompatível com as áreas de atendimento.');
         const token = epoch;
         const current = () => { if (token !== epoch) throw Error('Estudo de atendimento cancelado.'); };
         progress('Consultando as áreas de atendimento por percurso…');
-        const cached = await client.rpc('fertilizer_service_cached', { map_year: String(year), requested_farms: requested });
+        const cached = await client.rpc('fertilizer_service_cached_profile', { map_year: String(year), requested_farms: requested, route_model: model });
         if (cached.error) throw cached.error;
         current();
         if (cached.data !== null && cached.data !== undefined) {
             if (!Array.isArray(cached.data.zones?.features) || cached.data.analysis?.method !== 'network_grid' ||
-                cached.data.analysis?.resolution_m !== 100 || typeof cached.data.signature !== 'string') throw Error('Estudo preparado incompleto.');
+                cached.data.analysis?.resolution_m !== 100 || cached.data.analysis?.model_version !== model || typeof cached.data.signature !== 'string') throw Error('Estudo preparado incompleto.');
             const allowed = new Set(base.mounds.map(m => m.id));
             if (cached.data.zones.features.some(f => !farms.includes(f.properties?.farm_code) ||
                 !Array.isArray(f.properties?.mound_ids) || f.properties.mound_ids.some(id => !allowed.has(id)))) throw Error('Estudo preparado fora do acesso atual.');
@@ -44,7 +46,7 @@
         const allowed = new Set(base.mounds.map(m => m.id));
         if (!Array.isArray(costs) || costs.length !== grid.cells.length || costs.some((c, index) =>
             c.farm_code !== grid.cells[index].farm_code || c.i !== grid.cells[index].i || c.j !== grid.cells[index].j ||
-            (c.mound_id !== null && !allowed.has(c.mound_id)))) throw Error('Resultado de atendimento inválido.');
+            (c.mound_id !== null && (!allowed.has(c.mound_id) || !Number.isFinite(c.score) || !Number.isFinite(c.meters))))) throw Error('Resultado de atendimento inválido.');
         const assignments = costs.filter(c => c.mound_id).map(c => ({ f: c.farm_code, i: c.i, j: c.j, m: c.mound_id }));
         const result = await client.rpc('fertilizer_service_zones', {
             map_year: String(year), grid_signature: grid.signature, requested_farms: requested, assignments
@@ -52,7 +54,7 @@
         if (result.error) throw result.error;
         current();
         if (!Array.isArray(result.data?.zones?.features) || result.data?.analysis?.method !== 'network_grid') throw Error('Áreas de atendimento incompletas.');
-        return result.data;
+        return { ...result.data, analysis: { ...result.data.analysis, model_version: model, ranking_metric: 'weighted_surface' } };
     }
     root.FertilizerServiceAreas = { calculate, invalidate: () => { epoch++; } };
 })(typeof window !== 'undefined' ? window : globalThis);

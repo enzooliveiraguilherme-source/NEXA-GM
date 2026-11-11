@@ -96,7 +96,7 @@ function pointInRings(point, rings) {
     return insideRing(rings[0]) && !rings.slice(1).some(insideRing);
 }
 
-test('FE0203 image point matches rank and 200 FE cell centers can be batch-costed', () => {
+test('FE0203 image point follows machine-road-v2 and 200 FE cell centers can be batch-costed', () => {
     const fixture = JSON.parse(fs.readFileSync(require.resolve('../tmp/routing/real-network.json'), 'utf8'));
     const buildStart = performance.now();
     const g = buildData(fixture.data);
@@ -105,7 +105,7 @@ test('FE0203 image point matches rank and 200 FE cell centers can be batch-coste
     const imagePoint = { farm_code: 'FE', i: -1, j: -1, point: [-52.241091, -10.361679] };
     const imageResult = assertMatchesRank(g, [imagePoint], feMounds)[0];
     assert.equal(imageResult.mound_id, '76240015-97bb-4a58-935e-4b7a54b94e15');
-    assert.ok(imageResult.meters > 500 && imageResult.meters < 570, `${imageResult.meters} m`);
+    assert.ok(imageResult.meters > 680 && imageResult.meters < 690, `${imageResult.meters} m`);
 
     let seed = 314159;
     const random = () => ((seed = (seed * 48271) % 2147483647) - 1) / 2147483646;
