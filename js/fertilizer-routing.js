@@ -126,6 +126,52 @@
             }
         }
         const roads = data.roads.features.flatMap(f => lines(f.geometry)).flatMap(line => line.slice(1).map((p, i) => [project(line[i]), project(p)]));
+        const roadGrid = new Map();
+        for (const road of roads) {
+            const box = bounds(road);
+            for (let x = Math.floor((box[0] - 2) / 80); x <= Math.floor((box[2] + 2) / 80); x++) {
+                for (let y = Math.floor((box[1] - 2) / 80); y <= Math.floor((box[3] + 2) / 80); y++) {
+                    const key = `${x},${y}`;
+                    if (!roadGrid.has(key)) roadGrid.set(key, []);
+                    roadGrid.get(key).push(road);
+                }
+            }
+        }
+        const isRoad = p => (roadGrid.get(`${Math.floor(p[0] / 80)},${Math.floor(p[1] / 80)}`) || [])
+            .some(([a, b]) => norm(p, projectPoint(p, a, b)) <= 2);
+        const roadNodes = nodes.map(isRoad);
+        const holePolygons = polygons.flatMap(p => p.rings.slice(1).map(ring => indexPolygon([ring])));
+        function crossesHole(a, b) {
+            // Road data is authoritative on its own centerline. A newly inferred
+            // approach, however, must never cut through an excluded field island.
+            const box = bounds([a, b]), d = sub(b, a), ts = [0, 1];
+            for (const poly of holePolygons.filter(p => overlaps(box, p.box))) {
+                const ring = poly.rings[0];
+                if (inRing(a, ring) === 1 || inRing(b, ring) === 1) return true;
+                for (let i = 1; i < ring.length; i++) {
+                    const c = ring[i - 1], e = sub(ring[i], c), denominator = cross(d, e);
+                    if (Math.abs(denominator) < 1e-10) continue;
+                    const t = cross(sub(c, a), e) / denominator, u = cross(sub(c, a), d) / denominator;
+                    if (t > 0 && t < 1 && u >= 0 && u <= 1) ts.push(t);
+                }
+                ts.sort((x, y) => x - y);
+                for (let i = 1; i < ts.length; i++) if (inRing(mix(a, b, (ts[i - 1] + ts[i]) / 2), ring) === 1) return true;
+            }
+            return false;
+        }
+        function accessCovered(a, b, available, toRoad = false) {
+            if (covered(a, b, available)) return true;
+            if (!toRoad || !available.length || crossesHole(a, b)) return false;
+            // Centerlines and crop polygons have different survey offsets. Permit
+            // only the final <=40 m from a field edge to an explicitly mapped road.
+            const length = norm(a, b), inset = mix(a, b, Math.max(0, 1 - 40 / Math.max(length, 0.001)));
+            return covered(a, inset, available);
+        }
+        for (const [a, b] of edges) {
+            const road = roadNodes[a] && roadNodes[b] && isRoad(mix(nodes[a], nodes[b], 0.5));
+            for (const e of adjacency[a]) if (e.to === b) e.kind = road ? 'road' : 'border';
+            for (const e of adjacency[b]) if (e.to === a) e.kind = road ? 'road' : 'border';
+        }
         const shortcut = Math.min(80, Math.max(0, Number(data.shortcut_m) || 0));
         if (shortcut) {
             const grid = new Map(), size = shortcut;
@@ -133,7 +179,12 @@
                 const p = nodes[i], x = Math.floor(p[0] / size), y = Math.floor(p[1] / size);
                 for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
                     for (const j of grid.get(`${x + dx},${y + dy}`) || []) {
-                        if (norm(p, nodes[j]) <= shortcut && !adjacency[i].some(e => e.to === j) && covered(p, nodes[j], polygons)) edge(i, j, 'shortcut');
+                        const meters = norm(p, nodes[j]);
+                        if (meters > shortcut || adjacency[i].some(e => e.to === j)) continue;
+                        if (covered(p, nodes[j], polygons)) edge(i, j, 'shortcut');
+                        else if (meters <= 2 && roadNodes[i] && roadNodes[j] && !crossesHole(p, nodes[j])) edge(i, j, 'road');
+                        else if (meters <= 40 && ((roadNodes[i] && accessCovered(nodes[j], p, polygons, true)) ||
+                            (roadNodes[j] && accessCovered(p, nodes[j], polygons, true)))) edge(i, j, 'approach');
                     }
                 }
                 const key = `${x},${y}`;
@@ -143,28 +194,42 @@
         }
         function connectors(coordinate) {
             const p = project(coordinate), containing = polygons.filter(poly => inPolygon(p, poly.rings));
-            const result = new Map(), segments = [];
+            const result = new Map(), segments = [], candidates = [];
             function put(id, q, kind) {
                 const meters = norm(p, q) + norm(q, nodes[id]);
                 if (!result.has(id) || result.get(id).meters > meters) result.set(id, { to: id, meters, via: q, kind });
             }
-            // Inside the application field, access to its border is necessary and is
-            // reported separately from short cuts between network nodes.
-            if (containing.length) {
-                for (const [a, b] of edges) {
-                    const q = projectPoint(p, nodes[a], nodes[b]);
-                    if (covered(p, q, containing)) { put(a, q, 'access'); put(b, q, 'access'); segments.push({ key: `${a},${b}`, q }); }
-                }
-            }
-            // Up to 2 m only for cartographic rounding at an explicitly mapped road.
-            // Never snap across a hole or invent an unmapped access across open land.
+            // First locate genuine road access; do not attach an interior point to
+            // every visible edge of its field, which allowed kilometre-long cuts.
             for (const [a, b] of edges) {
                 const q = projectPoint(p, nodes[a], nodes[b]);
-                if (norm(p, q) < 0.002 || (!containing.length && norm(p, q) <= 2 && roads.some(([c, d]) => norm(q, projectPoint(q, c, d)) < 0.01))) {
-                    if (!polygons.some(poly => poly.rings.slice(1).some(r => inRing(p, r) === 1))) { put(a, q, 'snap'); put(b, q, 'snap'); segments.push({ key: `${a},${b}`, q }); }
+                const meters = norm(p, q), road = roadNodes[a] && roadNodes[b] && isRoad(q);
+                candidates.push({ a, b, q, meters, road });
+            }
+            const pinned = candidates.filter(c => c.road && c.meters <= 2);
+            let limit = 0;
+            if (pinned.length) {
+                // A mapped road remains usable even when a crop mask excludes it.
+                // This is not permission to create a new cut through that exclusion.
+                for (const c of pinned) { put(c.a, c.q, 'snap'); put(c.b, c.q, 'snap'); segments.push({ key: `${c.a},${c.b}`, q: c.q }); }
+            } else {
+                candidates.sort((a, b) => a.meters - b.meters);
+                let nearestRoad = Infinity, nearestBorder = Infinity;
+                for (const c of candidates) {
+                    if (c.road && !Number.isFinite(nearestRoad) && accessCovered(p, c.q, containing, true)) nearestRoad = c.meters;
+                    if (!Number.isFinite(nearestBorder) && (c.meters < 0.002 || covered(p, c.q, containing))) nearestBorder = c.meters;
+                    if (Number.isFinite(nearestRoad) && Number.isFinite(nearestBorder)) break;
+                }
+                const nearest = Number.isFinite(nearestRoad) ? nearestRoad : nearestBorder;
+                limit = Number.isFinite(nearest) ? 2 * nearest + shortcut : 0;
+                for (const c of candidates) {
+                    if (c.meters > limit) break;
+                    if (c.meters < 0.002 || accessCovered(p, c.q, containing, c.road)) {
+                        put(c.a, c.q, 'access'); put(c.b, c.q, 'access'); segments.push({ key: `${c.a},${c.b}`, q: c.q });
+                    }
                 }
             }
-            return { p, containing, links: [...result.values()], segments: new Map(segments.map(s => [s.key, s.q])) };
+            return { p, containing, limit, onRoad: !!pinned.length, links: [...result.values()], segments: new Map(segments.map(s => [s.key, s.q])) };
         }
         const moundCache = new Map();
         function rank(origin, mounds) {
@@ -186,9 +251,11 @@
                 let best = null;
                 for (const c of end.links) if (Number.isFinite(dist[c.to]) && (!best || dist[c.to] + c.meters < best.meters)) best = { end: c, meters: dist[c.to] + c.meters };
                 let direct = norm(start.p, end.p);
-                // A mound in the application field can be reached directly within that
-                // field. For all other fields only bounded network shortcuts are allowed.
-                const directAllowed = start.containing.length && covered(start.p, end.p, start.containing);
+                // Only a local approach can compete with road routes; nearby roads
+                // cannot be abandoned in favour of an unlimited field diagonal.
+                const directAllowed = direct <= Math.max(shortcut, start.limit + end.limit) && (
+                    accessCovered(start.p, end.p, start.containing, end.onRoad) ||
+                    accessCovered(end.p, start.p, end.containing, start.onRoad));
                 if (directAllowed && (!best || direct < best.meters)) {
                     routes.push({ mound, meters: direct, shortcutMeters: 0, accessMeters: direct, coordinates: [origin, destination] }); continue;
                 }
@@ -220,7 +287,7 @@
     const workers = new Set();
     function backgroundGraph(data) {
         if (!root.Worker) return build(data);
-        const worker = new root.Worker('js/fertilizer-routing-worker.js?v=roads-20261111');
+        const worker = new root.Worker('js/fertilizer-routing-worker.js?v=local-access-20261111');
         workers.add(worker);
         let sequence = 0, failed = null;
         const requests = new Map();

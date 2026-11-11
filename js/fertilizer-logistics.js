@@ -117,7 +117,7 @@
                     link = L.polyline(best.coordinates.map(p => [p[1], p[0]]), { color: '#fff', weight: 4, interactive: false }).addTo(group);
                     let html = `<strong>Menor percurso calculado: ${escape(best.mound.name)}</strong><p>${number(best.meters / 1000)} km até o monte.</p>`;
                     if (best.shortcutMeters > 0.1) html += `<p>Atalhos curtos dentro dos talhões: ${number(best.shortcutMeters)} m.</p>`;
-                    if (best.accessMeters > 0.1) html += `<p>Acesso dentro do talhão de origem/destino: ${number(best.accessMeters)} m.</p>`;
+                    if (best.accessMeters > 0.1) html += `<p>Acesso local ao ponto/monte: ${number(best.accessMeters)} m.</p>`;
                     html += moundDetails(best.mound);
                     if (result.routes.length > 1) html += '<p>Outras origens por percurso:</p><ol>' + result.routes.slice(1, 4).map(r => `<li>${escape(r.mound.name)}: ${number(r.meters / 1000)} km</li>`).join('') + '</ol>';
                     if (result.unreachable) html += `<p>${result.unreachable} monte(s) sem ligação confirmada.</p>`;
@@ -147,8 +147,8 @@
             const totalArea = zones.reduce((sum, f) => sum + Number(f.properties.area_ha), 0);
             panel.innerHTML = `<details open><summary>Logística de adubação</summary><div class="logistics-content">` +
                 `<p class="logistics-total"><strong>${mounds.length} montes</strong><span>${number(totalArea)} ha atendidos</span></p><p>Limites de adubação · ${escape(state.currentAno)}</p>` +
-                '<p>Clique no talhão para comparar os montes pelo menor percurso: estradas, bordas e atalhos curtos dentro dos talhões, sem penalidade por pisar na lavoura.</p>' +
-                '<p class="logistics-note">As cores são referência em linha reta; a recomendação por percurso é calculada no clique e pode indicar outro monte. Estradas em amarelo e percurso em branco. Atalhos entre bordas de até 80 m. O acesso ao ponto de aplicação é informado à parte. Não considera produto ou estoque.</p>' +
+                '<p>Clique no talhão para comparar os montes por percurso, usando estradas, bordas e acessos locais. Dentro da lavoura, o acesso é limitado pela estrada mais próxima; atalhos locais podem encurtar o caminho.</p>' +
+                '<p class="logistics-note">As cores são referência em linha reta; a recomendação por percurso é calculada no clique e pode indicar outro monte. Estradas em amarelo e percurso em branco. O trecho de acesso dentro do talhão é informado à parte. Não considera produto ou estoque.</p>' +
                 (missing.length ? `<p class="logistics-note">Sem cobertura de montes disponíveis: ${escape(missing.join(', '))}.</p>` : '') +
                 (!mounds.length ? '<p>Nenhum monte cadastrado para os filtros atuais.</p>' : '') +
                 (mounds.length && !zones.length ? '<p>Montes cadastrados, mas sem talhões disponíveis para calcular o atendimento.</p>' : '') +

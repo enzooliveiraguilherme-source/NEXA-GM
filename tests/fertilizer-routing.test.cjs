@@ -86,7 +86,7 @@ test('origem no interior conecta à rede e mede o acesso separadamente', () => {
     const result = g.rank([0.0003, 0.0006], [mound('externo', 'FE', 0.0011)]);
     assert.equal(result.routes.length, 1);
     assert.ok(result.routes[0].accessMeters > 10);
-    assert.ok(result.routes[0].meters > result.routes[0].accessMeters);
+    assert.ok(result.routes[0].meters >= result.routes[0].accessMeters - 0.001);
 });
 
 test('monte no mesmo talhão usa percurso direto coberto', () => {
@@ -117,4 +117,40 @@ test('origem e monte no meio do mesmo segmento usam o trecho direto', () => {
     assert.ok(Math.abs(result.routes[0].meters - 55.6) < 0.2);
     const coordinates = Array.from(result.routes[0].coordinates, point => Array.from(point));
     assert.ok(coordinates.every(point => Math.abs(point[1]) < 1e-12 && point[0] >= 0.0002 - 1e-12 && point[0] <= 0.0007 + 1e-12));
+});
+
+test('origem próxima à estrada segue o acesso local, alcança FE02 03 e FE03, e não corta até FE04', () => {
+    const broadField = polygon([[[0, 0], [0.01, 0], [0.01, 0.01], [0, 0.01], [0, 0]]]);
+    const localRoad = line([0.002, 0.0051], [0.009, 0.0051]);
+    const isolatedRoad = line([0.0045, 0.008], [0.0046, 0.008]);
+    const g = graph({ fields: [broadField], network: [localRoad, isolatedRoad], roads: [localRoad, isolatedRoad] });
+    const origin = [0.002, 0.005];
+    const result = g.rank(origin, [
+        mound('FE0203', 'FE', 0.0065, 0.0051),
+        mound('FE03', 'FE', 0.0085, 0.0051),
+        mound('FE04', 'FE', 0.00455, 0.008)
+    ]);
+    assert.deepEqual(Array.from(result.routes, route => route.mound.id), ['FE0203', 'FE03']);
+    assert.equal(result.unreachable, 1);
+    const route = result.routes[0];
+    assert.ok(route.meters > 490 && route.meters < 530);
+    assert.ok(route.accessMeters < 20);
+    assert.ok(route.coordinates.length > 2);
+    const firstLeg = route.coordinates[1];
+    const distanceToLocalRoad = Math.abs(firstLeg[1] - 0.0051) * 111195;
+    assert.ok(distanceToLocalRoad < 0.02);
+});
+
+test('monte FE03 continua acessível quando a estrada mapeada atravessa uma máscara de talhão', () => {
+    const fieldWithHole = polygon([
+        [[0, 0], [0.01, 0], [0.01, 0.01], [0, 0.01], [0, 0]],
+        [[0.0028, 0.0048], [0.0032, 0.0048], [0.0032, 0.0052], [0.0028, 0.0052], [0.0028, 0.0048]]
+    ]);
+    const road = line([0.002, 0.005], [0.003, 0.005]);
+    const g = graph({ fields: [fieldWithHole], roads: [road], network: [road] });
+    const result = g.rank([0.002, 0.005], [mound('FE03', 'FE', 0.003, 0.005)]);
+    assert.equal(result.routes.length, 1);
+    assert.equal(result.routes[0].mound.id, 'FE03');
+    assert.ok(Math.abs(result.routes[0].meters - 111.2) < 1);
+    assert.ok(result.routes[0].coordinates.length <= 3);
 });
