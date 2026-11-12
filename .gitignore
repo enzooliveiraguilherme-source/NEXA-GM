@@ -44,3 +44,6 @@ logs/
 *.temp
 ~$*
 /site-dist/
+/tmp/routing/
+/Sentido_plantio_milho.geojson
+/Sentido_plantio_milho.qmd

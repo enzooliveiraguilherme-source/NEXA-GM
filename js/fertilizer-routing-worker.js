@@ -1,5 +1,5 @@
 /* Keep geometry work outside the map's UI thread. No data is persisted here. */
-importScripts('fertilizer-routing.js?v=machine-road-v2-20261111');
+importScripts('fertilizer-routing.js?v=ab-strips-v1-20261112');
 let graph = null, initializationError = null;
 self.onmessage = event => {
     const message = event.data;
@@ -9,7 +9,9 @@ self.onmessage = event => {
     }
     try {
         if (initializationError || !graph) throw Error(initializationError || 'Rede de caminhos indisponível.');
-        const result = message.operation === 'costs'
+        const result = message.operation === 'strips'
+            ? graph.serviceStripCosts(message.samples, message.mounds, progress => self.postMessage({ id: message.id, progress }))
+            : message.operation === 'costs'
             ? graph.serviceCosts(message.samples, message.mounds, progress => self.postMessage({ id: message.id, progress }))
             : graph.rank(message.origin, message.mounds);
         self.postMessage({ id: message.id, result });

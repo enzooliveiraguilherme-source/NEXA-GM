@@ -5,17 +5,27 @@ const vm = require('node:vm');
 
 const source = fs.readFileSync(require.resolve('../js/fertilizer-service-areas.js'), 'utf8');
 const routeProfile = { version: 'machine-road-v2' };
+const expectedAnalysis = { method: 'ab_strips', model_version: 'ab-strips-v1', routing_model: 'machine-road-v2', strip_width_m: 50, sampling_step_m: 100 };
 function moduleWith(routing) {
     const window = { FertilizerRouting: routing };
-    vm.runInNewContext(source, vm.createContext({ window, Promise, Set, String, Array, Error, Math }));
+    vm.runInNewContext(source, vm.createContext({ window, Promise, Set, String, Array, Error, Math, Number, JSON }));
     return window.FertilizerServiceAreas;
 }
 const emptyZones = () => ({ type: 'FeatureCollection', features: [] });
 const emptyBase = () => ({ zones: emptyZones(), mounds: [{ id: 'fe-mound', gleba: 'FE' }, { id: 'pa-mound', gleba: 'PA' }] });
 function grid(cells, overrides = {}) {
-    return { year: '2026', gleba: 'FE', resolution_m: 100, signature: 'sig-1', cells, ...overrides };
+    return { year: '2026', gleba: 'FE', model_version: 'ab-strips-v1', routing_model: 'machine-road-v2', strip_width_m: 50,
+        sampling_step_m: 100, signature: 'sig-1', cells, ...overrides };
 }
-function cell(farm_code, i) { return { farm_code, i, j: i + 10, point: [-52 + i / 10000, -10], area_ha: 1 }; }
+function cell(farm_code, campo, strip_id, i = 1, area_ha = 1) {
+    return { farm_code, campo, strip_id, point: [-52 + i / 10000, -10], area_ha };
+}
+function resultData(zones = emptyZones(), signature = 'sig-final') { return { signature, zones, analysis: { ...expectedAnalysis } }; }
+function validZones() {
+    return { type: 'FeatureCollection', features: [
+        { type: 'Feature', properties: { farm_code: 'FE', mound_id: 'fe-mound', mound_ids: ['fe-mound'] }, geometry: null }
+    ] };
+}
 
 test('ignores farms outside FE/PA/RM scope without RPC and returns base zones', async () => {
     const calls = [];
@@ -27,44 +37,52 @@ test('ignores farms outside FE/PA/RM scope without RPC and returns base zones', 
     assert.equal(result.analysis, null);
 });
 
-test('requests only authorized farm codes at 100 m and submits one winning assignment per cell', async () => {
-    const cells = [cell('FE', 1), cell('PA', 2), cell('RM', 3)];
+test('requests only authorized farms, groups repeated samples by strip and submits one assignment per strip', async () => {
+    const cells = [cell('FE', 'FE01', 'strip-1', 1), cell('FE', 'FE01', 'strip-1', 2, 2),
+        cell('PA', 'PA01', 'strip-2', 3), cell('RM', 'RM01', 'strip-3', 4)];
     const rpcCalls = [], routingCalls = [];
     const base = emptyBase();
-    const zones = { type: 'FeatureCollection', features: [{ type: 'Feature', properties: {}, geometry: null }] };
+    const zones = validZones();
     const client = { async rpc(name, args) {
         rpcCalls.push([name, args]);
         if (name === 'fertilizer_service_cached_profile') return { data: null, error: null };
-        if (name === 'fertilizer_service_grid') return { data: grid(cells), error: null };
-        return { data: { zones, analysis: { method: 'network_grid' } }, error: null };
+        if (name === 'fertilizer_direction_grid') return { data: grid(cells), error: null };
+        return { data: resultData(zones), error: null };
     } };
     const routing = { profile: routeProfile, async load(...args) {
         routingCalls.push(args);
-        return { graph: { serviceCosts(samples, mounds) {
-            assert.equal(samples.length, 3);
+        return { graph: { async serviceStripCosts(samples, mounds) {
+            assert.equal(samples.length, 4);
             assert.deepEqual(Array.from(mounds, mound => mound.id), ['fe-mound']);
-            return samples.map(sample => ({ ...sample, mound_id: 'fe-mound', score: 200 + sample.i, meters: 100 + sample.i }));
+            return [
+                { farm_code: 'FE', campo: 'FE01', strip_id: 'strip-1', mound_id: 'fe-mound', score: 200, meters: 100 },
+                { farm_code: 'PA', campo: 'PA01', strip_id: 'strip-2', mound_id: 'fe-mound', score: 210, meters: 110 },
+                { farm_code: 'RM', campo: 'RM01', strip_id: 'strip-3', mound_id: 'fe-mound', score: 220, meters: 120 }
+            ];
         } } };
     } };
     const service = moduleWith(routing), scope = { farm: 'authorized' };
     const result = await service.calculate(client, 2026, ['FE', 'FE2', 'PA', 'RM', 'GM'], base, scope);
     assert.deepEqual(Array.from(rpcCalls[0][1].requested_farms), ['FE', 'PA', 'RM']);
-    assert.equal(rpcCalls[0][1].route_model, 'machine-road-v2');
+    assert.equal(rpcCalls[0][1].route_model, 'ab-strips-v1');
     assert.equal(rpcCalls[0][1].map_year, '2026');
     assert.deepEqual(routingCalls[0], [client, 2026, 'FE', scope]);
-    assert.equal(rpcCalls[2][0], 'fertilizer_service_zones');
+    assert.equal(rpcCalls[1][0], 'fertilizer_direction_grid');
     const payload = rpcCalls[2][1];
+    assert.equal(rpcCalls[2][0], 'fertilizer_direction_zones');
     assert.deepEqual(Array.from(payload.requested_farms), ['FE', 'PA', 'RM']);
     assert.equal(payload.grid_signature, 'sig-1');
-    assert.deepEqual(Array.from(payload.assignments, assignment => [assignment.f, assignment.i, assignment.j, assignment.m]), [
-        ['FE', 1, 11, 'fe-mound'], ['PA', 2, 12, 'fe-mound'], ['RM', 3, 13, 'fe-mound']
+    assert.deepEqual(Array.from(payload.assignments, assignment => [assignment.f, assignment.c, assignment.s, assignment.m]), [
+        ['FE', 'FE01', 'strip-1', 'fe-mound'], ['PA', 'PA01', 'strip-2', 'fe-mound'], ['RM', 'RM01', 'strip-3', 'fe-mound']
     ]);
-    assert.equal(payload.assignments.length, cells.length);
+    assert.equal(payload.assignments.length, 3);
     assert.equal(result.zones, zones);
+    assert.equal(result.signature, 'sig-final');
+    assert.deepEqual(result.analysis, expectedAnalysis);
 });
 
-test('propagates grid or routing failures and never returns fallback straight-line zones', async () => {
-    const base = emptyBase(), failure = new Error('service grid offline');
+test('propagates grid or routing failures and never returns fallback zones', async () => {
+    const base = emptyBase(), failure = new Error('direction grid offline');
     const failedGrid = moduleWith({ profile: routeProfile, load: async () => { throw new Error('should not load graph'); } });
     await assert.rejects(failedGrid.calculate({ async rpc(name) {
         return name === 'fertilizer_service_cached_profile' ? { data: null, error: null } : { data: null, error: failure };
@@ -73,7 +91,7 @@ test('propagates grid or routing failures and never returns fallback straight-li
     const routingFailure = new Error('network graph unavailable');
     const validGridClient = { async rpc(name) {
         if (name === 'fertilizer_service_cached_profile') return { data: null, error: null };
-        if (name === 'fertilizer_service_grid') return { data: grid([cell('FE', 1)]), error: null };
+        if (name === 'fertilizer_direction_grid') return { data: grid([cell('FE', 'FE01', 's1')]), error: null };
         throw new Error('zones RPC must not run after routing error');
     } };
     const failedRouting = moduleWith({ profile: routeProfile, async load() { throw routingFailure; } });
@@ -85,11 +103,11 @@ test('invalidate makes an older cache lookup stale before grid, graph or zone RP
     const pending = new Promise(resolve => { resolveCache = resolve; });
     const client = { async rpc(name) {
         if (name === 'fertilizer_service_cached_profile') return pending;
-        if (name === 'fertilizer_service_grid') gridCalls++;
+        if (name === 'fertilizer_direction_grid') gridCalls++;
         zoneCalls++;
-        return { data: { zones: emptyZones(), analysis: { method: 'network_grid' } }, error: null };
+        return { data: resultData(), error: null };
     } };
-    const service = moduleWith({ profile: routeProfile, async load() { networkLoads++; return { graph: { serviceCosts: () => [] } }; } });
+    const service = moduleWith({ profile: routeProfile, async load() { networkLoads++; return { graph: { serviceStripCosts: () => [] } }; } });
     const work = service.calculate(client, 2026, ['FE'], emptyBase(), {});
     service.invalidate();
     resolveCache({ data: null, error: null });
@@ -99,12 +117,11 @@ test('invalidate makes an older cache lookup stale before grid, graph or zone RP
     assert.equal(zoneCalls, 0);
 });
 
-test('valid cached zones return directly without loading the graph or generating cell costs', async () => {
-    const zones = { type: 'FeatureCollection', features: [
-        { type: 'Feature', properties: { farm_code: 'FE', mound_ids: ['fe-mound'] }, geometry: null },
-        { type: 'Feature', properties: { farm_code: 'PA', mound_ids: ['pa-mound'] }, geometry: null }
-    ] };
-    const cached = { signature: 'full-scope-signature', zones, analysis: { method: 'network_grid', resolution_m: 100, model_version: 'machine-road-v2' } };
+test('valid cached ab-strips zones return directly without loading the graph', async () => {
+    const cached = resultData({ type: 'FeatureCollection', features: [
+        ...validZones().features,
+        { type: 'Feature', properties: { farm_code: 'PA', mound_id: 'pa-mound', mound_ids: ['pa-mound'] }, geometry: null }
+    ] }, 'full-scope-signature');
     const calls = [];
     const service = moduleWith({ profile: routeProfile, async load() { throw new Error('cache hit must skip graph load'); } });
     const result = await service.calculate({ async rpc(name, args) {
@@ -113,39 +130,80 @@ test('valid cached zones return directly without loading the graph or generating
     } }, 2026, ['FE', 'PA', 'FE2'], emptyBase(), {});
     assert.deepEqual(calls.map(([name]) => name), ['fertilizer_service_cached_profile']);
     assert.deepEqual(Array.from(calls[0][1].requested_farms), ['FE', 'PA']);
-    assert.equal(calls[0][1].route_model, 'machine-road-v2');
+    assert.equal(calls[0][1].route_model, 'ab-strips-v1');
     assert.equal(result, cached);
 });
 
-test('rejects network-grid-v1 cached zones under machine-road-v2 without loading the graph', async () => {
-    const service = moduleWith({ profile: routeProfile, async load() { throw new Error('stale cache must not load graph'); } });
-    const stale = { signature: 'old-signature', zones: { type: 'FeatureCollection', features: [
-        { type: 'Feature', properties: { farm_code: 'FE', mound_ids: ['fe-mound'] }, geometry: null }
-    ] }, analysis: { method: 'network_grid', resolution_m: 100, model_version: 'network-grid-v1' } };
+test('missing directional RPC falls back to the valid cached v2 study without loading a graph', async () => {
+    const cachedV2 = {
+        signature: 'v2-signature', zones: validZones(),
+        analysis: { method: 'network_grid', model_version: 'machine-road-v2', resolution_m: 100 }
+    };
     const calls = [];
-    await assert.rejects(service.calculate({ async rpc(name, args) {
+    const service = moduleWith({ profile: routeProfile, async load() { throw new Error('cached v2 must skip graph load'); } });
+    const result = await service.calculate({ async rpc(name, args) {
         calls.push([name, args]);
-        return { data: stale, error: null };
-    } }, 2026, ['FE'], emptyBase(), {}), /preparado incompleto/i);
-    assert.equal(calls.length, 1);
-    assert.equal(calls[0][0], 'fertilizer_service_cached_profile');
-    assert.equal(calls[0][1].route_model, 'machine-road-v2');
+        if (name === 'fertilizer_service_cached_profile' && args.route_model === 'ab-strips-v1') return { data: null, error: null };
+        if (name === 'fertilizer_direction_grid') return { data: null, error: { code: 'PGRST202', message: 'function not found' } };
+        if (name === 'fertilizer_service_cached_profile' && args.route_model === 'machine-road-v2') return { data: cachedV2, error: null };
+        throw new Error(`unexpected RPC ${name}`);
+    } }, 2026, ['FE'], emptyBase(), {});
+    assert.deepEqual(Array.from(calls, ([name, args]) => [name, args.route_model ?? null]), [
+        ['fertilizer_service_cached_profile', 'ab-strips-v1'],
+        ['fertilizer_direction_grid', null],
+        ['fertilizer_service_cached_profile', 'machine-road-v2']
+    ]);
+    assert.equal(result, cachedV2);
 });
 
-test('rejects cached zones outside authorized farms or mound IDs without loading the graph', async () => {
-    const service = moduleWith({ profile: routeProfile, async load() { throw new Error('invalid cache must not load graph'); } });
-    const cached = { signature: 'signature', analysis: { method: 'network_grid', resolution_m: 100, model_version: 'machine-road-v2' }, zones: { type: 'FeatureCollection', features: [
-        { type: 'Feature', properties: { farm_code: 'FE2', mound_ids: ['fe-mound'] }, geometry: null }
-    ] } };
+test('generic directional grid errors do not trigger the v2 fallback', async () => {
+    const failure = { code: '500', message: 'network unavailable' }, calls = [];
+    const service = moduleWith({ profile: routeProfile, async load() { throw new Error('graph must not load'); } });
+    await assert.rejects(service.calculate({ async rpc(name, args) {
+        calls.push([name, args]);
+        if (name === 'fertilizer_service_cached_profile') return { data: null, error: null };
+        return { data: null, error: failure };
+    } }, 2026, ['FE'], emptyBase(), {}), error => error === failure);
+    assert.deepEqual(Array.from(calls, ([name]) => name), ['fertilizer_service_cached_profile', 'fertilizer_direction_grid']);
+});
+
+test('rejects stale v2 cache, duplicate or missing strip results, and unauthorized output', async () => {
+    const service = moduleWith({ profile: routeProfile, async load() { return { graph: { serviceStripCosts: async () => [] } }; } });
+    const stale = resultData(validZones());
+    stale.analysis = { method: 'network_grid', resolution_m: 100, model_version: 'machine-road-v2' };
     let calls = 0;
-    await assert.rejects(service.calculate({ async rpc() { calls++; return { data: cached, error: null }; } },
-        2026, ['FE'], emptyBase(), {}), /fora do acesso atual/i);
+    await assert.rejects(service.calculate({ async rpc() { calls++; return { data: stale, error: null }; } },
+        2026, ['FE'], emptyBase(), {}), /preparado incompleto/i);
     assert.equal(calls, 1);
 
-    const unknownMound = { ...cached, zones: { type: 'FeatureCollection', features: [
-        { type: 'Feature', properties: { farm_code: 'FE', mound_ids: ['unknown'] }, geometry: null }
-    ] } };
-    await assert.rejects(service.calculate({ async rpc() { calls++; return { data: unknownMound, error: null }; } },
-        2026, ['FE'], emptyBase(), {}), /fora do acesso atual/i);
-    assert.equal(calls, 2);
+    const outOfScopeGrid = moduleWith({ profile: routeProfile, async load() { throw new Error('out-of-scope grid must be rejected before graph load'); } });
+    await assert.rejects(outOfScopeGrid.calculate({ async rpc(name) {
+        if (name === 'fertilizer_service_cached_profile') return { data: null, error: null };
+        return { data: grid([cell('FE2', 'FE201', 'outside')]), error: null };
+    } }, 2026, ['FE'], emptyBase(), {}), /fora do escopo/i);
+
+    async function runWithCosts(costs) {
+        const client = { async rpc(name) {
+            if (name === 'fertilizer_service_cached_profile') return { data: null, error: null };
+            if (name === 'fertilizer_direction_grid') return { data: grid([cell('FE', 'FE01', 's1')]), error: null };
+            return { data: resultData(validZones()), error: null };
+        } };
+        const badRouting = { profile: routeProfile, async load() { return { graph: { serviceStripCosts: async () => costs } }; } };
+        return moduleWith(badRouting).calculate(client, 2026, ['FE'], emptyBase(), {});
+    }
+    const cost = { farm_code: 'FE', campo: 'FE01', strip_id: 's1', mound_id: 'fe-mound', score: 10, meters: 9 };
+    await assert.rejects(runWithCosts([cost, cost]), /inválido/i);
+    await assert.rejects(runWithCosts([]), /inválido/i);
+
+    const forbidden = resultData({ type: 'FeatureCollection', features: [
+        { type: 'Feature', properties: { farm_code: 'FE2', mound_id: 'fe-mound', mound_ids: ['fe-mound'] }, geometry: null }
+    ] });
+    await assert.rejects(moduleWith({ profile: routeProfile, async load() { throw new Error('cache should be rejected before graph load'); } })
+        .calculate({ async rpc() { return { data: forbidden, error: null }; } }, 2026, ['FE'], emptyBase(), {}), /fora do acesso atual/i);
+
+    const unknownMound = resultData({ type: 'FeatureCollection', features: [
+        { type: 'Feature', properties: { farm_code: 'FE', mound_id: 'fe-mound', mound_ids: ['unknown'] }, geometry: null }
+    ] });
+    await assert.rejects(moduleWith({ profile: routeProfile, async load() { throw new Error('cache should be rejected before graph load'); } })
+        .calculate({ async rpc() { return { data: unknownMound, error: null }; } }, 2026, ['FE'], emptyBase(), {}), /fora do acesso atual/i);
 });

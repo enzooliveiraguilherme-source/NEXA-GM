@@ -377,6 +377,75 @@
                     score: Number.isFinite(bestScore) ? bestScore : null, meters: Number.isFinite(bestMeters) ? bestMeters : null };
             });
         }
+        // One supplier for the complete, connected pass strip. Keep the road
+        // preference unchanged; average its cost by sampled area, not by votes.
+        let stripCache = null;
+        function serviceStripCosts(samples, mounds, progress = () => {}) {
+            if (!Array.isArray(samples) || samples.length > 30000 || samples.some(s =>
+                typeof s.strip_id !== 'string' || !s.strip_id || !Number.isFinite(s.area_ha) || s.area_ha <= 0 ||
+                !Array.isArray(s.point) || s.point.length !== 2 || s.point.some(v => !Number.isFinite(v)))) throw Error('Amostras das faixas inválidas.');
+            const permitted = mounds.filter(m => m.gleba === data.gleba).sort((a, b) => String(a.id).localeCompare(String(b.id)));
+            const key = JSON.stringify(permitted.map(m => [m.id, m.longitude, m.latitude]));
+            if (stripCache?.key !== key) {
+                const sites = new Set();
+                const destinations = permitted.filter(m => {
+                    const site = JSON.stringify([m.longitude, m.latitude]);
+                    if (sites.has(site)) return false;
+                    sites.add(site); return true;
+                }).map((mound, index) => {
+                    const end = destination(mound), dist = new Float64Array(nodes.length).fill(Infinity);
+                    const lengths = new Float64Array(nodes.length).fill(Infinity), heap = new Heap();
+                    function relax(id, score, meters) {
+                        if (better(score, meters, dist[id], lengths[id])) {
+                            dist[id] = score; lengths[id] = meters; heap.push([score, id, meters]);
+                        }
+                    }
+                    for (const c of end.links) relax(c.to, c.score, c.meters);
+                    while (heap.items.length) {
+                        const [score, id, meters] = heap.pop();
+                        if (score !== dist[id] || meters !== lengths[id]) continue;
+                        for (const e of adjacency[id]) relax(e.to, score + e.cost, meters + e.meters);
+                    }
+                    progress({ stage: 'mounds', done: index + 1, total: sites.size });
+                    return { mound, end, dist, lengths };
+                });
+                stripCache = { key, destinations };
+            }
+            const groups = new Map();
+            for (const [index, sample] of samples.entries()) {
+                const groupKey = JSON.stringify([sample.farm_code, sample.campo, sample.strip_id]);
+                if (!groups.has(groupKey)) groups.set(groupKey, { farm_code: sample.farm_code, campo: sample.campo,
+                    strip_id: sample.strip_id, area_ha: 0, samples: 0,
+                    candidates: stripCache.destinations.map(() => ({ score: 0, meters: 0, reachable: true })) });
+                const group = groups.get(groupKey), start = connectors(sample.point);
+                group.area_ha += sample.area_ha; group.samples++;
+                stripCache.destinations.forEach(({ end, dist, lengths }, owner) => {
+                    const candidate = group.candidates[owner];
+                    if (!candidate.reachable) return;
+                    let score = Infinity, meters = Infinity;
+                    for (const c of start.links) {
+                        const cost = c.score + dist[c.to], length = c.meters + lengths[c.to];
+                        if (better(cost, length, score, meters)) { score = cost; meters = length; }
+                    }
+                    const local = localCandidate(start, end, score);
+                    if (local && better(local.score, local.meters, score, meters)) { score = local.score; meters = local.meters; }
+                    if (!Number.isFinite(score)) candidate.reachable = false;
+                    else { candidate.score += score * sample.area_ha; candidate.meters += meters * sample.area_ha; }
+                });
+                if (index % 50 === 0 || index + 1 === samples.length) progress({ stage: 'cells', done: index + 1, total: samples.length });
+            }
+            return [...groups.values()].map(group => {
+                let winner = -1;
+                group.candidates.forEach((candidate, index) => {
+                    if (candidate.reachable && (winner < 0 || better(candidate.score, candidate.meters,
+                        group.candidates[winner].score, group.candidates[winner].meters))) winner = index;
+                });
+                const { candidates, ...result } = group;
+                return { ...result, mound_id: winner < 0 ? null : stripCache.destinations[winner].mound.id,
+                    score: winner < 0 ? null : candidates[winner].score / group.area_ha,
+                    meters: winner < 0 ? null : candidates[winner].meters / group.area_ha };
+            });
+        }
         function rank(origin, mounds) {
             const start = connectors(origin), dist = new Float64Array(nodes.length).fill(Infinity);
             const lengths = new Float64Array(nodes.length).fill(Infinity), previous = [], starts = [], heap = new Heap();
@@ -421,14 +490,14 @@
             routes.sort((a, b) => a.score - b.score || a.meters - b.meters || String(a.mound.id).localeCompare(String(b.mound.id)));
             return { routes, unreachable: mounds.filter(m => m.gleba === data.gleba && !routes.some(r => r.mound.id === m.id)).length, model: profile.version };
         }
-        return { rank, serviceCosts, nodeCount: nodes.length, shortcutMeters: shortcut, profile };
+        return { rank, serviceCosts, serviceStripCosts, nodeCount: nodes.length, shortcutMeters: shortcut, profile };
     }
     const pending = new Map();
     const workers = new Set();
     let cacheGeneration = 0;
     function backgroundGraph(data) {
         if (!root.Worker) return build(data);
-        const worker = new root.Worker('js/fertilizer-routing-worker.js?v=machine-road-v2-20261111');
+        const worker = new root.Worker('js/fertilizer-routing-worker.js?v=ab-strips-v1-20261112');
         workers.add(worker);
         let sequence = 0, failed = null;
         const requests = new Map();
@@ -452,7 +521,9 @@
             const id = ++sequence;
             return new Promise((resolve, reject) => { requests.set(id, { resolve, reject, progress }); worker.postMessage({ id, operation, ...args }); });
         }
-        return { profile, rank: (origin, mounds) => call('rank', { origin, mounds }), serviceCosts: (samples, mounds, progress) => call('costs', { samples, mounds }, progress) };
+        return { profile, rank: (origin, mounds) => call('rank', { origin, mounds }),
+            serviceCosts: (samples, mounds, progress) => call('costs', { samples, mounds }, progress),
+            serviceStripCosts: (samples, mounds, progress) => call('strips', { samples, mounds }, progress) };
     }
     async function load(client, year, gleba, scope) {
         const key = JSON.stringify([year, gleba, scope]);

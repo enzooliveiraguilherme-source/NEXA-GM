@@ -214,6 +214,47 @@ test('clique na zona seleciona o monte calculado mesmo diferente do monte Vorono
     assert.deepEqual(Array.from(h.polylines[0].points, point => Array.from(point)), [[-20, -50], [-19, -49]]);
 });
 
+test('zona directional mantém o monte atribuído à faixa mesmo quando outro vence no ponto', async () => {
+    const data = response();
+    data.mounds[2].gleba = 'FE 01';
+    data.mounds[2].name = 'Monte Atribuído';
+    const zone = data.zones.features[0];
+    zone.properties.method = 'directional';
+    zone.properties.mound_ids = ['m3'];
+    const h = harness({ result: data, routing: routingFor(async (_origin, candidates) => ({ routes: [
+        { mound: candidates.find(m => m.id === 'm1'), meters: 800, coordinates: [[-50, -20], [-50.1, -20.1]] },
+        { mound: candidates.find(m => m.id === 'm3'), meters: 1250, coordinates: [[-50, -20], [-49, -19]] }
+    ], unreachable: 0 })) });
+    await h.api.refresh(h.state, h.fields);
+    const zoneGroup = findGeoGroup(h.groups[0], f => f.properties.mound_id === 'm1');
+    zoneGroup.items.find(item => item.feature.properties.mound_id === 'm1').events.click({ latlng: { lng: -50, lat: -20 } });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.match(h.popups.at(-1).content, /Abastecimento da faixa: Monte Atribuído/);
+    assert.equal(h.element('logistics-mound').value, 'm3');
+    assert.equal(h.polylines.length, 1);
+    assert.deepEqual(Array.from(h.polylines[0].points, point => Array.from(point)), [[-20, -50], [-19, -49]]);
+});
+
+test('zona directional sem rota confirmada ao monte atribuído não desenha rota nem troca o seletor', async () => {
+    const data = response();
+    data.mounds[2].gleba = 'FE 01';
+    const zone = data.zones.features[0];
+    zone.properties.method = 'directional';
+    zone.properties.mound_ids = ['m3'];
+    const h = harness({ result: data, routing: routingFor(async (_origin, candidates) => ({ routes: [
+        { mound: candidates.find(m => m.id === 'm1'), meters: 800, coordinates: [[-50, -20], [-50.1, -20.1]] }
+    ], unreachable: 1 })) });
+    await h.api.refresh(h.state, h.fields);
+    const select = h.element('logistics-mound');
+    select.value = 'm1';
+    const zoneGroup = findGeoGroup(h.groups[0], f => f.properties.mound_id === 'm1');
+    zoneGroup.items.find(item => item.feature.properties.mound_id === 'm1').events.click({ latlng: { lng: -50, lat: -20 } });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.match(h.popups.at(-1).content, /Sem trajeto confirmado até o monte desta faixa/);
+    assert.equal(h.polylines.length, 0);
+    assert.equal(select.value, 'm1');
+});
+
 test('limpar/trocar filtro invalida resposta de roteamento atrasada', async () => {
     const pending = deferred();
     const h = harness({ result: response(), routing: { load: () => pending.promise, clearCache() {} } });
