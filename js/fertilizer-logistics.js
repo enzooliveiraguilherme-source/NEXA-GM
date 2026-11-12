@@ -137,7 +137,7 @@
                     }
                     link = L.polyline(best.coordinates.map(p => [p[1], p[0]]), { color: '#fff', weight: 4, interactive: false }).addTo(group);
                     let html = `<strong>${assigned ? 'Abastecimento da faixa' : 'Percurso recomendado'}: ${escape(best.mound.name)}</strong><p>${number(best.meters / 1000)} km até o monte.</p>`;
-                    if (assigned) html += '<p>Origem escolhida para a faixa completa, paralela às guias de plantio do milho. O trajeto em branco parte do ponto clicado.</p>';
+                    if (assigned) html += '<p>Origem escolhida para a faixa completa do bloco de plantio, incluindo suas partes separadas. O trajeto em branco parte do ponto clicado e respeita os acessos disponíveis.</p>';
                     if (best.metrics) html += `<p>Estrada: ${number(best.metrics.roadMeters)} m · Bordadura: ${number(best.metrics.borderMeters)} m · Interior: ${number(best.metrics.fieldMeters)} m` +
                         (best.metrics.approachMeters > 0.1 ? ` · Conexões: ${number(best.metrics.approachMeters)} m` : '') + '.</p>';
                     else {
@@ -176,8 +176,8 @@
             panel.innerHTML = `<details open><summary>Logística de adubação</summary><div class="logistics-content">` +
                 `<p class="logistics-total"><strong>${mounds.length} montes</strong><span>${number(totalArea)} ha atendidos</span></p><p>Limites de adubação · ${escape(state.currentAno)}</p>` +
                 '<p>Preferência por estradas para o deslocamento. Bordadura é usada quando evita um desvio grande; interior fica restrito aos acessos e atalhos locais. O trajeto recomendado pode ter mais quilômetros e menos deslocamento na lavoura.</p>' +
-                (hasDirectional ? '<p class="logistics-note"><strong>Divisões no sentido do plantio de milho em FE, PA e RM 01/RM 02.</strong> Faixas paralelas às guias AB, estimadas a cada 50 m e recortadas nos talhões. Cada faixa recebe o monte de menor custo médio de abastecimento, mantendo a prioridade por estradas. O clique mostra o caminho até o monte da faixa. Estradas em amarelo e percurso em branco.</p>' : hasNetwork ? '<p class="logistics-note"><strong>Cores com prioridade por estradas em FE, PA e RM 01/RM 02.</strong> Estimativa em malha de 100 m, recortada nos limites dos talhões. Nas demais áreas, as cores continuam em linha reta. O clique confere a rota do ponto exato e pode variar perto das divisões. Estradas em amarelo e percurso em branco.</p>' : '<p class="logistics-note">As cores são referência em linha reta; a recomendação por percurso é calculada no clique e pode indicar outro monte. Estradas em amarelo e percurso em branco.</p>') +
-                (hasDirectional ? '<p class="logistics-note">Fora desse estudo, as áreas continuam com a referência em linha reta.</p>' : '') +
+                (hasDirectional ? '<p class="logistics-note"><strong>Blocos no sentido do plantio de milho em FE, PA e RM 01/RM 02.</strong> Os talhões que compartilham as guias são analisados em conjunto. A origem é escolhida para a faixa inteira do bloco, mantendo a prioridade por estradas. Subdivisões de cadastro e recortes da mesma faixa não provocam trocas de monte. O clique mostra o caminho até a origem da faixa. Estradas em amarelo e percurso em branco.</p>' : hasNetwork ? '<p class="logistics-note"><strong>Cores com prioridade por estradas em FE, PA e RM 01/RM 02.</strong> Estimativa em malha de 100 m, recortada nos limites dos talhões. Nas demais áreas, as cores continuam em linha reta. O clique confere a rota do ponto exato e pode variar perto das divisões. Estradas em amarelo e percurso em branco.</p>' : '<p class="logistics-note">As cores são referência em linha reta; a recomendação por percurso é calculada no clique e pode indicar outro monte. Estradas em amarelo e percurso em branco.</p>') +
+                (hasDirectional ? '<p class="logistics-note">Áreas com contorno tracejado são apenas referência em linha reta, fora desse estudo de percurso.</p>' : '') +
                 (Number(data.analysis?.unguided_fields) > 0 ? `<p class="logistics-note">${number(data.analysis.unguided_fields)} talhão(ões) do estudo sem guia de milho disponível para esta safra: atendimento por percurso em malha de 100 m.</p>` : '') +
                 (Number(data.analysis?.unserved_area_ha) > 0.01 ? `<p class="logistics-note">${number(data.analysis.unserved_area_ha)} ha do estudo estão sem ligação aos montes e aparecem somente com contorno.</p>` : '') +
                 '<p class="logistics-note">Não considera produto ou estoque.</p>' +
@@ -207,10 +207,12 @@
                 document.getElementById('logistics-mound').value = mound.id;
             }
             const zoneGroup = L.geoJSON({ type: 'FeatureCollection', features: zones }, {
-                style: feature => ({ color: color(feature.properties.mound_id), fillColor: color(feature.properties.mound_id), weight: 1, fillOpacity: 0.24 }),
+                style: feature => ({ color: color(feature.properties.mound_id), fillColor: color(feature.properties.mound_id), weight: 1,
+                    dashArray: feature.properties.method === 'straight' ? '6 4' : null,
+                    fillOpacity: feature.properties.method === 'straight' ? 0.10 : 0.26 }),
                 onEachFeature(feature, layer) {
                     zoneLayers.push({ feature, layer });
-                    layer.bindTooltip(`<strong>${escape(feature.properties.name)}</strong><br>${number(feature.properties.area_ha)} ha de atendimento<br>${feature.properties.method === 'directional' ? 'Faixas no sentido do milho' : feature.properties.method === 'network' ? 'Por percurso · malha de 100 m' : 'Referência em linha reta'}`);
+                    layer.bindTooltip(`<strong>${escape(feature.properties.name)}</strong><br>${number(feature.properties.area_ha)} ha de atendimento<br>${feature.properties.method === 'directional' ? 'Faixa completa do bloco de milho' : feature.properties.method === 'network' ? 'Por percurso · malha de 100 m' : 'Referência em linha reta · fora do estudo de percurso'}`);
                     layer.on('click', event => {
                         L.DomEvent.stopPropagation(event);
                         routeFrom(event.latlng, feature.properties.gleba, feature);

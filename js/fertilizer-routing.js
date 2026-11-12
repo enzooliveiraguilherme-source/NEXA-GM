@@ -380,7 +380,7 @@
         // One supplier for the complete, connected pass strip. Keep the road
         // preference unchanged; average its cost by sampled area, not by votes.
         let stripCache = null;
-        function serviceStripCosts(samples, mounds, progress = () => {}) {
+        function serviceStripCosts(samples, mounds, progress = () => {}, includeCandidates = false) {
             if (!Array.isArray(samples) || samples.length > 30000 || samples.some(s =>
                 typeof s.strip_id !== 'string' || !s.strip_id || !Number.isFinite(s.area_ha) || s.area_ha <= 0 ||
                 !Array.isArray(s.point) || s.point.length !== 2 || s.point.some(v => !Number.isFinite(v)))) throw Error('Amostras das faixas inválidas.');
@@ -441,10 +441,48 @@
                         group.candidates[winner].score, group.candidates[winner].meters))) winner = index;
                 });
                 const { candidates, ...result } = group;
-                return { ...result, mound_id: winner < 0 ? null : stripCache.destinations[winner].mound.id,
+                return { ...result, ...(includeCandidates ? { candidates: candidates.flatMap((c, index) => c.reachable ? [{
+                    mound_id: stripCache.destinations[index].mound.id, score: c.score / group.area_ha, meters: c.meters / group.area_ha
+                }] : []) } : {}), mound_id: winner < 0 ? null : stripCache.destinations[winner].mound.id,
                     score: winner < 0 ? null : candidates[winner].score / group.area_ha,
                     meters: winner < 0 ? null : candidates[winner].meters / group.area_ha };
             });
+        }
+        function serviceBlockCosts(samples, mounds, progress = () => {}) {
+            const pieces = serviceStripCosts(samples, mounds, progress, true), bands = new Map();
+            for (const piece of pieces) {
+                // All physical pieces of this parallel band share the same
+                // application block/frame, including cadastral subdivisions.
+                const match = /^ab:(-?\d+):/.exec(piece.strip_id);
+                const key = JSON.stringify([piece.farm_code, piece.campo, match ? Number(match[1]) : piece.strip_id]);
+                if (!bands.has(key)) bands.set(key, []);
+                bands.get(key).push(piece);
+            }
+            for (const band of bands.values()) {
+                const reachable = band.filter(piece => piece.candidates.length);
+                if (!reachable.length) continue;
+                let best = null;
+                for (const origin of reachable[0].candidates) {
+                    let score = 0, meters = 0;
+                    for (const piece of reachable) {
+                        const candidate = piece.candidates.find(c => c.mound_id === origin.mound_id);
+                        if (!candidate) { score = Infinity; break; }
+                        score += candidate.score * piece.area_ha;
+                        meters += candidate.meters * piece.area_ha;
+                    }
+                    if (Number.isFinite(score) && (!best || better(score, meters, best.score, best.meters))) {
+                        best = { mound_id: origin.mound_id, score, meters };
+                    }
+                }
+                // Disconnected networks with no common supplier stay separate;
+                // an unreachable piece is never painted by its neighbors.
+                if (!best) continue;
+                for (const piece of reachable) {
+                    const candidate = piece.candidates.find(c => c.mound_id === best.mound_id);
+                    piece.mound_id = candidate.mound_id; piece.score = candidate.score; piece.meters = candidate.meters;
+                }
+            }
+            return pieces.map(({ candidates, ...piece }) => piece);
         }
         function rank(origin, mounds) {
             const start = connectors(origin), dist = new Float64Array(nodes.length).fill(Infinity);
@@ -490,14 +528,14 @@
             routes.sort((a, b) => a.score - b.score || a.meters - b.meters || String(a.mound.id).localeCompare(String(b.mound.id)));
             return { routes, unreachable: mounds.filter(m => m.gleba === data.gleba && !routes.some(r => r.mound.id === m.id)).length, model: profile.version };
         }
-        return { rank, serviceCosts, serviceStripCosts, nodeCount: nodes.length, shortcutMeters: shortcut, profile };
+        return { rank, serviceCosts, serviceStripCosts, serviceBlockCosts, nodeCount: nodes.length, shortcutMeters: shortcut, profile };
     }
     const pending = new Map();
     const workers = new Set();
     let cacheGeneration = 0;
     function backgroundGraph(data) {
         if (!root.Worker) return build(data);
-        const worker = new root.Worker('js/fertilizer-routing-worker.js?v=ab-strips-v1-20261112');
+        const worker = new root.Worker('js/fertilizer-routing-worker.js?v=ab-blocks-v2-20261112');
         workers.add(worker);
         let sequence = 0, failed = null;
         const requests = new Map();
@@ -523,7 +561,8 @@
         }
         return { profile, rank: (origin, mounds) => call('rank', { origin, mounds }),
             serviceCosts: (samples, mounds, progress) => call('costs', { samples, mounds }, progress),
-            serviceStripCosts: (samples, mounds, progress) => call('strips', { samples, mounds }, progress) };
+            serviceStripCosts: (samples, mounds, progress) => call('strips', { samples, mounds }, progress),
+            serviceBlockCosts: (samples, mounds, progress) => call('blocks', { samples, mounds }, progress) };
     }
     async function load(client, year, gleba, scope) {
         const key = JSON.stringify([year, gleba, scope]);

@@ -1,5 +1,7 @@
 # Logística orientada pelas guias de milho
 
+Revisão posterior: o modelo ativo de decisão passa a ser `ab-blocks-v2`, descrito em `docs/fertilizer-application-blocks.md`. Ele reúne as subdivisões do mesmo bloco e escolhe uma origem comum para as partes da mesma faixa. O registro abaixo descreve a etapa inicial `ab-strips-v1`.
+
 Atualização de 12/11/2026, com instalação e publicação autorizadas pelo usuário. As guias e funções foram instaladas no Supabase pela migração `20261112130550_fertilizer_directional_strips`. O resultado direcional foi recalculado para o piloto de 2026.
 
 O arquivo fornecido, `Sentido_plantio_milho.geojson`, contém 84 registros: 82 linhas AB válidas de dois pontos e dois registros vazios. A importação usa somente o piloto existente: FE, PA e RM 01/RM 02, na safra de mapa 2026. As geometrias originais ficam fora do bundle público e do Git.
