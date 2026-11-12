@@ -535,7 +535,7 @@
     let cacheGeneration = 0;
     function backgroundGraph(data) {
         if (!root.Worker) return build(data);
-        const worker = new root.Worker('js/fertilizer-routing-worker.js?v=ab-blocks-v2-20261112');
+        const worker = new root.Worker('js/fertilizer-routing-worker.js?v=ab-local-v3-20261112');
         workers.add(worker);
         let sequence = 0, failed = null;
         const requests = new Map();

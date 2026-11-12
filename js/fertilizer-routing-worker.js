@@ -1,5 +1,5 @@
 /* Keep geometry work outside the map's UI thread. No data is persisted here. */
-importScripts('fertilizer-routing.js?v=ab-blocks-v2-20261112');
+importScripts('fertilizer-routing.js?v=ab-local-v3-20261112');
 let graph = null, initializationError = null;
 self.onmessage = event => {
     const message = event.data;

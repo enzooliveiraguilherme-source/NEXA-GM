@@ -1,6 +1,6 @@
 (function (root) {
     'use strict';
-    const model = 'ab-blocks-v2', routingModel = 'machine-road-v2';
+    const model = 'ab-local-v3', routingModel = 'machine-road-v2';
     let epoch = 0;
     // Older databases keep serving their existing road-priority study until the
     // directional RPCs are installed. Other failures must remain visible.
@@ -52,7 +52,7 @@
         const current = () => { if (token !== epoch) throw Error('Estudo de atendimento cancelado.'); };
         const allowed = new Set(base.mounds.map(m => m.id));
         function validateResult(result) {
-            if (!Array.isArray(result?.zones?.features) || result.analysis?.method !== 'ab_blocks' ||
+            if (!Array.isArray(result?.zones?.features) || result.analysis?.method !== 'ab_local' ||
                 result.analysis?.model_version !== model || result.analysis?.routing_model !== routingModel ||
                 result.analysis?.strip_width_m !== 50 || result.analysis?.sampling_step_m !== 100 || typeof result.signature !== 'string') throw Error('Estudo preparado incompleto.');
             if (result.zones.features.some(f => !farms.includes(f.properties?.farm_code) ||
@@ -65,8 +65,8 @@
         if (cached.error) throw cached.error;
         current();
         if (cached.data !== null && cached.data !== undefined) return validateResult(cached.data);
-        progress('Unindo os talhões do mesmo bloco de aplicação e preparando as faixas AB.');
-        const gridResult = await client.rpc('fertilizer_block_grid', { map_year: String(year), requested_farms: requested });
+        progress('Preparando as posições de abastecimento no sentido das guias AB.');
+        const gridResult = await client.rpc('fertilizer_local_grid', { map_year: String(year), requested_farms: requested });
         if (gridResult.error?.code === 'PGRST202') {
             current();
             return previousStudy(client, year, requested, farms, base, scope, current, progress);
@@ -81,13 +81,13 @@
                 !Number.isFinite(c.area_ha) || c.area_ha <= 0 || !Array.isArray(c.point) || c.point.length !== 2 ||
                 c.point.some(x => !Number.isFinite(x)))) throw Error('Amostras de atendimento incompletas ou fora do escopo.');
         if (!grid.cells.length) return { zones: base.zones, analysis: null };
-        progress(`Comparando os montes para ${grid.cells.length.toLocaleString('pt-BR')} amostras das faixas.`);
+        progress(`Comparando os percursos em ${grid.cells.length.toLocaleString('pt-BR')} posições dos talhões.`);
         const network = await root.FertilizerRouting.load(client, year, grid.gleba, scope);
         current();
-        const costs = await network.graph.serviceBlockCosts(grid.cells, base.mounds.filter(m => m.gleba === grid.gleba), update => {
+        const costs = await network.graph.serviceCosts(grid.cells, base.mounds.filter(m => m.gleba === grid.gleba), update => {
             if (token !== epoch) return;
             progress(update.stage === 'mounds' ? `Calculando percursos dos montes: ${update.done}/${update.total}.`
-                : `Comparando abastecimento por faixa: ${Math.round(update.done / Math.max(1, update.total) * 100)}%.`);
+                : `Comparando abastecimento por posição: ${Math.round(update.done / Math.max(1, update.total) * 100)}%.`);
         });
         current();
         const stripKey = c => JSON.stringify([c.farm_code, c.campo, c.strip_id]);
@@ -98,9 +98,9 @@
                 (!allowed.has(c.mound_id) || !Number.isFinite(c.score) || !Number.isFinite(c.meters)))) return true;
             received.add(key); return false;
         })) throw Error('Resultado de atendimento inválido.');
-        progress('Unindo as faixas atendidas por cada monte.');
+        progress('Unindo os trechos atendidos por cada monte.');
         const assignments = costs.filter(c => c.mound_id).map(c => ({ f: c.farm_code, c: c.campo, s: c.strip_id, m: c.mound_id }));
-        const result = await client.rpc('fertilizer_block_zones', {
+        const result = await client.rpc('fertilizer_local_zones', {
             map_year: String(year), grid_signature: grid.signature, requested_farms: requested, assignments
         });
         if (result.error) throw result.error;

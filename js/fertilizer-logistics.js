@@ -129,15 +129,15 @@
                         popup.setContent('<strong>Sem caminho conectado aos montes</strong><p>As estradas e bordas disponíveis não confirmam um acesso a partir deste ponto. Confira as ligações no mapa.</p>');
                         return;
                     }
-                    const assigned = zone?.properties?.method === 'directional';
-                    const best = assigned ? result.routes.find(route => zone.properties.mound_ids.includes(route.mound.id)) : result.routes[0];
-                    if (!best) {
-                        popup.setContent('<strong>Sem trajeto confirmado até o monte desta faixa</strong><p>Confira o acesso a partir deste ponto. A divisão da faixa usa amostras do seu percurso de aplicação.</p>');
-                        return;
-                    }
+                    // Replenishment starts HERE. A prepared zone must never
+                    // override a better route from the machine's current point.
+                    const best = result.routes[0];
                     link = L.polyline(best.coordinates.map(p => [p[1], p[0]]), { color: '#fff', weight: 4, interactive: false }).addTo(group);
-                    let html = `<strong>${assigned ? 'Abastecimento da faixa' : 'Percurso recomendado'}: ${escape(best.mound.name)}</strong><p>${number(best.meters / 1000)} km até o monte.</p>`;
-                    if (assigned) html += '<p>Origem escolhida para a faixa completa do bloco de plantio, incluindo suas partes separadas. O trajeto em branco parte do ponto clicado e respeita os acessos disponíveis.</p>';
+                    let html = `<strong>Percurso recomendado: ${escape(best.mound.name)}</strong><p>${number(best.meters / 1000)} km até o monte.</p>`;
+                    html += '<p>Origem escolhida pelo melhor acesso a partir do ponto clicado. A direção das guias não obriga abastecer no mesmo monte ao longo de toda a faixa.</p>';
+                    if (zone?.properties?.method === 'local' && !zone.properties.mound_ids.includes(best.mound.id)) {
+                        html += '<p>Este ponto está próximo de uma divisão estimada. A consulta do percurso exato é mais precisa que a cor do mapa.</p>';
+                    }
                     if (best.metrics) html += `<p>Estrada: ${number(best.metrics.roadMeters)} m · Bordadura: ${number(best.metrics.borderMeters)} m · Interior: ${number(best.metrics.fieldMeters)} m` +
                         (best.metrics.approachMeters > 0.1 ? ` · Conexões: ${number(best.metrics.approachMeters)} m` : '') + '.</p>';
                     else {
@@ -171,13 +171,13 @@
                 });
             }
             const totalArea = zones.reduce((sum, f) => sum + Number(f.properties.area_ha), 0);
-            const hasDirectional = zones.some(f => f.properties.method === 'directional');
-            const hasNetwork = zones.some(f => ['network', 'directional'].includes(f.properties.method));
+            const hasLocal = zones.some(f => f.properties.method === 'local');
+            const hasNetwork = zones.some(f => ['network', 'directional', 'local'].includes(f.properties.method));
             panel.innerHTML = `<details open><summary>Logística de adubação</summary><div class="logistics-content">` +
                 `<p class="logistics-total"><strong>${mounds.length} montes</strong><span>${number(totalArea)} ha atendidos</span></p><p>Limites de adubação · ${escape(state.currentAno)}</p>` +
                 '<p>Preferência por estradas para o deslocamento. Bordadura é usada quando evita um desvio grande; interior fica restrito aos acessos e atalhos locais. O trajeto recomendado pode ter mais quilômetros e menos deslocamento na lavoura.</p>' +
-                (hasDirectional ? '<p class="logistics-note"><strong>Blocos no sentido do plantio de milho em FE, PA e RM 01/RM 02.</strong> Os talhões que compartilham as guias são analisados em conjunto. A origem é escolhida para a faixa inteira do bloco, mantendo a prioridade por estradas. Subdivisões de cadastro e recortes da mesma faixa não provocam trocas de monte. O clique mostra o caminho até a origem da faixa. Estradas em amarelo e percurso em branco.</p>' : hasNetwork ? '<p class="logistics-note"><strong>Cores com prioridade por estradas em FE, PA e RM 01/RM 02.</strong> Estimativa em malha de 100 m, recortada nos limites dos talhões. Nas demais áreas, as cores continuam em linha reta. O clique confere a rota do ponto exato e pode variar perto das divisões. Estradas em amarelo e percurso em branco.</p>' : '<p class="logistics-note">As cores são referência em linha reta; a recomendação por percurso é calculada no clique e pode indicar outro monte. Estradas em amarelo e percurso em branco.</p>') +
-                (hasDirectional ? '<p class="logistics-note">Áreas com contorno tracejado são apenas referência em linha reta, fora desse estudo de percurso.</p>' : '') +
+                (hasLocal ? '<p class="logistics-note"><strong>Abastecimento pela posição em FE, PA e RM 01/RM 02.</strong> Cada trecho usa o monte com melhor acesso local, priorizando estradas. As guias de milho orientam os recortes; a origem pode mudar ao longo da mesma linha conforme a máquina avança. As cores são uma estimativa por posições amostradas. O clique confere o percurso exato desde o ponto escolhido. Estradas em amarelo e percurso em branco.</p>' : hasNetwork ? '<p class="logistics-note"><strong>Cores com prioridade por estradas em FE, PA e RM 01/RM 02.</strong> Estimativa por posições amostradas, recortada nos limites dos talhões. O clique confere a rota do ponto exato e pode variar perto das divisões. Estradas em amarelo e percurso em branco.</p>' : '<p class="logistics-note">As cores são referência em linha reta; a recomendação por percurso é calculada no clique e pode indicar outro monte. Estradas em amarelo e percurso em branco.</p>') +
+                (hasNetwork ? '<p class="logistics-note">Áreas com contorno tracejado são apenas referência em linha reta, fora desse estudo de percurso.</p>' : '') +
                 (Number(data.analysis?.unguided_fields) > 0 ? `<p class="logistics-note">${number(data.analysis.unguided_fields)} talhão(ões) do estudo sem guia de milho disponível para esta safra: atendimento por percurso em malha de 100 m.</p>` : '') +
                 (Number(data.analysis?.unserved_area_ha) > 0.01 ? `<p class="logistics-note">${number(data.analysis.unserved_area_ha)} ha do estudo estão sem ligação aos montes e aparecem somente com contorno.</p>` : '') +
                 '<p class="logistics-note">Não considera produto ou estoque.</p>' +
@@ -212,7 +212,7 @@
                     fillOpacity: feature.properties.method === 'straight' ? 0.10 : 0.26 }),
                 onEachFeature(feature, layer) {
                     zoneLayers.push({ feature, layer });
-                    layer.bindTooltip(`<strong>${escape(feature.properties.name)}</strong><br>${number(feature.properties.area_ha)} ha de atendimento<br>${feature.properties.method === 'directional' ? 'Faixa completa do bloco de milho' : feature.properties.method === 'network' ? 'Por percurso · malha de 100 m' : 'Referência em linha reta · fora do estudo de percurso'}`);
+                    layer.bindTooltip(`<strong>${escape(feature.properties.name)}</strong><br>${number(feature.properties.area_ha)} ha de atendimento<br>${feature.properties.method === 'local' ? 'Atendimento local por percurso · sentido do milho' : ['directional','network'].includes(feature.properties.method) ? 'Atendimento por percurso' : 'Referência em linha reta · fora do estudo de percurso'}`);
                     layer.on('click', event => {
                         L.DomEvent.stopPropagation(event);
                         routeFrom(event.latlng, feature.properties.gleba, feature);
