@@ -528,14 +528,20 @@
             routes.sort((a, b) => a.score - b.score || a.meters - b.meters || String(a.mound.id).localeCompare(String(b.mound.id)));
             return { routes, unreachable: mounds.filter(m => m.gleba === data.gleba && !routes.some(r => r.mound.id === m.id)).length, model: profile.version };
         }
-        return { rank, serviceCosts, serviceStripCosts, serviceBlockCosts, nodeCount: nodes.length, shortcutMeters: shortcut, profile };
+        function servicePlanCosts(samples, mounds, progress = () => {}) {
+            if (!root.FertilizerABPlan) throw Error('Planejador de faixas AB indisponível.');
+            const candidates = serviceStripCosts(samples, mounds, progress, true);
+            progress({ stage: 'sections', done: 0, total: candidates.length });
+            return root.FertilizerABPlan.partition(candidates);
+        }
+        return { rank, serviceCosts, serviceStripCosts, serviceBlockCosts, servicePlanCosts, nodeCount: nodes.length, shortcutMeters: shortcut, profile };
     }
     const pending = new Map();
     const workers = new Set();
     let cacheGeneration = 0;
     function backgroundGraph(data) {
         if (!root.Worker) return build(data);
-        const worker = new root.Worker('js/fertilizer-routing-worker.js?v=ab-local-v3-20261112');
+        const worker = new root.Worker('js/fertilizer-routing-worker.js?v=ab-plan-v4-20261112');
         workers.add(worker);
         let sequence = 0, failed = null;
         const requests = new Map();
@@ -562,7 +568,8 @@
         return { profile, rank: (origin, mounds) => call('rank', { origin, mounds }),
             serviceCosts: (samples, mounds, progress) => call('costs', { samples, mounds }, progress),
             serviceStripCosts: (samples, mounds, progress) => call('strips', { samples, mounds }, progress),
-            serviceBlockCosts: (samples, mounds, progress) => call('blocks', { samples, mounds }, progress) };
+            serviceBlockCosts: (samples, mounds, progress) => call('blocks', { samples, mounds }, progress),
+            servicePlanCosts: (samples, mounds, progress) => call('plan', { samples, mounds }, progress) };
     }
     async function load(client, year, gleba, scope) {
         const key = JSON.stringify([year, gleba, scope]);
