@@ -534,14 +534,23 @@
             progress({ stage: 'sections', done: 0, total: candidates.length });
             return root.FertilizerABPlan.partition(candidates);
         }
-        return { rank, serviceCosts, serviceStripCosts, serviceBlockCosts, servicePlanCosts, nodeCount: nodes.length, shortcutMeters: shortcut, profile };
+        function serviceStraightCosts(samples, fields, mounds, progress = () => {}) {
+            if (!root.FertilizerABStraight) throw Error('Planejador de cortes retos indisponível.');
+            const candidates = serviceStripCosts(samples, mounds, progress, true);
+            const positions = new Map(samples.map(c => [JSON.stringify([c.farm_code, c.campo, c.strip_id]), c]));
+            return root.FertilizerABStraight.plan(candidates.map(c => {
+                const p = positions.get(JSON.stringify([c.farm_code, c.campo, c.strip_id]));
+                return { ...c, u: p.u, v: p.v };
+            }), fields);
+        }
+        return { rank, serviceCosts, serviceStripCosts, serviceBlockCosts, servicePlanCosts, serviceStraightCosts, nodeCount: nodes.length, shortcutMeters: shortcut, profile };
     }
     const pending = new Map();
     const workers = new Set();
     let cacheGeneration = 0;
     function backgroundGraph(data) {
         if (!root.Worker) return build(data);
-        const worker = new root.Worker('js/fertilizer-routing-worker.js?v=ab-plan-v4-20261112');
+        const worker = new root.Worker('js/fertilizer-routing-worker.js?v=ab-straight-v7-20261116');
         workers.add(worker);
         let sequence = 0, failed = null;
         const requests = new Map();
@@ -569,6 +578,7 @@
             serviceCosts: (samples, mounds, progress) => call('costs', { samples, mounds }, progress),
             serviceStripCosts: (samples, mounds, progress) => call('strips', { samples, mounds }, progress),
             serviceBlockCosts: (samples, mounds, progress) => call('blocks', { samples, mounds }, progress),
+            serviceStraightCosts: (samples, fields, mounds, progress) => call('straight', { samples, fields, mounds }, progress),
             servicePlanCosts: (samples, mounds, progress) => call('plan', { samples, mounds }, progress) };
     }
     async function load(client, year, gleba, scope) {
