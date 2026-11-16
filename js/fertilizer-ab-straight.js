@@ -1,6 +1,6 @@
 (function (root) {
     'use strict';
-    const policy = Object.freeze({ version: 'ab-straight-v7', nearMeters: 250, nearRegret: 50, cutCostPerHa: 100 });
+    const policy = Object.freeze({ version: 'ab-guide-parallel-v8', nearMeters: 250, nearRegret: 50, cutCostPerHa: 100, cutAxis: 1 });
     function plan(samples, fields) {
         if (!Array.isArray(samples) || !Array.isArray(fields)) throw Error('Referencial AB inválido.');
         const frames = new Map(), groups = new Map(), ids = new Set(), unserved = [], regions = [], diagnostics = [];
@@ -40,6 +40,7 @@
             }
             bins = merged;
             const owners = [...new Set(cells.flatMap(c => [...c.candidates.keys()]))].sort(), n = bins.length;
+            const conflicts = bins.map(bin => !owners.some(owner => bin.every(c => c.candidates.has(owner))));
             const prefixes = owners.map(owner => {
                 const costs = [0], bad = [0];
                 for (const bin of bins) {
@@ -49,6 +50,10 @@
                 return { owner, costs, bad };
             });
             const penalty = cells.reduce((sum, c) => sum + c.area_ha, 0) * policy.cutCostPerHa;
+            // A conflict between the guide direction and protected local access
+            // leaves a whole parallel stripe for review; never rotate the cut.
+            prefixes.push({ owner: null, costs: Array(n + 1).fill(0), bad: [0] });
+            for (let i = 0; i < n; i++) prefixes.at(-1).bad.push(prefixes.at(-1).bad.at(-1) + (conflicts[i] ? 0 : 1));
             const dp = Array(n + 1).fill(null); dp[0] = { score: 0, runs: 0 };
             for (let end = 1; end <= n; end++) for (let start = 0; start < end; start++) {
                 if (!dp[start]) continue;
@@ -74,18 +79,25 @@
         for (const [key, f] of frames) {
             const cells = groups.get(key);
             if (!cells.length) continue;
-            const alternatives = [stripes(cells, f, 1), stripes(cells, f, 0)].filter(Boolean).sort((a, b) => a.score - b.score || a.runs - b.runs || b.axis - a.axis);
-            if (!alternatives.length) throw Error('Guias exigem revisão dos acessos: ' + f.farm_code + ' / ' + f.campo);
-            const chosen = alternatives[0]; regions.push(...chosen.regions);
+            // u follows the original GeoJSON guide. Constant-v boundaries are
+            // therefore parallel to that exact line. Cost cannot rotate them.
+            const alternatives = [stripes(cells, f, policy.cutAxis)].filter(Boolean);
+            if (!alternatives.length) throw Error('Não há abastecimento compatível com cortes paralelos à guia: ' + f.farm_code + ' / ' + f.campo);
+            const chosen = alternatives[0]; regions.push(...chosen.regions.filter(r => r.mound_id));
             let regret = 0, maxRegret = 0;
             for (const c of cells) {
                 const value = chosen.axis === 0 ? c.u : c.v;
                 const region = chosen.regions.find(r => value >= r.rect[chosen.axis] - 1e-7 && value <= r.rect[chosen.axis + 2] + 1e-7);
+                if (!region.mound_id) {
+                    unserved.push({ f: c.farm_code, c: c.campo, s: c.strip_id, reason: 'guide_conflict' });
+                    continue;
+                }
                 const candidate = c.candidates.get(region.mound_id), excess = candidate.score - c.best.score;
                 regret += excess * c.area_ha; maxRegret = Math.max(maxRegret, excess);
             }
             diagnostics.push({ farm_code: f.farm_code, campo: f.campo, axis: chosen.axis, regions: chosen.regions.length,
-                samples: cells.length, protected_samples: cells.filter(c => c.near).length, weighted_regret: regret, max_weighted_regret: maxRegret });
+                samples: cells.length, protected_samples: cells.filter(c => c.near).length, review_stripes: chosen.regions.filter(r => !r.mound_id).length,
+                weighted_regret: regret, max_weighted_regret: maxRegret });
         }
         return { regions, unserved, diagnostics, policy };
     }
