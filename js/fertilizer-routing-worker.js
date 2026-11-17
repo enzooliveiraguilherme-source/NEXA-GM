@@ -1,5 +1,5 @@
 /* Keep geometry work outside the map's UI thread. No data is persisted here. */
-importScripts('fertilizer-ab-straight.js?v=ab-guide-parallel-v8-20261116', 'fertilizer-ab-plan.js?v=ab-plan-v4-20261112', 'fertilizer-routing.js?v=ab-guide-parallel-v8-20261116');
+importScripts('fertilizer-ab-straight.js?v=ab-guided-exits-v9-20261117', 'fertilizer-ab-plan.js?v=ab-plan-v4-20261112', 'fertilizer-routing.js?v=ab-guided-exits-v9-20261117');
 let graph = null, initializationError = null;
 self.onmessage = event => {
     const message = event.data;

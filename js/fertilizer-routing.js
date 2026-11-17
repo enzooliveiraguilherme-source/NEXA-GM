@@ -1,6 +1,6 @@
 (function (root) {
     'use strict';
-    const profile = Object.freeze({ version: 'machine-road-v2', factors: Object.freeze({ road: 1, border: 2, approach: 3, shortcut: 4, access: 4, snap: 1 }) });
+    const profile = Object.freeze({ version: 'machine-guided-v3', factors: Object.freeze({ road: 1, pass: 1, border: 2, approach: 3, shortcut: 4, access: 4, snap: 1 }) });
     const factor = kind => profile.factors[kind] ?? profile.factors.access;
     const better = (score, meters, oldScore, oldMeters) => score < oldScore || (score === oldScore && meters < oldMeters);
     const R = 6371008.8, rad = Math.PI / 180;
@@ -104,11 +104,15 @@
         const scale = Math.cos(first[1] * rad);
         const project = p => [(p[0] - first[0]) * rad * R * scale, (p[1] - first[1]) * rad * R];
         const unproject = p => [p[0] / (rad * R * scale) + first[0], p[1] / (rad * R) + first[1]];
+        const guides = new Map((data.guides?.features || []).map(f => {
+            const line = lines(f.geometry)[0], d = line?.length === 2 ? sub(project(line[1]), project(line[0])) : null;
+            return [JSON.stringify([f.properties?.farm_code, f.properties?.campo]), d && norm(d, [0, 0]) > 0.001 ? d : null];
+        }));
         const polygons = data.fields.features.flatMap(f => {
             const g = f.geometry;
             return (g?.type === 'Polygon' ? [g.coordinates] : g?.type === 'MultiPolygon' ? g.coordinates : []).map(rings => {
                 const projected = rings.map(r => r.map(project));
-                return indexPolygon(projected);
+                return { ...indexPolygon(projected), guide: guides.get(JSON.stringify([f.properties?.farm_code, f.properties?.campo])) };
             });
         });
         const nodes = [], edges = [], ids = new Map(), adjacency = [];
@@ -226,7 +230,51 @@
             }
         }
         for (const outgoing of adjacency) for (const e of outgoing) e.cost = e.meters * factor(e.kind);
-        function connectors(coordinate) {
+        // Only the initial leg is constrained by the AB. After reaching an
+        // actual road or field edge the existing road preference takes over.
+        const guideEdges = new WeakMap();
+        function guidedConnectors(p, containing) {
+            const choices = [];
+            for (const poly of containing.filter(poly => poly.guide)) {
+                if (!guideEdges.has(poly)) {
+                    const found = new Set(), box = poly.box;
+                    for (let x = Math.floor(box[0] / 200); x <= Math.floor(box[2] / 200); x++)
+                        for (let y = Math.floor(box[1] / 200); y <= Math.floor(box[3] / 200); y++)
+                            for (const id of edgeGrid.get(`${x},${y}`) || []) found.add(id);
+                    guideEdges.set(poly, [...found]);
+                }
+                const d = poly.guide, hits = [[], []];
+                for (const id of guideEdges.get(poly)) {
+                    const [a, b] = edges[id], e = sub(nodes[b], nodes[a]), denominator = cross(d, e);
+                    if (Math.abs(denominator) < 1e-10) continue;
+                    const delta = sub(nodes[a], p), t = cross(delta, e) / denominator, u = cross(delta, d) / denominator;
+                    if (u < -1e-8 || u > 1 + 1e-8) continue;
+                    const q = mix(nodes[a], nodes[b], Math.max(0, Math.min(1, u))), meters = norm(p, q);
+                    hits[t < 0 ? 0 : 1].push({ a, b, q, meters, road: edges[id].road });
+                }
+                for (const side of hits) {
+                    side.sort((a, b) => a.meters - b.meters || Number(b.road) - Number(a.road));
+                    // Never go through an island or leave the crop polygon in
+                    // order to reach a farther intersection on the same line.
+                    const first = side.find(c => c.meters < 0.005 || covered(p, c.q, [poly]));
+                    if (first) choices.push(...side.filter(c => c.meters <= first.meters + 0.005 &&
+                        (c.meters < 0.005 || covered(p, c.q, [poly]))));
+                }
+            }
+            const links = new Map(), segments = new Map();
+            for (const c of choices) {
+                const networkKind = c.road ? 'road' : 'border';
+                for (const id of [c.a, c.b]) {
+                    const along = norm(c.q, nodes[id]), meters = c.meters + along;
+                    const score = c.meters * factor('pass') + along * factor(networkKind), old = links.get(id);
+                    if (!old || better(score, meters, old.score, old.meters))
+                        links.set(id, { to: id, meters, score, via: c.q, kind: 'pass', networkKind });
+                }
+                segments.set(`${c.a},${c.b}`, c.q);
+            }
+            return { p, containing, guided: true, limit: 0, onRoad: false, links: [...links.values()], segments };
+        }
+        function connectors(coordinate, followGuide = false) {
             const p = project(coordinate), containing = polygons.filter(poly => inPolygon(p, poly.rings));
             const result = new Map(), segments = [];
             function put(id, q, kind, road) {
@@ -237,6 +285,7 @@
             // First locate genuine road access; do not attach an interior point to
             // every visible edge of its field, which allowed kilometre-long cuts.
             const pinned = nearby(p, 2, true).filter(c => isRoad(c.q));
+            if (followGuide && !pinned.length && containing.some(poly => poly.guide)) return guidedConnectors(p, containing);
             let limit = 0;
             if (pinned.length) {
                 // A mapped road remains usable even when a crop mask excludes it.
@@ -282,7 +331,7 @@
             let best = null;
             const direct = norm(start.p, end.p), directKind = start.onRoad && end.onRoad ? 'shortcut' : 'access';
             const directScore = direct * factor(directKind);
-            if (directScore <= bound && direct <= Math.max(shortcut, start.limit + end.limit) && (
+            if (!start.guided && directScore <= bound && direct <= Math.max(shortcut, start.limit + end.limit) && (
                 accessCovered(start.p, end.p, start.containing, end.onRoad) ||
                 accessCovered(end.p, start.p, end.containing, start.onRoad))) {
                 best = { type: 'direct', kind: directKind, score: directScore, meters: direct };
@@ -292,7 +341,7 @@
                 if (!a) continue;
                 const kind = segmentKinds.get(segment) || 'border';
                 const accessA = norm(start.p, a), along = norm(a, b), accessB = norm(b, end.p);
-                const score = accessA * factor(start.onRoad ? 'snap' : 'access') + along * factor(kind) + accessB * factor(end.onRoad ? 'snap' : 'access');
+                const score = accessA * factor(start.guided ? 'pass' : start.onRoad ? 'snap' : 'access') + along * factor(kind) + accessB * factor(end.onRoad ? 'snap' : 'access');
                 const meters = accessA + along + accessB;
                 if (score <= bound && (!best || better(score, meters, best.score, best.meters))) best = { type: 'segment', a, b, kind, score, meters };
             }
@@ -301,7 +350,7 @@
         function localLegs(start, end, choice) {
             if (choice.type === 'direct') return [{ a: start.p, b: end.p, kind: choice.kind }];
             return [
-                { a: start.p, b: choice.a, kind: start.onRoad ? 'snap' : 'access' },
+                { a: start.p, b: choice.a, kind: start.guided ? 'pass' : start.onRoad ? 'snap' : 'access' },
                 { a: choice.a, b: choice.b, kind: choice.kind },
                 { a: choice.b, b: end.p, kind: end.onRoad ? 'snap' : 'access' }
             ];
@@ -359,7 +408,7 @@
                 costCache = { key, destinations, dist, lengths, owners };
             }
             return samples.map((sample, index) => {
-                const start = connectors(sample.point);
+                const start = connectors(sample.point, true);
                 let bestScore = Infinity, bestMeters = Infinity, bestOwner = -1;
                 function choose(score, meters, owner) {
                     if (owner < 0 || !Number.isFinite(score)) return;
@@ -417,7 +466,7 @@
                 if (!groups.has(groupKey)) groups.set(groupKey, { farm_code: sample.farm_code, campo: sample.campo,
                     strip_id: sample.strip_id, area_ha: 0, samples: 0,
                     candidates: stripCache.destinations.map(() => ({ score: 0, meters: 0, reachable: true })) });
-                const group = groups.get(groupKey), start = connectors(sample.point);
+                const group = groups.get(groupKey), start = connectors(sample.point, true);
                 group.area_ha += sample.area_ha; group.samples++;
                 stripCache.destinations.forEach(({ end, dist, lengths }, owner) => {
                     const candidate = group.candidates[owner];
@@ -485,7 +534,7 @@
             return pieces.map(({ candidates, ...piece }) => piece);
         }
         function rank(origin, mounds) {
-            const start = connectors(origin), dist = new Float64Array(nodes.length).fill(Infinity);
+            const start = connectors(origin, true), dist = new Float64Array(nodes.length).fill(Infinity);
             const lengths = new Float64Array(nodes.length).fill(Infinity), previous = [], starts = [], heap = new Heap();
             for (const c of start.links) if (better(c.score, c.meters, dist[c.to], lengths[c.to])) {
                 dist[c.to] = c.score; lengths[c.to] = c.meters; starts[c.to] = c; heap.push([c.score, c.to, c.meters]);
@@ -550,7 +599,7 @@
     let cacheGeneration = 0;
     function backgroundGraph(data) {
         if (!root.Worker) return build(data);
-        const worker = new root.Worker('js/fertilizer-routing-worker.js?v=ab-guide-parallel-v8-20261116');
+        const worker = new root.Worker('js/fertilizer-routing-worker.js?v=ab-guided-exits-v9-20261117');
         workers.add(worker);
         let sequence = 0, failed = null;
         const requests = new Map();
@@ -586,10 +635,11 @@
         if (!pending.has(key)) {
             const token = cacheGeneration;
             const task = (async () => {
-                const { data, error } = await client.rpc('fertilizer_routing', { map_year: String(year), routing_gleba: gleba });
+                const { data, error } = await client.rpc('fertilizer_guided_routing', { map_year: String(year), routing_gleba: gleba });
                 if (error) throw error;
                 if (token !== cacheGeneration) throw Error('Consulta de caminhos cancelada.');
-                if (data?.gleba !== gleba || data?.year !== String(year)) throw Error('Contexto da rede de caminhos inválido.');
+                if (data?.gleba !== gleba || data?.year !== String(year) || data.routing_model !== profile.version || !Array.isArray(data.guides?.features))
+                    throw Error('Contexto da rede de caminhos inválido.');
                 return { data, graph: backgroundGraph(data) };
             })();
             pending.set(key, task); task.catch(() => { if (pending.get(key) === task) pending.delete(key); });
