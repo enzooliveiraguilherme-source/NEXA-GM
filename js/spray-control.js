@@ -265,7 +265,7 @@
         el('counts').innerHTML=`<span class="spray-status scheduled">${totals.scheduled} no prazo</span> <span class="spray-status attention">${totals.attention} próximas</span> <span class="spray-status overdue">${totals.overdue} atrasadas</span> <span>${visible.length} registros neste filtro · ${totals.total?Math.round(totals.completed/totals.total*100):0}% concluído</span>`;
         const next=O.sort(visible.filter(row=>!row.deleted&&!row.optional&&!row.unplanned&&!O.isCompleted(row)),'planned',1)[0];
         el('next').textContent=next?`Próxima pendência: ${next.name} · ${next.farm} / ${next.field} · ${date(next.planned)}`:'Nenhuma aplicação pendente neste filtro.';
-        el('permission').textContent=canEdit() ? 'Edite as datas na grade ou os demais campos na lista. Salve todas as alterações juntas. Limpar a data programada de uma etapa do plantio retoma o cálculo automático.' : 'Modo de consulta. Seu perfil não permite alterar aplicações.';
+        el('permission').textContent=canEdit() ? 'Você pode concluir antes da data prevista: informe a data realizada na tabela. Edite as datas na grade ou os demais campos na lista. Salve todas as alterações juntas. Limpar a data programada de uma etapa do plantio retoma o cálculo automático.' : 'Modo de consulta. Seu perfil não permite alterar aplicações.';
         el('table').innerHTML=visible.length?(mode==='grid'?matrixTable():listTable()):'<p class="spray-empty">Nenhuma aplicação neste filtro. Os talhões cadastrados continuam visíveis no mapa.</p>';
         syncQuickDialog();
         if(quick){el('quick-status').value=quick.status;el('quick-date').value=quick.date;}
@@ -290,6 +290,7 @@
     }
     function previewForm() {
         el('preview').innerHTML='';
+        el('input-planned').required=!O.isIndependent(editing?.stage)&&!O.isCompleted({...editing,actual:el('input-actual').value});
         if(!editing?.plantingId)return;
         const field=formField();if(!field)return;
         try{
@@ -331,7 +332,7 @@
         el('input-started').max=S.today();
         el('input-actual').max=S.today();el('input-auto').checked=!!row?.autoDate;el('auto-label').hidden=!row?.plantingId;
         el('input-planned').disabled=!!row?.autoDate;el('input-name').readOnly=!!row?.plantingId;
-        el('input-planned').required=!O.isIndependent(row?.stage);
+        el('input-planned').required=!O.isIndependent(row?.stage)&&!O.isCompleted(row||{});
         if(O.isIndependent(row?.stage))el('input-name').readOnly=true;
         el('stage-note').textContent=(O.isIndependent(row?.stage)?'Datas manuais e independentes do plantio. ':'Desmarque a data calculada para confirmar o planejamento. ')+ 'Informe o início para marcar em execução e a data realizada ao concluir.'+(row?.plantingId?' A conclusão recalcula as próximas datas automáticas.':'');
         if(!row)configureNew();
