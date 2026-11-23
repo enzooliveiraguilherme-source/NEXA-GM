@@ -185,7 +185,9 @@
     function validate(row, field, current = S.today()) {
         if (!field || row.farm !== field.farm || row.field !== field.field) throw Error('Escolha um talhão cadastrado.');
         if (!String(row.name || '').trim()) throw Error('Informe a aplicação.');
-        if ((!isIndependent(row.stage)||row.planned) && S.time(row.planned) === null) throw Error('Informe uma data programada válida.');
+        // A previsão não limita a conclusão: a data realizada pode antecipar qualquer etapa.
+        const needsPlan = !isIndependent(row.stage) && !isCompleted(row);
+        if ((needsPlan || row.planned) && S.time(row.planned) === null) throw Error('Informe uma data programada válida.');
         if (row.actual && (S.time(row.actual) === null || row.actual > current)) throw Error('A data realizada deve ser válida e não pode estar no futuro.');
         if (row.started && (S.time(row.started) === null || row.started > current)) throw Error('A data de início deve ser válida e não pode estar no futuro.');
         if (row.started && row.plantingId && row.started < field.plantingDate) throw Error('O início não pode ser anterior ao plantio.');
