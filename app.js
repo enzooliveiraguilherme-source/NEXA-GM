@@ -706,9 +706,9 @@ const OPERACOES_CONFIG = {
         fillColor: '#d97706',
         borderColor: '#b45309'
     },
-    savefarm: {
-        name: 'Save Farm',
-        icon: 'fa-solid fa-leaf',
+    aerea: {
+        name: 'Pulverização Aérea',
+        icon: 'fa-solid fa-plane',
         color: '#3b82f6',
         fillColor: '#2563eb',
         borderColor: '#1d4ed8'
@@ -776,7 +776,7 @@ function updateOperationUI() {
     if (heading && operation) heading.textContent = logistics ? 'Adubação · Logística' : operation.name;
     document.getElementById('calcario-dashboard')?.classList.toggle('hidden', !operational);
     document.getElementById('calcario-filter-bar')?.classList.toggle('hidden', !operational && !analysis && !spraying);
-    document.getElementById('generic-op-bar')?.classList.toggle('hidden', logistics || operational || analysis || spraying || state.currentTab === 'savefarm');
+    document.getElementById('generic-op-bar')?.classList.toggle('hidden', logistics || operational || analysis || spraying || state.currentTab === 'aerea');
     document.body.classList.toggle('planting-analysis', analysis);
     if (operation) {
         const name = document.getElementById('generic-op-name');
@@ -1136,7 +1136,7 @@ function updateMapStylesAndKPIs() {
 function renderMap(shouldFitBounds = true) {
     window.FertilizerLogistics?.clear();
     window.PlantingMaps?.clearLabels();
-    window.SaveFarmView?.refresh(state);
+    window.AerialSpray?.refresh(state);
     state.selectedFeatures.clear();
     TalhaoSelection.updateUI();
     HarvestView.clear(state);
@@ -1151,6 +1151,13 @@ function renderMap(shouldFitBounds = true) {
         return;
     }
     
+    if (state.currentTab === 'aerea') {
+        window.SprayControl?.refresh(state, []);
+        ['calcario-filter-bar','calcario-dashboard','generic-op-bar','planning-banner-bar','info-panel'].forEach(id => document.getElementById(id)?.classList.add('hidden'));
+        const count = document.getElementById('stats-count');
+        if (count) count.textContent = '—';
+        return;
+    }
     if (state.currentTab === 'colheita') HarvestView.refreshFilters(state);
     const filteredFeatures = activeData.features.filter(featureMatchesFilters);
     window.PlantingMaps?.refresh(state, filteredFeatures);
@@ -1201,7 +1208,7 @@ function renderMap(shouldFitBounds = true) {
         if (planningBanner) planningBanner.classList.add('hidden');
         
         if (genericOpBar) {
-            genericOpBar.classList.toggle('hidden', state.currentTab === 'colheita' || state.currentTab === 'savefarm' || state.currentTab === 'pulverizacao');
+            genericOpBar.classList.toggle('hidden', state.currentTab === 'colheita' || state.currentTab === 'aerea' || state.currentTab === 'pulverizacao');
             const opCfg = OPERACOES_CONFIG[state.currentTab] || OPERACOES_CONFIG.colheita;
             const opIcon = document.getElementById('generic-op-icon');
             const opName = document.getElementById('generic-op-name');
@@ -2583,3 +2590,4 @@ function setupEventListeners() {
         });
     });
 }
+

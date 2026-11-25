@@ -15,11 +15,11 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
     
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="style.css?v=savecloud-rate-1">
+    <link rel="stylesheet" href="style.css?v=aerial-20261125">
     <link rel="stylesheet" href="brand.css?v=spray-summary-20261104">
     <link rel="stylesheet" href="js/spray-mobile.css?v=spray-summary-20261104">
     <link rel="stylesheet" href="js/spray-dashboard.css?v=spray-overview-20261103">
-    <link rel="stylesheet" href="js/savefarm-connection.css?v=20261102">
+    <link rel="stylesheet" href="js/aerial-spray.css?v=20261125">
     <link rel="stylesheet" href="js/fertilizer-logistics.css?v=20261110">
 </head>
 <body data-page="portal">
@@ -48,9 +48,9 @@
                             <span>Colheita</span>
                         </button>
                         
-                        <button class="nav-item tab-btn" data-tab="savefarm">
-                            <i class="fa-solid fa-leaf tab-icon savefarm-icon"></i>
-                            <span>Save Farm</span>
+                        <button class="nav-item tab-btn" data-tab="aerea">
+                            <i class="fa-solid fa-plane tab-icon"></i>
+                            <span>Pulverização Aérea</span>
                         </button>
                         
                         <!-- Menu Adubação com Submenu Expansível / Retrátil Suave -->
@@ -187,30 +187,26 @@
                 <button type="button" class="mobile-control" id="mobile-field-toggle" hidden aria-controls="portal-sidebar"><i class="fa-solid fa-draw-polygon" aria-hidden="true"></i> Talhões</button>
                 <button type="button" id="btn-account-menu" class="account-menu-trigger"><i class="fa-solid fa-gear" aria-hidden="true"></i> Opções</button>
             </header>
-            <section id="savefarm-panel" class="savefarm-panel" aria-label="Consulta Save Farm" hidden>
-                <header><div><strong>Save Farm</strong><span id="savefarm-connection-status" role="status">Aguardando conexão</span></div><button id="savefarm-reload" type="button">Atualizar conexão</button></header>
-                <details id="savefarm-connect" hidden>
-                    <summary>Conectar ou trocar conta SaveCloud</summary>
-                    <p>Conecte uma vez para usar nas próximas visitas. O acesso da integração fica salvo de forma protegida para os administradores do NEXA. Sua senha não é armazenada.</p>
-                    <form id="savefarm-connect-form" autocomplete="off">
-                        <label>Usuário SaveCloud<input id="savefarm-username" type="text" autocomplete="off" maxlength="150" required></label>
-                        <label>Senha SaveCloud<input id="savefarm-password" type="password" autocomplete="off" maxlength="1000" required></label>
-                        <button id="savefarm-connect-submit" type="submit">Conectar conta</button>
-                    </form>
-                </details>
-                <form id="savefarm-form">
-                    <label>Fazenda<select id="savefarm-farm" required disabled><option value="">Aguardando conexão</option></select></label>
-                    <label>Talhão<select id="savefarm-polygon" required disabled><option value="">Aguardando conexão</option></select></label>
-                    <label>Máquina<select id="savefarm-machine" required disabled><option value="">Aguardando conexão</option></select></label>
-                    <label>Camada<select id="savefarm-mode" disabled><option value="rate">Taxa de aplicação (L/ha)</option><option value="5">Cobertura consolidada</option><option value="3">Faixas aplicadas</option><option value="4">Percurso e aplicação</option><option value="1">Percurso</option><option value="boundaries">Limite do talhão</option></select></label>
-                    <label>Início<input id="savefarm-from" type="datetime-local" step="3600" required disabled></label>
-                    <label>Fim<input id="savefarm-to" type="datetime-local" step="3600" required disabled></label>
-                    <button type="submit" disabled>Consultar</button><button id="savefarm-clear" type="button">Limpar mapa</button>
-                </form>
-                <small id="savefarm-timezone">Período máximo: sete dias.</small>
-                <p id="savefarm-status" role="status" aria-live="polite">Aguardando conexão com a SaveCloud.</p>
-                <div id="savefarm-results" class="savefarm-results"></div>
-                <small>Os resultados são descartados ao mudar os filtros ou sair desta aba. Aplicação seletiva não precisa cobrir todo o talhão.</small>
+            <section id="aerial-panel" class="aerial-panel" aria-label="Pulverização Aérea" hidden>
+                <header><h2><i class="fa-solid fa-plane" aria-hidden="true"></i> Pulverização Aérea</h2><button id="aerial-reload" type="button">Atualizar</button></header>
+                <div class="aerial-filters">
+                    <label>Ano<select id="aerial-year" disabled></select></label>
+                    <label>Cultura<select id="aerial-culture" disabled></select></label>
+                    <fieldset><legend>Aplicações (AP) — selecione uma ou mais</legend><button id="aerial-all" type="button" disabled>Selecionar todas</button> <button id="aerial-none" type="button" disabled>Limpar seleção</button><div id="aerial-aps" class="aerial-aps"></div></fieldset>
+                </div>
+                <div class="aerial-stats" aria-live="polite">
+                    <div><span>Área aplicada</span><strong id="aerial-applied">—</strong></div>
+                    <div><span>Área não aplicada</span><strong id="aerial-unapplied">—</strong></div>
+                    <div><span>Área total dos talhões</span><strong id="aerial-total">—</strong></div>
+                </div>
+                <div class="aerial-layers" aria-label="Camadas do mapa">
+                    <label><input id="aerial-show-coverage" type="checkbox" checked>Áreas aplicadas</label>
+                    <label><input id="aerial-show-tracks" type="checkbox" checked>Circuito do avião</label>
+                    <label><input id="aerial-show-boundaries" type="checkbox" checked>Limites dos talhões</label>
+                    <label><input id="aerial-show-gaps" type="checkbox">Áreas não aplicadas</label>
+                </div>
+                <div class="aerial-legend"><span class="off">● Vermelho: APLICANDO = 0 (desligado)</span> · <span class="on">● Verde: APLICANDO = 1 (ligado)</span></div>
+                <p id="aerial-status" role="status" aria-live="polite">Aguardando os dados da pulverização aérea.</p>
             </section>
             <!-- Barra Superior Informativa para Outras Operações -->
             <div class="generic-op-bar hidden" id="generic-op-bar">
@@ -393,7 +389,6 @@
             <!-- Container do Mapa -->
             <div id="map-container" class="map-container">
                 <aside id="fertilizer-logistics-panel" aria-label="Logística dos montes de adubo" aria-live="polite" hidden></aside>
-                <div id="savefarm-legend" class="savefarm-rate-legend" aria-label="Legenda da taxa de aplicação" hidden></div>
                 <div id="map"></div>
                 <section id="spray-map-dashboard" class="calcario-dashboard-panel spray-map-dashboard hidden" aria-label="Acompanhamento da pulverização">
                     <header class="dashboard-header-toggle">
@@ -1152,14 +1147,14 @@
     <script src="js/spray-control.js?v=early-completion-20261123"></script>
     <script src="js/spray-summary.js?v=spray-summary-red-20261104"></script>
     <script src="js/spray-report.js?v=spray-area-pdf-20261102"></script>
-    <script src="js/savefarm-rate.js?v=1"></script>
-    <script src="js/savefarm-view.js?v=connection-20261102"></script>
+    <script src="js/aerial-spray.js?v=20261125"></script>
     <script src="js/fertilizer-ab-plan.js?v=ab-plan-v4-20261112"></script>
     <script src="js/fertilizer-ab-straight.js?v=ab-guided-exits-v9-20261117"></script>
     <script src="js/fertilizer-routing.js?v=ab-guided-exits-v9-20261117"></script>
     <script src="js/fertilizer-service-areas.js?v=ab-guided-exits-v9-20261117"></script>
     <script src="js/fertilizer-logistics.js?v=ab-guided-exits-v9-20261117"></script>
-    <script src="app.js?v=logistics-gleba-20261110"></script>
+    <script src="app.js?v=aerial-20261125"></script>
     <script src="js/mobile-layout.js?v=3"></script>
 </body>
 </html>
+
