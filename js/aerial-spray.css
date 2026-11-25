@@ -1,4 +1,7 @@
 .aerial-panel[hidden]{display:none!important}
+.aerial-panel label[hidden]{display:none!important}
+.aerial-field-label{background:rgba(15,40,28,.86);border:0;color:#fff;box-shadow:none;font-size:10px;font-weight:600;padding:2px 5px;white-space:nowrap}
+.aerial-field-label:before{display:none}
 .aerial-panel{padding:16px 22px;background:var(--bg-panel,#101d2b);color:var(--text-primary,#e2e8f0);border-bottom:1px solid #334155;max-height:45vh;overflow:auto}
 .aerial-panel header,.aerial-filters,.aerial-layers,.aerial-stats{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
 .aerial-panel header{justify-content:space-between;margin-bottom:12px}
@@ -18,3 +21,12 @@
 .aerial-legend{font-size:12px;margin-top:9px}.aerial-legend .on{color:#22c55e}.aerial-legend .off{color:#f87171}
 .aerial-panel [role=status]{font-size:12px;margin:9px 0 0;color:#cbd5e1}
 @media(max-width:700px){.aerial-panel{padding:12px;max-height:48vh}.aerial-stats{gap:6px}.aerial-stats>div{min-width:95px;padding:8px}.aerial-stats strong{font-size:18px}.aerial-filters{gap:8px}.aerial-panel fieldset{flex-basis:100%}}
+.aerial-panel{flex-shrink:0;background:#fff;color:#244638;max-height:36vh;border-bottom:1px solid #dce5e2;padding:12px 20px}
+.aerial-panel button,.aerial-panel select{background:#fff;color:#244638;border-color:#cad9d1;min-height:34px}
+.aerial-panel header{margin-bottom:8px}.aerial-panel header>div{display:flex;gap:8px}
+.aerial-panel fieldset{border-color:#dce5e2}.aerial-aps{gap:7px 12px;max-height:85px}
+.aerial-aps label{background:#f5f9f6;border:1px solid #e1ebe5;border-radius:6px;padding:5px 8px;max-width:340px;align-items:flex-start}
+.aerial-aps label span{display:grid;gap:2px}.aerial-aps label small{font-size:10px;color:#63796c;max-width:295px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.aerial-stats{margin:9px 0;gap:10px}.aerial-stats>div{padding:8px 13px;background:#f5f9f6}.aerial-stats strong{font-size:21px}
+.aerial-panel [role=status]{color:#63796c;margin-top:6px}.aerial-panel input{accent-color:#087b5a}
+@media(max-width:700px){.aerial-panel{max-height:39dvh;padding:10px}.aerial-aps{max-height:80px}.aerial-stats>div{min-width:80px;padding:6px}.aerial-stats strong{font-size:17px}}

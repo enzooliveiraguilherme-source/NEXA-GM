@@ -19,7 +19,7 @@
     <link rel="stylesheet" href="brand.css?v=spray-summary-20261104">
     <link rel="stylesheet" href="js/spray-mobile.css?v=spray-summary-20261104">
     <link rel="stylesheet" href="js/spray-dashboard.css?v=spray-overview-20261103">
-    <link rel="stylesheet" href="js/aerial-spray.css?v=20261125">
+    <link rel="stylesheet" href="js/aerial-spray.css?v=fast-map-20261125">
     <link rel="stylesheet" href="js/fertilizer-logistics.css?v=20261110">
 </head>
 <body data-page="portal">
@@ -188,7 +188,7 @@
                 <button type="button" id="btn-account-menu" class="account-menu-trigger"><i class="fa-solid fa-gear" aria-hidden="true"></i> Opções</button>
             </header>
             <section id="aerial-panel" class="aerial-panel" aria-label="Pulverização Aérea" hidden>
-                <header><h2><i class="fa-solid fa-plane" aria-hidden="true"></i> Pulverização Aérea</h2><button id="aerial-reload" type="button">Atualizar</button></header>
+                <header><h2><i class="fa-solid fa-plane" aria-hidden="true"></i> Pulverização Aérea</h2><div><button id="aerial-focus" type="button" disabled>Enquadrar seleção</button><button id="aerial-reload" type="button">Atualizar</button></div></header>
                 <div class="aerial-filters">
                     <label>Ano<select id="aerial-year" disabled></select></label>
                     <label>Cultura<select id="aerial-culture" disabled></select></label>
@@ -202,8 +202,8 @@
                 <div class="aerial-layers" aria-label="Camadas do mapa">
                     <label><input id="aerial-show-coverage" type="checkbox" checked>Áreas aplicadas</label>
                     <label><input id="aerial-show-tracks" type="checkbox" checked>Circuito do avião</label>
-                    <label><input id="aerial-show-boundaries" type="checkbox" checked>Limites dos talhões</label>
-                    <label><input id="aerial-show-gaps" type="checkbox">Áreas não aplicadas</label>
+                    <label><input id="aerial-show-boundaries" type="checkbox" checked>Talhões de base</label>
+                    <label hidden><input id="aerial-show-gaps" type="checkbox">Áreas não aplicadas</label>
                 </div>
                 <div class="aerial-legend"><span class="off">● Vermelho: APLICANDO = 0 (desligado)</span> · <span class="on">● Verde: APLICANDO = 1 (ligado)</span></div>
                 <p id="aerial-status" role="status" aria-live="polite">Aguardando os dados da pulverização aérea.</p>
@@ -1147,7 +1147,7 @@
     <script src="js/spray-control.js?v=early-completion-20261123"></script>
     <script src="js/spray-summary.js?v=spray-summary-red-20261104"></script>
     <script src="js/spray-report.js?v=spray-area-pdf-20261102"></script>
-    <script src="js/aerial-spray.js?v=20261125"></script>
+    <script src="js/aerial-spray.js?v=fast-map-20261125"></script>
     <script src="js/fertilizer-ab-plan.js?v=ab-plan-v4-20261112"></script>
     <script src="js/fertilizer-ab-straight.js?v=ab-guided-exits-v9-20261117"></script>
     <script src="js/fertilizer-routing.js?v=ab-guided-exits-v9-20261117"></script>
