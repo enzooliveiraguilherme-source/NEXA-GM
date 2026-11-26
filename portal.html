@@ -19,7 +19,7 @@
     <link rel="stylesheet" href="brand.css?v=spray-summary-20261104">
     <link rel="stylesheet" href="js/spray-mobile.css?v=spray-summary-20261104">
     <link rel="stylesheet" href="js/spray-dashboard.css?v=spray-overview-20261103">
-    <link rel="stylesheet" href="js/aerial-spray.css?v=fast-map-20261125">
+    <link rel="stylesheet" href="js/aerial-spray.css?v=aerial-v2-20261126">
     <link rel="stylesheet" href="js/fertilizer-logistics.css?v=20261110">
 </head>
 <body data-page="portal">
@@ -187,26 +187,32 @@
                 <button type="button" class="mobile-control" id="mobile-field-toggle" hidden aria-controls="portal-sidebar"><i class="fa-solid fa-draw-polygon" aria-hidden="true"></i> Talhões</button>
                 <button type="button" id="btn-account-menu" class="account-menu-trigger"><i class="fa-solid fa-gear" aria-hidden="true"></i> Opções</button>
             </header>
-            <section id="aerial-panel" class="aerial-panel" aria-label="Pulverização Aérea" hidden>
-                <header><h2><i class="fa-solid fa-plane" aria-hidden="true"></i> Pulverização Aérea</h2><div><button id="aerial-focus" type="button" disabled>Enquadrar seleção</button><button id="aerial-reload" type="button">Atualizar</button></div></header>
-                <div class="aerial-filters">
-                    <label>Ano<select id="aerial-year" disabled></select></label>
-                    <label>Cultura<select id="aerial-culture" disabled></select></label>
-                    <fieldset><legend>Aplicações (AP) — selecione uma ou mais</legend><button id="aerial-all" type="button" disabled>Selecionar todas</button> <button id="aerial-none" type="button" disabled>Limpar seleção</button><div id="aerial-aps" class="aerial-aps"></div></fieldset>
+            <section id="aerial-panel" class="aerial-panel" aria-label="Pulveriza��o a�rea" hidden>
+                <div class="aerial-toolbar">
+                    <h2><i class="fa-solid fa-plane" aria-hidden="true"></i> A�rea</h2>
+                    <label class="aerial-ap-label"><span>AP</span><select id="aerial-ap" disabled aria-label="Aplica��o"></select></label>
+                    <label class="aerial-date-label"><span>Data</span><select id="aerial-date" disabled aria-label="Data da aplica��o"></select></label>
+                    <button id="aerial-focus" type="button" class="aerial-icon" title="Enquadrar AP" aria-label="Enquadrar AP" disabled><i class="fa-solid fa-crosshairs" aria-hidden="true"></i></button>
+                    <details id="aerial-options" class="aerial-options">
+                        <summary aria-label="Mais op��es"><i class="fa-solid fa-sliders" aria-hidden="true"></i><span>Op��es</span></summary>
+                        <div class="aerial-options-card">
+                            <div class="aerial-options-heading"><strong>Op��es do mapa</strong><button id="aerial-close-options" type="button" aria-label="Fechar op��es">Fechar</button></div>
+                            <div class="aerial-season"><label>Ano<select id="aerial-year" disabled></select></label><label>Cultura<select id="aerial-culture" disabled></select></label></div>
+                            <label><input id="aerial-show-boundaries" type="checkbox" checked> Talh�es de base</label>
+                            <label><input id="aerial-show-tracks" type="checkbox"> Trajeto do avi�o</label>
+                            <label><input id="aerial-show-nominal" type="checkbox"> Faixas nominais</label>
+                            <p>�rea dos talh�es: <strong id="aerial-total">-</strong></p>
+                            <p>Sem aplica��o: restante ap�s todos os voos da AP, somente em talh�es com pelo menos 50% de cobertura.</p>
+                            <button id="aerial-reload" type="button"><i class="fa-solid fa-rotate" aria-hidden="true"></i> Atualizar dados</button>
+                        </div>
+                    </details>
                 </div>
-                <div class="aerial-stats" aria-live="polite">
-                    <div><span>Área aplicada</span><strong id="aerial-applied">—</strong></div>
-                    <div><span>Área não aplicada</span><strong id="aerial-unapplied">—</strong></div>
-                    <div><span>Área total dos talhões</span><strong id="aerial-total">—</strong></div>
+                <div class="aerial-results" role="group" aria-label="Resultado no mapa">
+                    <button id="aerial-mode-coverage" type="button" aria-pressed="true"><span><i class="aerial-dot coverage" aria-hidden="true"></i>Aplicada</span><strong id="aerial-applied">-</strong></button>
+                    <button id="aerial-mode-overlap" type="button" aria-pressed="false"><span><i class="aerial-dot overlap" aria-hidden="true"></i>Sobreposi��o</span><strong id="aerial-overlap">-</strong></button>
+                    <button id="aerial-mode-gaps" type="button" aria-pressed="false"><span><i class="aerial-dot gaps" aria-hidden="true"></i>Sem aplica��o</span><strong id="aerial-unapplied">-</strong></button>
                 </div>
-                <div class="aerial-layers" aria-label="Camadas do mapa">
-                    <label><input id="aerial-show-coverage" type="checkbox" checked>Áreas aplicadas</label>
-                    <label><input id="aerial-show-tracks" type="checkbox" checked>Circuito do avião</label>
-                    <label><input id="aerial-show-boundaries" type="checkbox" checked>Talhões de base</label>
-                    <label hidden><input id="aerial-show-gaps" type="checkbox">Áreas não aplicadas</label>
-                </div>
-                <div class="aerial-legend"><span class="off">● Vermelho: APLICANDO = 0 (desligado)</span> · <span class="on">● Verde: APLICANDO = 1 (ligado)</span></div>
-                <p id="aerial-status" role="status" aria-live="polite">Aguardando os dados da pulverização aérea.</p>
+                <div class="aerial-message"><p id="aerial-status" role="status" aria-live="polite"></p><button id="aerial-final" type="button" hidden>Ver restante final</button></div>
             </section>
             <!-- Barra Superior Informativa para Outras Operações -->
             <div class="generic-op-bar hidden" id="generic-op-bar">
@@ -1147,7 +1153,7 @@
     <script src="js/spray-control.js?v=early-completion-20261123"></script>
     <script src="js/spray-summary.js?v=spray-summary-red-20261104"></script>
     <script src="js/spray-report.js?v=spray-area-pdf-20261102"></script>
-    <script src="js/aerial-spray.js?v=fast-map-20261125"></script>
+    <script src="js/aerial-spray.js?v=aerial-v2-20261126"></script>
     <script src="js/fertilizer-ab-plan.js?v=ab-plan-v4-20261112"></script>
     <script src="js/fertilizer-ab-straight.js?v=ab-guided-exits-v9-20261117"></script>
     <script src="js/fertilizer-routing.js?v=ab-guided-exits-v9-20261117"></script>
