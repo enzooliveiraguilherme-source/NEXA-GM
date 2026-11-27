@@ -85,10 +85,10 @@
   const params=kind=>({map_year:el('year').value,map_culture:el('culture').value,map_farm:state.currentFazenda,map_gleba:state.currentGleba,selected_ap:el('ap').value,map_date:['boundaries','gaps'].includes(kind)?'*':el('date').value,map_kind:kind});
   async function rpc(name,args,signal){let result=client.rpc(name,args);if(signal&&result.abortSignal)result=result.abortSignal(signal);const r=await result;if(r.error)throw r.error;return r.data;}
   function add(kind,data){
-   remove(kind);const colors={coverage:'#16a36a',overlap:'#dd5272',gaps:'#f3ad3b',nominal:'#409fd1',boundaries:'#f6e9ad'};
+   remove(kind);const colors={coverage:'#16a36a',overlap:'#facc15',gaps:'#dc2626',nominal:'#409fd1',boundaries:'#f6e9ad'};
    const pane='aerial-'+kind,order={nominal:410,coverage:420,gaps:430,overlap:440,tracks:450,boundaries:460};
    if(state.map.createPane){const p=state.map.getPane(pane)||state.map.createPane(pane);p.style.zIndex=String(order[kind]);renderers[kind]??=L.canvas({pane,padding:.3});}
-   const layer=L.geoJSON(data,{pane,renderer:renderers[kind]||renderer,interactive:kind!=='boundaries',style:kind==='tracks'?lineStyle:{color:colors[kind],weight:kind==='boundaries'?1.6:.55,fillOpacity:kind==='boundaries'?0:kind==='nominal'?.15:.65},
+   const layer=L.geoJSON(data,{pane,renderer:renderers[kind]||renderer,interactive:kind!=='boundaries',style:kind==='tracks'?lineStyle:{color:colors[kind],weight:kind==='boundaries'?1.6:.55,opacity:1,fillOpacity:kind==='boundaries'?0:kind==='nominal'?.15:1},
     onEachFeature(f,l){const p=f.properties||{};l.bindPopup?.('<strong>'+escape(p.Campo||p.AP)+'</strong><br>'+escape(p.AP)+' · '+escape(kind==='gaps'?'Restante final da AP':formatDate(p.data_aplicacao))+(p.area_ha!=null?'<br>'+escape(formatArea(p.area_ha)):''));}});
    layers[kind]=layer;layer.addTo(state.map);
   }

@@ -71,6 +71,9 @@
     function clearSession() {
         if (!storageKey) return;
         try {
+            window.localStorage.removeItem(storageKey);
+            window.localStorage.removeItem(`${storageKey}-user`);
+            window.localStorage.removeItem(`${storageKey}.recovery`);
             window.sessionStorage.removeItem(storageKey);
             window.sessionStorage.removeItem(`${storageKey}-user`);
             window.sessionStorage.removeItem(`${storageKey}.entry`);
@@ -92,9 +95,51 @@
     async function getProfile(user) {
         const { data, error } = await window.supabaseClient.from('profiles')
             .select('id, full_name, role, all_farms').eq('id', user.id).single();
+        if (isConnectionError(error)) throw error;
         // Somente o cadastro do banco define a permissão; e-mail e URL não concedem acesso.
         if (error || !data || data.id !== user.id || !roles.includes(data.role)) return null;
         return data;
+    }
+
+    function isConnectionError(error) {
+        return !!error && (error.name === 'AuthRetryableFetchError' || error.name === 'AbortError' ||
+            error instanceof TypeError || error.status === 0 || error.status === 429 || error.status >= 500 ||
+            /network|failed to fetch|fetch failed|offline|timeout|timed out|abort/i.test(error.message || ''));
+    }
+
+    async function resumeSession() {
+        const { data: { session }, error: sessionError } = await window.supabaseClient.auth.getSession();
+        if (isConnectionError(sessionError)) throw sessionError;
+        if (sessionError || !session) {
+            clearSession(); goToLogin(); return false;
+        }
+        const { data: { user }, error: userError } = await window.supabaseClient.auth.getUser();
+        if (isConnectionError(userError)) throw userError;
+        if (userError || !user) {
+            goToLogin('sessao'); await endSession(); return false;
+        }
+        if (!user.email_confirmed_at) {
+            goToLogin('email'); await endSession(); return false;
+        }
+        if (!await hasPermanentPassword()) {
+            goToLogin('senha'); await endSession(); return false;
+        }
+        const profile = await getProfile(user);
+        if (!profile) {
+            goToLogin('perfil'); await endSession(); return false;
+        }
+        allowedFarms = await getFarms();
+        window.portalFarms = allowedFarms;
+        const chosen = window.sessionStorage.getItem(`${storageKey}.farm`) || rememberedFarm(user);
+        window.portalFarm = allowedFarms.find(farm => farm.code === chosen) || allowedFarms[0];
+        if (!window.portalFarm) {
+            goToLogin('fazenda'); await endSession(); return false;
+        }
+        if (isLoginPage) return enterFarm(user, window.portalFarm.code);
+        window.sessionStorage.setItem(`${storageKey}.farm`, window.portalFarm.code);
+        showAccount(profile, user);
+        rememberFarm(user, window.portalFarm.code);
+        return true;
     }
 
     function showRecovery(active) {
@@ -132,7 +177,7 @@
 
     function beginPasswordCreation(purpose, user) {
         passwordPurpose = purpose;
-        window.sessionStorage.setItem(`${storageKey}.recovery`, purpose === 'invite' ? 'invite' : '1');
+        window.localStorage.setItem(`${storageKey}.recovery`, purpose === 'invite' ? 'invite' : '1');
         recoveryReady = true;
         if (user?.email) document.getElementById('email').value = user.email;
         showRecovery(true); setMessage('');
@@ -184,18 +229,21 @@
             tabId = window.crypto.randomUUID();
             window.sessionStorage.setItem(tabKey, tabId);
         }
-        // Uma chave por aba impede o Supabase de compartilhar login pelo BroadcastChannel.
-        storageKey = `geoportal.auth.${project}.${tabId}.session.v2`;
-        const entryKey = `${storageKey}.entry`;
-        const loginHandoff = window.sessionStorage.getItem(entryKey) === '1';
-        window.sessionStorage.removeItem(entryKey);
+        // The shared key lets Supabase coordinate refresh and sign-out across tabs.
+        const legacyKey = `geoportal.auth.${project}.${tabId}.session.v2`;
+        storageKey = `geoportal.auth.${project}.session.v3`;
+        const migrationKey = `${storageKey}.migrated`;
         const reload = window.performance?.getEntriesByType('navigation')[0]?.type === 'reload';
-        if (!isLoginPage && !reload && !loginHandoff) {
-            // Abrir pelo endereço, favorito ou restaurar uma aba pede login; F5 preserva o acesso.
-            clearSession();
+        if (!window.localStorage.getItem(migrationKey) && !window.localStorage.getItem(storageKey) &&
+            !window.sessionStorage.getItem(`${legacyKey}.recovery`)) {
+            const legacySession = window.sessionStorage.getItem(legacyKey);
+            if (legacySession) window.localStorage.setItem(storageKey, legacySession);
         }
-        window.sessionStorage.setItem(`${storageKey}.check`, '1');
-        window.sessionStorage.removeItem(`${storageKey}.check`);
+        window.localStorage.setItem(migrationKey, '1');
+        window.sessionStorage.removeItem(legacyKey);
+        window.sessionStorage.removeItem(`${legacyKey}-user`);
+        window.localStorage.setItem(`${storageKey}.check`, '1');
+        window.localStorage.removeItem(`${storageKey}.check`);
         try {
             // Não reutiliza o login permanente anterior. Os dados agrícolas são preservados.
             window.localStorage.removeItem(`sb-${project}-auth-token`);
@@ -215,13 +263,25 @@
                     options.signal?.removeEventListener('abort', abort);
                 }
             } },
-            auth: { storage: window.sessionStorage, storageKey, persistSession: true,
+            auth: { storage: window.localStorage, storageKey, persistSession: true,
                 autoRefreshToken: true, detectSessionInUrl: false }
         });
-        window.supabaseClient.auth.onAuthStateChange((event) => {
+        window.supabaseClient.auth.onAuthStateChange((event, session) => {
             if (event === 'SIGNED_OUT') {
                 clearSession();
                 goToLogin('sessao');
+            } else if (!isLoginPage && window.portalUser && session?.user &&
+                session.user.id !== window.portalUser.id) {
+                lockAccess();
+                window.location.reload();
+            }
+        });
+        window.addEventListener('storage', event => {
+            if (event.key === storageKey && !event.newValue) {
+                clearSession();
+                goToLogin('sessao');
+            } else if (!isLoginPage && event.key === `${storageKey}.recovery` && event.newValue) {
+                goToLogin('senha');
             }
         });
 
@@ -258,8 +318,8 @@
             }
             const recovery = new URLSearchParams(String(window.location.hash || '').replace(/^#/, ''));
             const recoveryLink = ['recovery', 'invite'].includes(recovery.get('type'));
-            const passwordMarker = window.sessionStorage.getItem(`${storageKey}.recovery`);
-            const resumeRecovery = reload && ['1', 'invite'].includes(passwordMarker);
+            const passwordMarker = window.localStorage.getItem(`${storageKey}.recovery`);
+            const resumeRecovery = ['1', 'invite'].includes(passwordMarker);
             if (recoveryLink || resumeRecovery) {
                 if (window.location.hash) window.history.replaceState(null, '', window.location.pathname);
                 try {
@@ -272,7 +332,7 @@
                     const { data: { user }, error } = await window.supabaseClient.auth.getUser();
                     if (error || !user) throw Error('expired');
                     passwordPurpose = recoveryLink ? recovery.get('type') : passwordMarker === 'invite' ? 'invite' : 'recovery';
-                    window.sessionStorage.setItem(`${storageKey}.recovery`, passwordPurpose === 'invite' ? 'invite' : '1');
+                    window.localStorage.setItem(`${storageKey}.recovery`, passwordPurpose === 'invite' ? 'invite' : '1');
                     recoveryReady = true; showRecovery(true); setMessage('');
                 } catch (_) {
                     try { await endSession(); } catch (_) { clearSession(); }
@@ -280,12 +340,16 @@
                 }
                 return false;
             }
-            // A entrada sempre pede as credenciais, sem redirecionamento automático.
-            await endSession();
             if (recovery.has('error') || recovery.has('error_code')) {
                 window.history.replaceState(null, '', window.location.pathname);
                 setMessage('O link recebido é inválido ou expirou. Solicite um novo em “Esqueci minha senha”.');
                 return false;
+            }
+            // Ignore unsolicited URL tokens; only a previously saved session resumes access.
+            if (!window.location.hash) {
+                const { data, error } = await window.supabaseClient.auth.getSession();
+                if (isConnectionError(error)) throw error;
+                if (!error && data?.session) return await resumeSession();
             }
             const reason = new URLSearchParams(window.location.search).get('erro');
             setMessage({ perfil: 'Sua conta não tem um perfil de acesso válido. Solicite a liberação ao administrador.',
@@ -300,39 +364,26 @@
             return false;
         }
 
-        const { data: { session }, error: sessionError } = await window.supabaseClient.auth.getSession();
-        if (sessionError || !session) {
-            clearSession(); goToLogin(); return false;
+        if (window.localStorage.getItem(`${storageKey}.recovery`)) {
+            goToLogin('senha'); return false;
         }
-        // Confirma a identidade no serviço de autenticação, não apenas no navegador.
-        const { data: { user }, error: userError } = await window.supabaseClient.auth.getUser();
-        if (userError || !user) {
-            goToLogin('sessao'); await endSession(); return false;
-        }
-        if (!user.email_confirmed_at) {
-            goToLogin('email'); await endSession(); return false;
-        }
-        if (!await hasPermanentPassword()) {
-            goToLogin('senha'); await endSession(); return false;
-        }
-        const profile = await getProfile(user);
-        if (!profile) {
-            goToLogin('perfil'); await endSession(); return false;
-        }
-        allowedFarms = await getFarms();
-        window.portalFarms = allowedFarms;
-        const chosen = window.sessionStorage.getItem(`${storageKey}.farm`);
-        window.portalFarm = allowedFarms.find(farm => farm.code === chosen);
-        if (!window.portalFarm) {
-            goToLogin('fazenda'); await endSession(); return false;
-        }
-        showAccount(profile, user);
-        rememberFarm(user, window.portalFarm.code);
-        return true;
+        return await resumeSession();
     })().catch(() => {
-        clearSession();
-        if (isLoginPage) setMessage('Não foi possível preparar o acesso. Permita o armazenamento desta aba e tente novamente.');
-        else goToLogin('acesso');
+        // A temporary connection failure must not erase a valid refresh token.
+        if (isLoginPage) setMessage('Não foi possível validar o acesso. Confira a conexão e tente novamente.');
+        else {
+            lockAccess();
+            const overlay = document.getElementById('auth-loading-overlay');
+            if (overlay) {
+                overlay.replaceChildren();
+                const message = document.createElement('p');
+                message.textContent = 'Não foi possível validar o acesso. Confira a conexão e tente novamente.';
+                const retry = document.createElement('button');
+                retry.type = 'button'; retry.textContent = 'Tentar novamente';
+                retry.addEventListener('click', () => window.location.reload());
+                overlay.appendChild(message); overlay.appendChild(retry);
+            }
+        }
         return false;
     });
 
@@ -475,7 +526,7 @@
             if (userError || !user?.email_confirmed_at) throw Error('expired');
             window.sessionStorage.removeItem(`${storageKey}.email-link`);
             pendingEmailLink = null;
-            window.sessionStorage.setItem(`${storageKey}.recovery`, passwordPurpose === 'invite' ? 'invite' : '1');
+            window.localStorage.setItem(`${storageKey}.recovery`, passwordPurpose === 'invite' ? 'invite' : '1');
             recoveryReady = true; showRecovery(true); setMessage('');
             return true;
         } catch (_) {

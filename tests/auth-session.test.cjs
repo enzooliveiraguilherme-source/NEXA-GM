@@ -2,15 +2,15 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
-const source = fs.readFileSync(require.resolve('../auth.js'), 'utf8');
+const source = process.env.AUTH_SOURCE_FILE ? fs.readFileSync(process.env.AUTH_SOURCE_FILE, 'utf8') : fs.readFileSync(require.resolve('../auth.js'), 'utf8');
 const user = { id: 'user-1', email: 'user@example.test', email_confirmed_at: '2026-10-08T12:00:00Z' };
 const session = { user, access_token: 'test-token', refresh_token: 'test-refresh' };
 let tabCounter = 0;
 
 function run({ page = 'portal', sessionMap = new Map(), initialSession, role = 'visualizador',
-    profileError = false, userError = false, loginError, offlineLogout = false, storageBlocked = false,
+    profileError = false, userError = false, userRetryable = false, loginError, loginThrow, offlineLogout = false, storageBlocked = false,
     hash = '', search = '', resetError, recoveryError, verifyOtpError, verifyOtpUserError = false,
-    otpAlreadyUsedOnRetry = false, verifiedUser = user, updateError,
+    otpAlreadyUsedOnRetry = false, verifyOtpErrors = {}, verifiedUser = user, updateError,
     hasPermanentPassword = true, permanentPasswordError = false,
     suppliedUser = user, configured = true, failProfile = false, navigation = 'reload',
     farms = [{code:'FE',name:'Esperança'}], farmError = false, chosenFarm = 'FE', fetchImpl,
@@ -40,8 +40,9 @@ function run({ page = 'portal', sessionMap = new Map(), initialSession, role = '
         addEventListener(event, fn) { listeners[event] = fn; },
         supabase: { createClient(url, key, options) {
             clientOptions = options;
-            const read = () => JSON.parse(sessionStorage.getItem(options.auth.storageKey) || 'null');
-            if (initialSession) sessionStorage.setItem(options.auth.storageKey, JSON.stringify(initialSession));
+            const authStorage = options.auth.storage;
+            const read = () => JSON.parse(authStorage.getItem(options.auth.storageKey) || 'null');
+            if (initialSession) authStorage.setItem(options.auth.storageKey, JSON.stringify(initialSession));
             if (initialSession && chosenFarm) sessionStorage.setItem(`${options.auth.storageKey}.farm`, chosenFarm);
             return {
                 async rpc(name, args) {
@@ -52,23 +53,24 @@ function run({ page = 'portal', sessionMap = new Map(), initialSession, role = '
                 auth: {
                     onAuthStateChange(fn) { authCallback = fn; },
                     async resetPasswordForEmail(email,options) { calls.reset.push({email,options}); return {error:resetError}; },
-                    async setSession(tokens) { calls.setSession.push(tokens); if(recoveryError)return {error:recoveryError};sessionStorage.setItem(options.auth.storageKey,JSON.stringify(session));return {data:{session},error:null}; },
-                    async verifyOtp(params) { calls.verifyOtp.push({ ...params }); if(verifyOtpError || (otpConsumed && otpAlreadyUsedOnRetry))return {data:{},error:verifyOtpError || Error('OTP already used')};otpConsumed=true;const verifiedSession={...session,user:verifiedUser};sessionStorage.setItem(options.auth.storageKey,JSON.stringify(verifiedSession));return {data:{user:verifiedUser,session:verifiedSession},error:null}; },
+                    async setSession(tokens) { calls.setSession.push(tokens); if(recoveryError)return {error:recoveryError};authStorage.setItem(options.auth.storageKey,JSON.stringify(session));return {data:{session},error:null}; },
+                    async verifyOtp(params) { calls.verifyOtp.push({ ...params }); const typedError=verifyOtpErrors[params.type]; if(verifyOtpError || typedError || (otpConsumed && otpAlreadyUsedOnRetry))return {data:{},error:verifyOtpError || typedError || Error('OTP already used')};otpConsumed=true;const verifiedSession={...session,user:verifiedUser};authStorage.setItem(options.auth.storageKey,JSON.stringify(verifiedSession));return {data:{user:verifiedUser,session:verifiedSession},error:null}; },
                     async updateUser(attributes) { calls.update.push({ ...attributes }); return {data:{user},error:updateError}; },
                     async getSession() { return { data: { session: read() }, error: null }; },
-                    async getUser() { calls.getUser++; const failed = userError || (verifyOtpUserError && otpConsumed); return { data: { user: failed ? null : read()?.user }, error: failed ? Error('revoked') : null }; },
+                    async getUser() { calls.getUser++; const failed = userError || userRetryable || (verifyOtpUserError && otpConsumed); const error = userRetryable ? Object.assign(Error('offline'), { name: 'AuthRetryableFetchError' }) : Error('revoked'); return { data: { user: failed ? null : read()?.user }, error: failed ? error : null }; },
                     async signInWithPassword(credentials) {
                         calls.signIn.push(credentials);
+                        if (loginThrow) throw loginThrow;
                         if (loginError) return { data: {}, error: loginError };
                         const signedIn = { ...session, user: suppliedUser };
-                        sessionStorage.setItem(options.auth.storageKey, JSON.stringify(signedIn));
+                        authStorage.setItem(options.auth.storageKey, JSON.stringify(signedIn));
                         return { data: { user: suppliedUser, session: signedIn }, error: null };
                     },
                     async signUp(credentials) { calls.signUp.push(credentials); return { data: {}, error: null }; },
                     async signOut(optionsOut) {
                         calls.signOut.push(optionsOut.scope);
                         if (offlineLogout) throw Error('offline');
-                        sessionStorage.removeItem(options.auth.storageKey);
+                        authStorage.removeItem(options.auth.storageKey);
                         authCallback('SIGNED_OUT', null);
                         return { error: null };
                     }
@@ -90,10 +92,12 @@ function run({ page = 'portal', sessionMap = new Map(), initialSession, role = '
         setTimeout: fn => setTimeout(fn, 5), clearTimeout,
         Option: function(label,value){this.label=label;this.value=value;} });
     return { window, document, elements, classes, calls, sessionMap, localMap, redirects,
-        options: () => clientOptions, emit: event => authCallback(event, null), pageShow: () => listeners.pageshow({ persisted: true }) };
+        options: () => clientOptions, emit: (event, nextSession = null) => authCallback(event, nextSession),
+        storageEvent: (key, newValue) => listeners.storage({ key, newValue }),
+        pageShow: () => listeners.pageshow({ persisted: true }) };
 }
 
-test('sem sessão na aba exige login mesmo com token permanente antigo', async () => {
+test('no persistent session requires login', async () => {
     const h = run(); assert.equal(await h.window.portalReady, false);
     assert.deepEqual(h.redirects, ['./index.html']);
     assert.equal(h.localMap.has('sb-example-auth-token'), false);
@@ -101,27 +105,53 @@ test('sem sessão na aba exige login mesmo com token permanente antigo', async (
     assert.equal(h.classes.has('portal-loading'), true);
 });
 
+test('legacy v2 session migrates once; recovery state never migrates as a portal session', async () => {
+    const legacyKey = 'geoportal.auth.example.fixture-tab.session.v2';
+    const sessionMap = new Map([['geoportal.auth.example.tab', 'fixture-tab'], [legacyKey, JSON.stringify(session)]]);
+    const localMap = new Map();
+    const migrated = run({ sessionMap, localMap });
+    assert.equal(await migrated.window.portalReady, true);
+    assert.equal(localMap.has(migrated.options().auth.storageKey), true);
+    assert.equal(sessionMap.has(legacyKey), false);
+
+    await migrated.window.logoutGeoportal();
+    sessionMap.set(legacyKey, JSON.stringify(session));
+    const afterLogout = run({ sessionMap, localMap });
+    assert.equal(await afterLogout.window.portalReady, false);
+    assert.equal(localMap.has(afterLogout.options().auth.storageKey), false);
+
+    const recoverySessionMap = new Map([
+        ['geoportal.auth.example.tab', 'fixture-tab'], [legacyKey, JSON.stringify(session)], [`${legacyKey}.recovery`, '1']
+    ]);
+    const recoveryLocalMap = new Map();
+    const recovery = run({ sessionMap: recoverySessionMap, localMap: recoveryLocalMap });
+    assert.equal(await recovery.window.portalReady, false);
+    assert.equal(recoveryLocalMap.has(recovery.options().auth.storageKey), false);
+});
+
 test('F5 mantém sessão da aba e confirma usuário e perfil no banco', async () => {
     const h = run({ initialSession: session }); assert.equal(await h.window.portalReady, true);
-    const reloaded = run({ sessionMap: h.sessionMap }); assert.equal(await reloaded.window.portalReady, true);
+    const reloaded = run({ sessionMap: h.sessionMap, localMap: h.localMap }); assert.equal(await reloaded.window.portalReady, true);
     assert.equal(reloaded.options().auth.storageKey, h.options().auth.storageKey);
     assert.equal(reloaded.calls.getUser, 1); assert.equal(reloaded.calls.profile, 1);
     assert.equal(reloaded.window.portalAccessRole, 'visualizador');
     assert.equal(reloaded.classes.has('portal-loading'), false);
 });
 
-test('nova aba tem chave própria e não herda login de outra aba', async () => {
+test('new tab shares persisted session', async () => {
     const h = run({ initialSession: session }); await h.window.portalReady;
-    const fresh = run(); assert.equal(await fresh.window.portalReady, false);
-    assert.notEqual(fresh.options().auth.storageKey, h.options().auth.storageKey);
+    const fresh = run({ localMap: h.localMap }); assert.equal(await fresh.window.portalReady, true);
+    assert.equal(fresh.options().auth.storageKey, h.options().auth.storageKey);
     assert.equal(fresh.options().auth.detectSessionInUrl, false);
-    assert.equal(fresh.redirects[0], './index.html');
+    assert.equal(fresh.redirects.length, 0);
 });
 
-test('a página inicial sempre pede email e senha, sem redirecionar uma sessão antiga', async () => {
+test('index resumes a valid persisted session', async () => {
     const h = run({ page: 'login', initialSession: session }); await h.window.portalReady;
-    assert.equal(h.redirects.length, 0); assert.deepEqual(h.calls.signOut, ['local']);
-    assert.equal(h.sessionMap.has(h.options().auth.storageKey), false);
+    assert.deepEqual(h.redirects, ['./portal.html']);
+    assert.equal(h.calls.getUser, 1);
+    assert.equal(h.calls.profile, 1);
+    assert.equal(h.localMap.has(h.options().auth.storageKey), true);
 });
 
 test('credenciais válidas entram direto na primeira fazenda liberada e apagam a senha', async () => {
@@ -133,8 +163,7 @@ test('credenciais válidas entram direto na primeira fazenda liberada e apagam a
     assert.equal(await h.window.choosePortalFarm('Y'), false);
     assert.equal(h.redirects.length, 1);
     assert.equal(h.document.getElementById('password').value, '');
-    assert.equal(h.sessionMap.has(h.options().auth.storageKey), true);
-    assert.equal(h.localMap.has(h.options().auth.storageKey), false);
+    assert.equal(h.localMap.has(h.options().auth.storageKey), true);
 });
 
 test('senha incorreta e e-mail não confirmado não liberam o mapa', async () => {
@@ -176,7 +205,7 @@ test('ausência de perfil nunca promove alguém a administrador pelo e-mail', as
     const adminEmail = { ...user, email: 'enzo.oliveira@grupomichels.com.br' };
     const h = run({ page: 'login', suppliedUser: adminEmail, profileError: true }); await h.window.portalReady;
     assert.equal(await h.window.loginGeoportal(adminEmail.email, 'Fixture-password!'), false);
-    assert.equal(h.sessionMap.has(h.options().auth.storageKey), false);
+    assert.equal(h.localMap.has(h.options().auth.storageKey), false);
     assert.equal(h.window.portalAccessRole, undefined);
     assert.equal(h.redirects.length, 0);
 });
@@ -185,16 +214,28 @@ test('sessão revogada, perfil inválido e falha no banco bloqueiam acesso', asy
     for (const options of [{ userError: true }, { role: 'unknown' }, { profileError: true }, { failProfile: true }]) {
         const h = run({ initialSession: session, ...options }); assert.equal(await h.window.portalReady, false);
         assert.equal(h.classes.has('portal-loading'), true);
-        assert.match(h.redirects[0], /index.html\?erro=/);
-        assert.equal(h.sessionMap.has(h.options().auth.storageKey), false);
+        if (options.failProfile) {
+            assert.equal(h.redirects.length, 0);
+            assert.equal(h.localMap.has(h.options().auth.storageKey), true);
+        } else {
+            assert.match(h.redirects[0], /index.html\?erro=/);
+            assert.equal(h.localMap.has(h.options().auth.storageKey), false);
+        }
     }
 });
 
+test('retryable getUser failure keeps persisted refresh session for retry', async () => {
+    const h = run({ initialSession: session, userRetryable: true });
+    assert.equal(await h.window.portalReady, false);
+    assert.equal(h.localMap.has(h.options().auth.storageKey), true);
+    assert.equal(h.redirects.length, 0);
+    assert.equal(h.classes.has('portal-loading'), true);
+});
 test('Sair apaga sessão local mesmo offline e não apaga dados agrícolas', async () => {
     const h = run({ initialSession: session, offlineLogout: true }); await h.window.portalReady;
     await h.window.logoutGeoportal();
     assert.deepEqual(h.calls.signOut, ['local']);
-    assert.equal(h.sessionMap.has(h.options().auth.storageKey), false);
+    assert.equal(h.localMap.has(h.options().auth.storageKey), false);
     assert.equal(h.classes.has('portal-loading'), true);
     assert.equal(h.window.portalUser, null);
     assert.equal(h.localMap.get('geoportal_calcario_records_v1'), 'preserved');
@@ -209,10 +250,36 @@ test('evento de saída e página restaurada pelo botão Voltar bloqueiam o conte
     assert.equal(restored.classes.has('portal-loading'), true);
 });
 
+test('storage logout and recovery events lock an already open portal', async () => {
+    const h = run({ initialSession: session });
+    assert.equal(await h.window.portalReady, true);
+    const authKey = h.options().auth.storageKey;
+    h.localMap.delete(authKey);
+    h.storageEvent(authKey, null);
+    assert.equal(h.window.portalUser, null);
+    assert.equal(h.classes.has('portal-loading'), true);
+
+    const other = run({ initialSession: session });
+    assert.equal(await other.window.portalReady, true);
+    const marker = `${other.options().auth.storageKey}.recovery`;
+    other.localMap.set(marker, '1');
+    other.storageEvent(marker, '1');
+    assert.equal(other.window.portalUser, null);
+    assert.equal(other.classes.has('portal-loading'), true);
+});
+
+test('auth user change locks access and reloads before reusing profile', async () => {
+    const h = run({ initialSession: session });
+    assert.equal(await h.window.portalReady, true);
+    h.emit('USER_UPDATED', { user: { ...user, id: 'user-2' } });
+    assert.equal(h.window.portalUser, null);
+    assert.equal(h.classes.has('portal-loading'), true);
+    assert.equal(h.redirects.at(-1), 'reload');
+});
 test('configuração ausente e armazenamento bloqueado não liberam acesso', async () => {
     for (const options of [{ configured: false }, { storageBlocked: true }]) {
         const h = run(options); assert.equal(await h.window.portalReady, false);
-        assert.match(h.redirects[0], /erro=acesso/);
+        assert.equal(h.classes.has('portal-loading'), true);
     }
 });
 
@@ -222,6 +289,7 @@ test('login aceita senha antiga somente numérica e consulta o banco sem impor c
         assert.equal(await h.window.loginGeoportal(user.email, password), true);
         assert.equal(h.calls.signIn.length, 1);
         assert.equal(h.calls.signIn[0].password, password);
+        assert.equal(h.calls.verifyOtp.length, 0);
     }
     const h = run({ page: 'login' }); await h.window.portalReady;
     assert.equal(await h.window.loginGeoportal(user.email, ''), false);
@@ -239,31 +307,31 @@ test('cadastro público não cria conta e orienta convite do administrador', asy
 test('abrir por endereço ou restaurar aba exige login; encaminhamento após login funciona uma vez', async () => {
     const h = run({ initialSession: session }); await h.window.portalReady;
     for (const navigation of ['navigate', 'back_forward']) {
-        const reopened = run({ sessionMap: new Map(h.sessionMap), navigation });
-        assert.equal(await reopened.window.portalReady, false);
-        assert.equal(reopened.redirects[0], './index.html');
+        const reopened = run({ sessionMap: new Map(h.sessionMap), localMap: new Map(h.localMap), navigation });
+        assert.equal(await reopened.window.portalReady, true);
+        assert.equal(reopened.calls.getUser, 1);
     }
     const login = run({ page: 'login' }); await login.window.portalReady;
     await login.window.loginGeoportal(user.email, 'Fixture-password!');
     await login.window.choosePortalFarm('FE');
-    const portal = run({ sessionMap: login.sessionMap, navigation: 'navigate' });
+    const portal = run({ sessionMap: login.sessionMap, localMap: login.localMap, navigation: 'navigate' });
     assert.equal(await portal.window.portalReady, true);
-    const revisit = run({ sessionMap: login.sessionMap, navigation: 'navigate' });
-    assert.equal(await revisit.window.portalReady, false);
+    const revisit = run({ sessionMap: login.sessionMap, localMap: login.localMap, navigation: 'navigate' });
+    assert.equal(await revisit.window.portalReady, true);
 });
 
 test('nenhuma fazenda liberada ou falha ao consultar fazendas impede entrada', async () => {
     for (const options of [{farms:[]},{farmError:true}]) {
         const h=run({page:'login',...options});await h.window.portalReady;
         assert.equal(await h.window.loginGeoportal(user.email,'Fixture-password!'),false);
-        assert.equal(h.redirects.length,0);assert.equal(h.sessionMap.has(h.options().auth.storageKey),false);
+        assert.equal(h.redirects.length,0);assert.equal(h.localMap.has(h.options().auth.storageKey),false);
     }
 });
 test('e-mail sem confirmação e fazenda adulterada não abrem o mapa',async()=>{
     const unconfirmed=run({initialSession:{...session,user:{...user,email_confirmed_at:null}}});
     assert.equal(await unconfirmed.window.portalReady,false);assert.match(unconfirmed.redirects[0],/erro=email/);
     const other=run({initialSession:session,chosenFarm:'FE2'});
-    assert.equal(await other.window.portalReady,false);assert.match(other.redirects[0],/erro=fazenda/);
+    assert.equal(await other.window.portalReady,true); assert.equal(other.window.portalFarm.code, 'FE');
 });
 
 test('única fazenda entra direto e preferência não substitui o login', async () => {
@@ -273,7 +341,7 @@ test('única fazenda entra direto e preferência não substitui o login', async 
     assert.equal(h.localMap.get('geoportal.preference.example.user-1.farm'), 'FE');
     const next = run({page:'login', localMap:h.localMap});
     await next.window.portalReady;
-    assert.equal(next.redirects.length, 0);
+    assert.deepEqual(next.redirects, ['./portal.html']);
     assert.equal(next.calls.signIn.length, 0);
 });
 
@@ -284,10 +352,12 @@ test('última fazenda entra direto; preferência revogada ou de outra conta usa 
     await valid.window.loginGeoportal(user.email, '123456');
     assert.equal(valid.redirects[0], './portal.html');
     assert.equal(valid.sessionMap.get(`${valid.options().auth.storageKey}.farm`), 'FE2');
+    localMap.delete(valid.options().auth.storageKey);
     const revoked = run({page:'login', farms:[farms[0], {code:'FPAR',name:'Paraíso',gleba:'FPAR'}], localMap});
     await revoked.window.loginGeoportal(user.email, '123456');
     assert.deepEqual(revoked.redirects, ['./portal.html']);
     assert.equal(revoked.sessionMap.get(`${revoked.options().auth.storageKey}.farm`), 'FE');
+    localMap.delete(revoked.options().auth.storageKey);
     const other = run({page:'login', farms, localMap, suppliedUser:{...user,id:'user-2'}});
     await other.window.loginGeoportal(user.email, '123456');
     assert.deepEqual(other.redirects, ['./portal.html']);
@@ -332,7 +402,7 @@ test('link de recuperação limpa tokens da URL, valida identidade e não abre o
     assert.equal(h.calls.update.length,0);
     assert.equal(await h.window.saveRecoveredPassword('12345678','12345678'),true);
     assert.equal(h.calls.update[0].password,'12345678');
-    assert.equal(h.sessionMap.has(h.options().auth.storageKey),false);
+    assert.equal(h.localMap.has(h.options().auth.storageKey),false);
     assert.equal(h.elements.get('new-password').value,'');assert.equal(h.elements.get('confirm-password').value,'');
     assert.equal(h.elements.get('login-form').hidden,false);assert.deepEqual(h.redirects,[]);
 });
@@ -345,7 +415,7 @@ test('link inválido e sessão comum não permitem alterar senha pelo fluxo de r
 });
 test('F5 retoma recuperação validada e falha ao salvar não apresenta sucesso', async () => {
     const h=run({page:'login',hash:'#type=recovery&access_token=test-token&refresh_token=test-refresh'});await h.window.portalReady;
-    const again=run({page:'login',sessionMap:h.sessionMap,updateError:{code:'same_password'}});await again.window.portalReady;
+    const again=run({page:'login',sessionMap:h.sessionMap,localMap:h.localMap,updateError:{code:'same_password'}});await again.window.portalReady;
     assert.equal(again.elements.get('new-password-form').hidden,false);
     assert.equal(await again.window.saveRecoveredPassword('12345678','12345678'),false);
     assert.match(again.elements.get('login-message').textContent,/diferente da anterior/);
@@ -355,7 +425,7 @@ test('convite abre criação de senha sem entrar no portal e mantém fluxo após
  const h=run({page:'login',hash:'#type=invite&access_token=invite-token&refresh_token=invite-refresh'}); await h.window.portalReady;
  assert.equal(h.document.getElementById('login-title').textContent,'Crie sua senha de acesso');
  assert.equal(h.calls.profile,0);assert.equal(h.redirects.length,0);assert.equal(h.window.location.hash,'');
- const reload=run({page:'login',sessionMap:h.sessionMap}); await reload.window.portalReady;
+ const reload=run({page:'login',sessionMap:h.sessionMap,localMap:h.localMap}); await reload.window.portalReady;
  assert.equal(reload.document.getElementById('login-title').textContent,'Crie sua senha de acesso');
  assert.equal(await reload.window.saveRecoveredPassword('12345678','12345678'),true);
  assert.match(reload.document.getElementById('login-message').textContent,/Convite concluído/);
@@ -367,7 +437,7 @@ test('link de convite ou recuperação só prepara confirmação; scanner não c
   const h=run({page:'login',search}); await h.window.portalReady;
   assert.equal(h.calls.verifyOtp.length,0); assert.equal(h.calls.setSession.length,0);
   assert.equal(h.calls.update.length,0);
-  assert.deepEqual(h.sessionMap.has(h.options().auth.storageKey),false);
+  assert.deepEqual(h.localMap.has(h.options().auth.storageKey),false);
   assert.equal(h.document.getElementById('email-link-confirmation').hidden,false);
   assert.equal(h.document.getElementById('btn-accept-invite').hidden,false);
   assert.equal(h.document.getElementById('new-password-form').hidden,true);
@@ -388,7 +458,7 @@ test('aceitação explícita verifica o hash uma vez, confirma usuário e só en
 });
 test('pending link sobrevive F5 e chamadas simultâneas não verificam duas vezes', async () => {
  const h=run({page:'login',search:'?token_hash=reset-hash&type=recovery'}); await h.window.portalReady;
- const again=run({page:'login',sessionMap:h.sessionMap}); await again.window.portalReady;
+ const again=run({page:'login',sessionMap:h.sessionMap,localMap:h.localMap}); await again.window.portalReady;
  assert.equal(again.document.getElementById('email-link-confirmation').hidden,false);
  assert.equal(again.document.getElementById('new-password-form').hidden,true);
  await Promise.all([again.window.acceptEmailLink(),again.window.acceptEmailLink()]);
@@ -407,7 +477,7 @@ test('tipo inválido não verifica OTP e cancelar apaga link pendente', async ()
  await h.window.cancelPasswordRecovery();
  assert.equal(h.calls.verifyOtp.length,0);
  assert.equal(h.sessionMap.has(`${h.options().auth.storageKey}.email-link`),false);
- assert.equal(h.sessionMap.has(`${h.options().auth.storageKey}.recovery`),false);
+ assert.equal(h.localMap.has(`${h.options().auth.storageKey}.recovery`),false);
  assert.equal(h.document.getElementById('email-link-confirmation').hidden,true);
 });
 test('falha na verificação OTP mantém confirmação para nova tentativa e não libera senha', async () => {
@@ -433,7 +503,7 @@ test('OTP consumido com falha temporária ao confirmar usuário não pode ser re
  const h=run({page:'login',search:'?token_hash=single-use-hash&type=invite',verifyOtpUserError:true,otpAlreadyUsedOnRetry:true}); await h.window.portalReady;
  assert.equal(await h.window.acceptEmailLink(),false);
  assert.equal(h.sessionMap.has(`${h.options().auth.storageKey}.email-link`),true);
- assert.equal(h.sessionMap.has(`${h.options().auth.storageKey}.recovery`),false);
+ assert.equal(h.localMap.has(`${h.options().auth.storageKey}.recovery`),false);
  assert.equal(h.document.getElementById('new-password-form').hidden,true);
  assert.equal(await h.window.acceptEmailLink(),false);
  assert.equal(h.calls.verifyOtp.length,2);
@@ -443,7 +513,7 @@ test('senha salva continua confirmada ao falhar o encerramento local da sessão'
  const h=run({page:'login',hash:'#type=recovery&access_token=test-token&refresh_token=test-refresh',offlineLogout:true}); await h.window.portalReady;
  assert.equal(await h.window.saveRecoveredPassword('12345678','12345678'),true);
  assert.deepEqual(h.calls.update,[{password:'12345678'}]);
- assert.equal(h.sessionMap.has(h.options().auth.storageKey),false);
+ assert.equal(h.localMap.has(h.options().auth.storageKey),false);
  assert.equal(h.document.getElementById('new-password-form').hidden,true);
  assert.match(h.document.getElementById('login-message').textContent,/Senha atualizada/);
 });
@@ -454,7 +524,7 @@ test('após criar senha no convite, o login ainda exige perfil válido e fazenda
   assert.equal(await h.window.saveRecoveredPassword('12345678','12345678'),true);
   assert.equal(await h.window.loginGeoportal(user.email,'123456'),false);
   assert.equal(h.calls.signIn.length,1);
-  assert.equal(h.sessionMap.has(h.options().auth.storageKey),false);
+  assert.equal(h.localMap.has(h.options().auth.storageKey),false);
   assert.equal(h.redirects.length,0);
  }
 });
@@ -490,7 +560,7 @@ test('OTP temporário de convite ou recuperação abre só a definição de senh
   assert.deepEqual(h.redirects,[]);
   assert.equal(h.document.getElementById('temporary-password').value,'');
   assert.equal(h.document.getElementById('new-password-form').hidden,false);
-  assert.equal(h.sessionMap.get(`${h.options().auth.storageKey}.recovery`),purpose==='invite'?'invite':'1');
+  assert.equal(h.localMap.get(`${h.options().auth.storageKey}.recovery`),purpose==='invite'?'invite':'1');
  }
 });
 test('OTP temporário expirado, inválido ou limitado não ativa a definição de senha', async () => {
@@ -565,13 +635,13 @@ test('sessão temporária retoma formulário após F5 e cancelar limpa estado de
  const h=run({page:'login'}); await h.window.portalReady;
  h.window.showTemporaryAccess('recovery',user.email);
  assert.equal(await h.window.loginTemporaryPassword(user.email,'654321','recovery'),true);
- const reload=run({page:'login',sessionMap:h.sessionMap}); await reload.window.portalReady;
+ const reload=run({page:'login',sessionMap:h.sessionMap,localMap:h.localMap}); await reload.window.portalReady;
  assert.equal(reload.document.getElementById('new-password-form').hidden,false);
- assert.equal(reload.sessionMap.get(`${reload.options().auth.storageKey}.recovery`),'1');
+ assert.equal(reload.localMap.get(`${reload.options().auth.storageKey}.recovery`),'1');
  await reload.window.cancelPasswordRecovery();
  assert.equal(reload.document.getElementById('new-password-form').hidden,true);
- assert.equal(reload.sessionMap.has(reload.options().auth.storageKey),false);
- assert.equal(reload.sessionMap.has(`${reload.options().auth.storageKey}.recovery`),false);
+ assert.equal(reload.localMap.has(reload.options().auth.storageKey),false);
+ assert.equal(reload.localMap.has(`${reload.options().auth.storageKey}.recovery`),false);
 });
 test('URL pública de primeiro acesso ou recuperação mostra a entrada OTP sem validar email', async () => {
  for (const [search,purpose] of [['?acesso=temporario','invite'],['?acesso=temporario&type=recovery','recovery']]) {
@@ -593,7 +663,7 @@ test('cancelar acesso temporário limpa senha e email inseridos no formulário',
  assert.equal(h.document.getElementById('temporary-email').value,'');
  assert.equal(h.document.getElementById('temporary-password').value,'');
  assert.equal(h.document.getElementById('temporary-access-form').hidden,true);
- assert.equal(h.sessionMap.has(`${h.options().auth.storageKey}.recovery`),false);
+ assert.equal(h.localMap.has(`${h.options().auth.storageKey}.recovery`),false);
 });
 test('conta sem senha permanente não pode abrir o portal', async () => {
  const h=run({initialSession:session,hasPermanentPassword:false});
@@ -618,4 +688,46 @@ test('login normal de conta sem senha permanente abre definição de senha e blo
  assert.equal(h.calls.profile,0);
  assert.equal(h.calls.rpc.some(call=>call.name==='list_accessible_farms_by_gleba'),false);
  assert.equal(h.document.getElementById('new-password-form').hidden,false);
+});
+test('login normal aceita OTP de convite ou recuperação após tentar senha primeiro', { skip: !source.includes('O mesmo campo aceita') }, async () => {
+ for (const purpose of ['invite','recovery']) {
+  for (const loginError of [{code:'invalid_credentials'},{code:'email_not_confirmed'}]) {
+   const verifyOtpErrors=purpose==='recovery' ? {invite:{code:'otp_expired',status:403}} : {};
+   const h=run({page:'login',loginError,verifyOtpErrors}); await h.window.portalReady;
+   assert.equal(await h.window.loginGeoportal(user.email,'654321'),true);
+   assert.equal(h.calls.signIn.length,1);
+   assert.equal(h.calls.signIn[0].password,'654321');
+   assert.deepEqual(h.calls.verifyOtp.map(call=>call.type),purpose==='invite'?['invite']:['invite','recovery']);
+   for (const call of h.calls.verifyOtp) {
+    assert.equal(call.email,user.email);
+    assert.equal(call.token,'654321');
+   }
+   assert.equal(h.calls.profile,0);
+   assert.equal(h.calls.rpc.some(call=>call.name==='list_accessible_farms_by_gleba'),false);
+   assert.deepEqual(h.redirects,[]);
+   assert.equal(h.document.getElementById('new-password-form').hidden,false);
+   assert.equal(h.document.getElementById('password').value,'');
+  }
+ }
+});
+test('OTP de convite expirado e OTP de recuperação inválido falham sem redirecionar', { skip: !source.includes('O mesmo campo aceita') }, async () => {
+ const h=run({page:'login',loginError:{code:'invalid_credentials'},verifyOtpErrors:{
+  invite:{code:'otp_expired',status:403},recovery:{code:'otp_expired',status:403}
+ }}); await h.window.portalReady;
+ assert.equal(await h.window.loginGeoportal(user.email,'654321'),false);
+ assert.deepEqual(h.calls.verifyOtp.map(call=>call.type),['invite','recovery']);
+ assert.equal(h.document.getElementById('new-password-form').hidden,true);
+ assert.equal(h.calls.profile,0);
+ assert.deepEqual(h.redirects,[]);
+ assert.match(h.document.getElementById('login-message').textContent,/inválida|expirada|nova senha/i);
+});
+test('429 ou erro de rede no login normal nunca tenta OTP como fallback', { skip: !source.includes('O mesmo campo aceita') }, async () => {
+ for (const options of [{loginError:{status:429}},{loginThrow:Error('offline')}]) {
+  const h=run({page:'login',...options}); await h.window.portalReady;
+  assert.equal(await h.window.loginGeoportal(user.email,'654321'),false);
+  assert.equal(h.calls.signIn.length,1);
+  assert.equal(h.calls.verifyOtp.length,0);
+  assert.equal(h.document.getElementById('new-password-form').hidden,true);
+  assert.deepEqual(h.redirects,[]);
+ }
 });
