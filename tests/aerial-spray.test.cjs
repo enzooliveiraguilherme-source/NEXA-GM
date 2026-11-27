@@ -1,83 +1,173 @@
-const test=require('node:test');
-const assert=require('node:assert/strict');
-const A=require('../js/aerial-spray.js');
-const pause=(ms=0)=>new Promise(resolve=>setTimeout(resolve,ms));
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const A = require('../js/aerial-spray.js');
+const tick = (ms = 0) => new Promise(resolve => setTimeout(resolve, ms));
+
 class Element {
- constructor(id){this.id=id;this.value='';this.checked=false;this.disabled=false;this.hidden=false;this.textContent='';this.events={};this.children=[];this.inputs=[];}
- addEventListener(type,fn){(this.events[type]??=[]).push(fn);}
- fire(type,event={}){for(const fn of this.events[type]||[])fn(event);}
- replaceChildren(){this.children=[];this.value='';}
- append(child){this.children.push(child);if(!this.value)this.value=child.value;}
- set innerHTML(html){this.html=html;this.inputs=[...html.matchAll(/<input type="checkbox" value="([^"]+)"( checked)?/g)].map(m=>({type:'checkbox',value:m[1],checked:!!m[2]}));}
- get innerHTML(){return this.html;}
- querySelectorAll(selector){return selector==='input:checked'?this.inputs.filter(x=>x.checked):this.inputs;}
+  constructor(id) { this.id=id; this.value=''; this.checked=false; this.disabled=false; this.hidden=false; this.textContent=''; this.events={}; this.children=[]; this.attrs={}; this.open=false; this.style={}; }
+  addEventListener(type, fn) { (this.events[type] ||= []).push(fn); }
+  fire(type, event={}) { for (const fn of this.events[type] || []) fn(event); }
+  setAttribute(k,v) { this.attrs[k]=v; }
+  replaceChildren() { this.children=[]; this.value=''; }
+  append(child) { this.children.push(child); if (!this.value) this.value=child.value; }
 }
-const field=(campo,extra={})=>({type:'Feature',properties:{Campo:campo,Fazenda:'F1',Gleba:'G1',...extra},geometry:{type:'Polygon',coordinates:[[[10,20],[11,20],[11,21],[10,20]]]}});
-const catalog={data:[{ano:'2026',cultura:'Soja',ap:'AP 1',bounds:[10,20,11,21],fields:['T1'],total:10,applied:4,unapplied:6},{ano:'2026',cultura:'Soja',ap:'AP 2',bounds:[12,22,13,23],fields:['T2'],total:12,applied:8,unapplied:4}]};
-const prepared=(values={})=>({data:Array.from({length:values.needsTotals?2:1},(_,i)=>({farm_code:'F1',ap:'AP '+(i+1),total:10,applied:4,boundary:{name:'boundaries'},coverage:{name:'coverage'},tracks:[{name:'tracks'}],...values}))});
-function harness(rpc=async name=>name==='aerial_spray_catalog'?catalog:prepared()){
- const ids=['panel','status','reload','focus','year','culture','aps','all','none','total','applied','unapplied','show-boundaries','show-gaps','show-coverage','show-tracks'];
- const elements=Object.fromEntries(ids.map(id=>['aerial-'+id,new Element(id)]));
- for(const name of ['boundaries','coverage','tracks'])elements['aerial-show-'+name].checked=true;
- const calls=[],map={layers:new Set(),fits:[],addLayer(layer){this.layers.add(layer);},removeLayer(layer){this.layers.delete(layer);},fitBounds(bounds){this.fits.push(bounds);},invalidateSize(){},getZoom(){return 13;},on(){},off(){}};
- const L={canvas(){return {};},geoJSON(data,options){const name=typeof options.style==='function'?'tracks':({'#f8fafc':'base','#facc15':'boundaries','#22c55e':'coverage','#f59e0b':'gaps'}[options.style?.color]||'base');const layer={name,data,options,addTo(target){target.addLayer(this);return this;},getBounds(){return {isValid(){return true;},tag:name};},eachLayer(){}};return layer;}};
- const document={getElementById:id=>elements[id],createElement:()=>new Element('option')};
- const client={rpc(name,args){calls.push({name,args});return rpc(name,args);}};
- const state={currentTab:'aerea',currentFazenda:'F1',currentGleba:'G1',currentAno:'2026',currentCultura:'Soja',fieldData:{type:'FeatureCollection',features:[field('T1'),field('T2')]},map};
- return {elements,calls,map,state,view:A.createView({document,L,client})};
+const row = (ap, date, stats, extra={}) => ({ano:'2026', cultura:'Soja', ap, dates:[date], bounds:[10,20,11,21], stats:{[date]:stats}, ...extra});
+const stats = (total, applied, unapplied, gaps_available=true) => ({total, applied, overlap:0, unapplied, gaps_available, eligible_fields:1});
+const fc = (tag='layer') => ({type:'FeatureCollection', features:[{type:'Feature',properties:{tag},geometry:{type:'Polygon',coordinates:[]}}]});
+const catalog = [
+  row('AP 1','2026-01-01',stats(0,0,0)), row('AP 1','2026-01-02',stats(10,4,6)),
+  row('AP 2','2026-01-03',stats(20,8,null,false)), row('AP 2','2026-01-04',stats(20,12,null,false))
+];
+catalog[0].stats['*']=stats(0,0,0); catalog[1].stats['*']=stats(10,4,6);
+catalog[2].stats['*']=stats(0,0,null,false); catalog[3].stats['*']=stats(20,12,null,false);
+function harness(rpc=async name => name==='aerial_v2_catalog' ? catalog : fc(name)) {
+  const ids=['panel','status','reload','focus','year','culture','ap','date','total','applied','overlap','unapplied','coverage-percent','overlap-percent','gaps-percent','coverage-bar','overlap-bar','gaps-bar','daily-chart','field-count','gaps-note','show-boundaries','show-tracks','show-nominal','mode-coverage','mode-overlap','mode-gaps','final','options','close-options'];
+  const elements=Object.fromEntries(ids.map(id=>['aerial-'+id,new Element(id)]));
+  elements['aerial-show-boundaries'].checked=true;
+  const calls=[];
+  const map={layers:new Set(),fits:[],panes:{},addLayer(l){this.layers.add(l);},removeLayer(l){this.layers.delete(l);},fitBounds(b){this.fits.push(b);},invalidateSize(){},createPane(name){this.panes[name]={style:{}};return this.panes[name];},getPane(name){return this.panes[name];}};
+  const L={canvas(opts={}){return {opts};},geoJSON(data,opts){const l={data,opts,addTo(m){m.addLayer(this);return this;},bindTooltip(){},bindPopup(){}};return l;}};
+  const document={getElementById:id=>elements[id],createElement:()=>new Element('option')};
+  const client={rpc(name,args){calls.push({name,args});return Promise.resolve(rpc(name,args)).then(data=>data&&Object.hasOwn(data,'data')?data:{data,error:null});}};
+  const state={currentTab:'aerea',currentFazenda:'F1',currentGleba:'G1',currentAno:'2026',currentCultura:'Soja',fieldData:{features:[]},map};
+  return {elements,calls,map,state,view:A.createView({document,L,client})};
 }
-const selectedLayers=h=>[...h.map.layers].map(l=>l.name);
-test('flags and hectares preserve zero and distinguish missing data',()=>{
- assert.equal(A.lineStyle({properties:{APLICANDO:'0'}}).color,'#dc2626');
- assert.equal(A.lineStyle({properties:{APLICANDO:1}}).color,'#16a34a');
- assert.equal(A.formatArea(0),'0 ha');assert.equal(A.formatArea(null),'-');
+const waitReady=async h=>{h.view.refresh(h.state);await tick(20);};
+const calls=(h,name)=>h.calls.filter(c=>c.name===name);
+
+test('formatters preserve zero and distinguish null',()=>{
+  assert.equal(A.formatArea(0),'0 ha'); assert.equal(A.formatArea(null),'—');
+  assert.equal(A.formatDate('2026-01-03'),'03/01/2026');
 });
-test('base fields use spraying/year overrides and exclude archived or inaccessible fields',()=>{
- const h=harness();h.state.fieldData.features=[field('ok'),field('archived',{OperationalArchived:true}),field('other',{Fazenda:'F2'}),field('wrong year',{MapOnlyContexts:[{operationType:'pulverizacao',ano:'2027'}]}),field('override',{MapContexts:[{operationType:'pulverizacao',ano:'2026',geometry:{type:'Polygon',coordinates:[]}}]})];
- const result=A.baseFeatures(h.state,'2026');assert.deepEqual(result.map(f=>f.properties.Campo),['ok','override']);assert.deepEqual(result[1].geometry.coordinates,[]);
+
+test('AP and date selections never mix summaries or layer requests',async()=>{
+  const h=harness(); await waitReady(h);
+  h.elements['aerial-ap'].value='AP 1'; h.elements['aerial-ap'].fire('change'); await tick(5);
+  assert.equal(h.elements['aerial-applied'].textContent,'4 ha');
+  h.elements['aerial-ap'].value='AP 2'; h.elements['aerial-ap'].fire('change'); await tick(10);
+  assert.equal(h.elements['aerial-date'].value,'*');
+  assert.equal(h.elements['aerial-applied'].textContent,'12 ha');
+  h.elements['aerial-date'].value='2026-01-04'; h.elements['aerial-date'].fire('change'); await tick(10);
+  const request=calls(h,'aerial_v2_layer').at(-1).args;
+  assert.equal(request.selected_ap,'AP 2'); assert.equal(request.map_date,'2026-01-04');
+  assert.equal(h.elements['aerial-applied'].textContent,'12 ha');
 });
-test('base map is visible before choosing any AP and survives a failed overlay',async t=>{
- t.mock.method(console,'error',()=>{});
- const h=harness(async name=>name==='aerial_spray_catalog'?catalog:{error:Error('offline')});h.view.refresh(h.state);await pause();
- assert.deepEqual(selectedLayers(h),['base']);h.elements['aerial-all'].fire('click');await pause();assert.deepEqual(selectedLayers(h),['base']);
+
+test('independent result toggles start enabled and can be combined or disabled',async()=>{
+  const h=harness(); await waitReady(h);
+  for(const n of ['coverage','overlap','gaps']) assert.equal(h.elements[`aerial-mode-${n}`].attrs['aria-pressed'],'true');
+  const kinds=()=>[...h.map.layers].map(l=>l.opts.pane).filter(Boolean);
+  assert(kinds().includes('aerial-coverage')); assert(kinds().includes('aerial-overlap')); assert(kinds().includes('aerial-gaps'));
+  h.elements['aerial-mode-overlap'].fire('click'); await tick(5);
+  assert.equal(h.elements['aerial-mode-overlap'].attrs['aria-pressed'],'false');
+  assert(![...h.map.layers].some(l=>l.opts.pane==='aerial-overlap'));
+  assert([...h.map.layers].some(l=>l.opts.pane==='aerial-coverage'));
+  h.elements['aerial-mode-overlap'].fire('click'); await tick(5);
+  assert([...h.map.layers].some(l=>l.opts.pane==='aerial-overlap'));
 });
-test('camera immediately frames target fields and never frames the transit circuit',async()=>{
- let resolve;const h=harness(async name=>name==='aerial_spray_catalog'?catalog:new Promise(r=>{resolve=r;}));
- h.view.refresh(h.state);await pause();h.elements['aerial-all'].fire('click');
- assert.deepEqual(h.map.fits.at(-1),[[20,10],[23,13]]);
- resolve(prepared());await pause();assert.deepEqual(h.map.fits.at(-1),[[20,10],[23,13]]);
+
+test('stale request responses and old scopes are ignored',async()=>{
+  const pending=[];
+  const h=harness((name,args)=>name==='aerial_v2_catalog'?Promise.resolve(catalog):new Promise(resolve=>pending.push({args,resolve})));
+  await waitReady(h); await tick(5);
+  h.elements['aerial-mode-overlap'].fire('click'); await tick(2);
+  h.elements['aerial-mode-coverage'].fire('click'); await tick(2);
+  assert(pending.length>=2);
+  pending[0].resolve(fc('stale')); await tick(5);
+  assert(![...h.map.layers].some(l=>l.data.features?.[0]?.properties?.tag==='stale'));
+  const before=calls(h,'aerial_v2_catalog').length;
+  h.view.refresh({...h.state,currentGleba:'G2'}); await tick(5);
+  assert.equal(calls(h,'aerial_v2_catalog').length,before+1);
+  const oldScope=pending[0]; oldScope.resolve(fc('late-scope')); await tick(5);
+  assert(![...h.map.layers].some(l=>l.data.features?.[0]?.properties?.tag==='late-scope'));
 });
-test('cached base still honors a requested fit after the catalog arrives',async()=>{
- const h=harness();h.view.refresh(h.state);const before=h.map.fits.length;await pause();assert(h.map.fits.length>before);
+
+test('catalog and layer requests carry farm and gleba scope',async()=>{
+  const h=harness(); await waitReady(h);
+  assert.deepEqual(calls(h,'aerial_v2_catalog')[0].args,{map_farm:'F1',map_gleba:'G1'});
+  const layer=calls(h,'aerial_v2_layer')[0].args;
+  assert.equal(layer.map_farm,'F1'); assert.equal(layer.map_gleba,'G1');
 });
-test('render uses prepared data; consolidated totals start after overlays are added',async()=>{
- let totalsAfterMap=false;const h=harness(async name=>{
-  if(name==='aerial_spray_catalog')return catalog;
-  if(name==='aerial_spray_layers')return prepared({total:null,applied:null,needsTotals:true});
-  if(name==='aerial_spray_totals'){totalsAfterMap=selectedLayers(h).includes('tracks');return {data:{total:20,applied:12,unapplied:8}};}
-  throw Error('Unexpected RPC '+name);
- });h.view.refresh(h.state);await pause();h.elements['aerial-all'].fire('click');await pause(30);
- assert(totalsAfterMap);assert(!h.calls.some(c=>c.name==='aerial_spray_map'));assert.equal(h.elements['aerial-total'].textContent,'20 ha');
+
+test('daily stats and final remaining gaps use separate dates',async()=>{
+  const h=harness(); await waitReady(h);
+  h.elements['aerial-ap'].value='AP 1'; h.elements['aerial-ap'].fire('change'); await tick(5);
+  h.elements['aerial-date'].value='2026-01-02'; h.elements['aerial-date'].fire('change'); await tick(5);
+  assert.equal(h.elements['aerial-final'].hidden,false);
+  assert(!calls(h,'aerial_v2_layer').some(c=>c.args.map_kind==='gaps'&&c.args.map_date!=='*'));
+  assert(calls(h,'aerial_v2_layer').some(c=>c.args.map_kind==='gaps'&&c.args.map_date==='*'));
+  assert.equal(h.elements['aerial-applied'].textContent,'4 ha');
+  assert.equal(h.elements['aerial-unapplied'].textContent,'6 ha');
+  assert.match(h.elements['aerial-gaps-note'].textContent,/final/i);
+  h.elements['aerial-final'].fire('click'); await tick(5);
+  assert.equal(h.elements['aerial-date'].value,'*');
+  assert.equal(h.elements['aerial-final'].hidden,true);
 });
-test('reselecting cached APs avoids a second render request',async()=>{
- const h=harness();h.view.refresh(h.state);await pause();h.elements['aerial-all'].fire('click');await pause();h.elements['aerial-none'].fire('click');h.elements['aerial-all'].fire('click');await pause();
- assert.equal(h.calls.filter(c=>c.name==='aerial_spray_layers').length,1);
+
+test('all enabled layers have stable dedicated panes regardless of response order',async()=>{
+  const pending=[];
+  const h=harness((name,args)=>name==='aerial_v2_catalog'?Promise.resolve(catalog):new Promise(resolve=>pending.push({args,resolve})));
+  h.view.refresh(h.state); await tick(10);
+  assert(pending.length>=4);
+  const order=['overlap','gaps','coverage','boundaries'];
+  for(const kind of order){const i=pending.findIndex(p=>p.args.map_kind===kind); assert(i>=0); pending[i].resolve(fc(kind)); await tick(2);}
+  await tick(10);
+  const layers=[...h.map.layers].filter(l=>l.opts.pane);
+  assert.equal(layers.length,4);
+  for(const kind of ['coverage','overlap','gaps','boundaries']){
+    const layer=layers.find(l=>l.opts.pane===`aerial-${kind}`);
+    assert(layer,`${kind} layer should render`);
+    assert.equal(layer.opts.renderer.opts.pane,`aerial-${kind}`);
+  }
+  for(const [kind,z] of Object.entries({coverage:420,gaps:430,overlap:440,boundaries:460})) assert.equal(h.map.panes[`aerial-${kind}`]?.style.zIndex,String(z));
 });
-test('rapid checkbox changes are coalesced into one request',async()=>{
- const h=harness();h.view.refresh(h.state);await pause();const list=h.elements['aerial-aps'];
- for(const input of list.inputs){input.checked=true;list.fire('change',{target:input});}
- await pause(160);const renders=h.calls.filter(c=>c.name==='aerial_spray_layers');assert.equal(renders.length,1);assert.deepEqual(renders[0].args.selected_aps,['AP 1','AP 2']);
+
+test('cache avoids duplicate layer RPCs and reload clears it',async()=>{
+  const h=harness(); await waitReady(h);
+  const count=calls(h,'aerial_v2_layer').length;
+  h.elements['aerial-mode-coverage'].fire('click'); await tick(5);
+  h.elements['aerial-mode-coverage'].fire('click'); await tick(5);
+  assert.equal(calls(h,'aerial_v2_layer').length,count);
+  h.elements['aerial-reload'].fire('click'); await tick(10);
+  assert(calls(h,'aerial_v2_layer').length>count);
 });
-test('obsolete responses cannot replace the latest selection; leaving removes all module layers',async()=>{
- const pending=[];const h=harness(async name=>name==='aerial_spray_catalog'?catalog:new Promise(resolve=>pending.push(resolve)));
- h.view.refresh(h.state);await pause();const list=h.elements['aerial-aps'];list.inputs[0].checked=true;list.fire('change',{target:list.inputs[0]});await pause(150);
- list.inputs[1].checked=true;list.fire('change',{target:list.inputs[1]});await pause(150);assert.equal(pending.length,2);
- pending[0](prepared({total:99}));await pause();assert.deepEqual(selectedLayers(h),['base']);
- pending[1](prepared({total:22}));await pause();assert.equal(h.elements['aerial-total'].textContent,'22 ha');
- h.view.refresh({...h.state,currentTab:'plantio'});assert.equal(h.map.layers.size,0);
+
+test('zero remains a measured value while null remains unavailable',async()=>{
+  const h=harness(); await waitReady(h);
+  h.elements['aerial-ap'].value='AP 1'; h.elements['aerial-ap'].fire('change'); await tick(5);
+  h.elements['aerial-date'].value='2026-01-01'; h.elements['aerial-date'].fire('change'); await tick(5);
+  assert.equal(h.elements['aerial-total'].textContent,'0 ha');
+  assert.equal(h.elements['aerial-applied'].textContent,'0 ha');
+  h.elements['aerial-ap'].value='AP 2'; h.elements['aerial-ap'].fire('change'); await tick(5);
+  assert.equal(h.elements['aerial-unapplied'].textContent,'—');
 });
-test('visibility toggles do not fetch data, move the map or change indicators',async()=>{
- const h=harness();h.view.refresh(h.state);await pause();h.elements['aerial-all'].fire('click');await pause();
- const before=[h.calls.length,h.map.fits.length,h.elements['aerial-total'].textContent];h.elements['aerial-show-tracks'].checked=false;h.elements['aerial-show-tracks'].fire('change');
- assert(!selectedLayers(h).includes('tracks'));assert.deepEqual([h.calls.length,h.map.fits.length,h.elements['aerial-total'].textContent],before);
+
+test('percentages handle nulls, zero denominators, and genuine zero',()=>{
+  assert.equal(A.formatPercent(0,10),'0%');
+  assert.equal(A.formatPercent(null,10),'—');
+  assert.equal(A.formatPercent(1,0),'—');
+  assert.equal(A.formatPercent(0,0),'—');
+});
+
+test('user facing copy has valid Portuguese characters',async()=>{
+  const html=fs.readFileSync(path.join(__dirname,'..','portal.html'),'utf8');
+  const js=fs.readFileSync(path.join(__dirname,'..','js','aerial-spray.js'),'utf8');
+  assert(!/[�]|Ã[\x80-\xBF]|Â[\x80-\xBF]/.test(html+js),'portal and aerial spray copy should be UTF-8 without mojibake');
+});
+
+test('tracks and nominal layers are lazy and optional',async()=>{
+  const h=harness(); await waitReady(h);
+  assert(!calls(h,'aerial_v2_layer').some(c=>['tracks','nominal'].includes(c.args.map_kind)));
+  h.elements['aerial-show-nominal'].checked=true; h.elements['aerial-show-nominal'].fire('change'); await tick(5);
+  assert(calls(h,'aerial_v2_layer').some(c=>c.args.map_kind==='nominal'));
+  h.elements['aerial-show-tracks'].checked=true; h.elements['aerial-show-tracks'].fire('change'); await tick(5);
+  assert(calls(h,'aerial_v2_layer').some(c=>c.args.map_kind==='tracks'));
+});
+
+test('local field map context is retained when building base polygons',()=>{
+  const feature={type:'Feature',properties:{Campo:'T1',Fazenda:'F1',Gleba:'G1',MapContexts:[{operationType:'pulverizacao',ano:'2026',geometry:{type:'Polygon',coordinates:[[1,2,3]]}}]},geometry:{type:'Polygon',coordinates:[]}};
+  const out=A.baseFeatures({currentFazenda:'F1',currentGleba:'G1',fieldData:{features:[feature]}},'2026');
+  assert.equal(out.length,1); assert.deepEqual(out[0].geometry.coordinates,[[1,2,3]]);
 });

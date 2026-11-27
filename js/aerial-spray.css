@@ -38,3 +38,23 @@
  .aerial-message{align-items:start}.aerial-message p{font-size:10px}
 }
 @media(min-width:701px){.aerial-options-card{right:max(20px,calc((100% - 1100px)/2))}}
+/* Aerial workspace: map and dashboard share the available width. */
+.map-container:has(>.aerial-panel:not([hidden])){display:flex;min-height:0;overflow:hidden}
+.map-container:has(>.aerial-panel:not([hidden]))>#map{flex:1;min-width:0;width:auto;height:100%}
+.aerial-panel{z-index:470;flex:0 0 330px;width:330px;min-width:0;box-sizing:border-box;overflow:auto;background:#f7faf8;padding:20px;border:0;border-left:1px solid #dce5e2;line-height:1.4}
+.aerial-heading>span{font-size:10px;letter-spacing:1.5px;color:#61766b;font-weight:700}.aerial-heading h2{display:block;font-size:21px;margin:4px 0;white-space:normal}.aerial-heading p{font-size:12px;color:#61766b;margin:0 0 16px}
+.aerial-toolbar{display:grid;grid-template-columns:minmax(0,1fr) 44px;gap:10px}.aerial-toolbar>label{gap:4px;font-size:11px}.aerial-ap-label{grid-column:1/-1}.aerial-date-label{min-width:0}
+.aerial-options{grid-column:1/-1}.aerial-options summary{min-height:44px}.aerial-options-card{position:static;width:auto;max-width:none;max-height:none;overflow:visible;padding:12px 0 4px;background:transparent;border:0;border-radius:0;box-shadow:none}
+.aerial-scope{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:16px 0}.aerial-scope div{display:grid;gap:4px}.aerial-scope span{font-size:11px;color:#61766b}.aerial-scope strong{font-size:17px;font-variant-numeric:tabular-nums}
+.aerial-results{grid-template-columns:1fr;gap:9px;margin:0}.aerial-results button{display:grid;gap:5px;padding:10px 12px;background:#fff;border-color:#d5e2db;box-shadow:0 2px 4px #183d2c05}.aerial-results button[aria-pressed=true]{border-color:#84ac98;background:#fff;box-shadow:none}.aerial-results button[aria-pressed=false]{background:#edf0ee;opacity:.6}
+.aerial-results button>span:first-child{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600;white-space:normal}.aerial-results strong{font-size:24px;line-height:1.3;white-space:normal;overflow-wrap:anywhere}.aerial-results small{font-size:10px;color:#61766b}
+.aerial-meter{display:block!important;height:5px;border-radius:8px;background:#e8efeb;overflow:hidden;margin-top:4px}.aerial-meter i{display:block;width:0;height:100%;border-radius:inherit}.aerial-meter.coverage i{background:#16a36a}.aerial-meter.overlap i{background:#dd5272}.aerial-meter.gaps i{background:#f3ad3b}
+.aerial-note,.aerial-daily p,.aerial-message p{font-size:11px;line-height:1.5;color:#61766b}.aerial-note{margin:10px 0 18px}.aerial-daily{border-top:1px solid #dce5e2;padding-top:15px}.aerial-daily h3{font-size:13px;margin:0 0 6px}.aerial-daily p{font-size:10px;margin:0 0 12px}.aerial-day{display:grid;grid-template-columns:65px minmax(25px,1fr) auto;align-items:center;gap:8px;margin:10px 0;font-size:10px}.aerial-day strong{font-size:11px;font-variant-numeric:tabular-nums}.aerial-day-track{height:8px;background:#e3ede7;border-radius:5px;overflow:hidden}.aerial-day-track i{display:block;height:100%;background:#16a36a;border-radius:inherit}.aerial-message{display:block;margin-top:16px}
+@media(max-width:900px){.aerial-panel{flex-basis:290px;width:290px;padding:14px}}
+@media(max-width:700px){
+ .map-container:has(>.aerial-panel:not([hidden])){flex-direction:column;overflow:auto}
+ .map-container:has(>.aerial-panel:not([hidden]))>#map{flex:0 0 48dvh;min-height:300px;width:100%;height:48dvh}
+ .aerial-panel{flex:none;width:100%;overflow:visible;border-left:0;border-top:1px solid #dce5e2;padding:14px}
+ .aerial-heading h2{font-size:18px}.aerial-heading p{margin-bottom:12px}.aerial-toolbar{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 44px;gap:8px}.aerial-ap-label{grid-column:auto}.aerial-toolbar .aerial-icon{display:block}.aerial-options{grid-column:1/-1}.aerial-options summary{width:100%;padding:0 12px}.aerial-options summary span{display:inline}
+ .aerial-results{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.aerial-results button{padding:8px 6px}.aerial-results button>span:first-child{align-items:start;font-size:10px;gap:4px;min-height:28px}.aerial-dot{margin-top:3px;width:7px;height:7px}.aerial-results strong{font-size:17px}.aerial-results small{font-size:9px}.aerial-scope{padding:12px 0}.aerial-note{font-size:10px}
+}
